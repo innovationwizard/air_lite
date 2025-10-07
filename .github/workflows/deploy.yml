@@ -1,0 +1,102 @@
+name: Deploy AI Refill Service
+
+# Controls when the action will run.
+# This workflow runs on pushes to the main branch.
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  # This job runs linting and testing on the code
+  lint-and-test:
+    name: Lint and Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        # Navigate to the dagster project and install its dependencies
+        working-directory: ./air_scaffold
+        run: |
+          pip install -e .
+          pip install ruff # A popular python linter
+
+      - name: Run linter
+        working-directory: ./air_scaffold
+        run: |
+          ruff check .
+
+  # This job builds and pushes the Docker image to ECR
+  build-and-push-image:
+    name: Build and Push Docker Image
+    needs: lint-and-test # This job runs only if lint-and-test succeeds
+    runs-on: ubuntu-latest
+
+    permissions:
+      id-token: write # Required for OIDC authentication with AWS
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_FOR_AUTOMATED_CICD }}
+          aws-region: us-east-2
+
+      - name: Login to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push image to ECR
+        uses: docker/build-push-action@v5
+        with:
+          context: ./air_scaffold # Path to the Dockerfile
+          push: true
+          tags: 200937443798.dkr.ecr.us-east-2.amazonaws.com/ai-refill-dagster:latest
+          platforms: linux/amd64 # Build for the Fargate architecture
+
+  # This job deploys infrastructure changes using the CDK
+  deploy-infrastructure:
+    name: Deploy CDK Infrastructure
+    needs: lint-and-test # This job also depends on the initial tests passing
+    runs-on: ubuntu-latest
+
+    permissions:
+      id-token: write # Required for OIDC authentication with AWS
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_FOR_AUTOMATED_CICD }}
+          aws-region: us-east-2
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install CDK dependencies and deploy
+        working-directory: ./infra_cdk
+        run: |
+          npm install
+          npx cdk deploy --require-approval never --ci

@@ -1,0 +1,450 @@
+-- AI Refill Data Validation & Analysis Queries
+-- Enterprise-grade validation for inventory optimization system
+
+-- =====================================================================
+-- DATA INTEGRITY & QUALITY VALIDATION
+-- =====================================================================
+
+-- 1. Overall Data Integrity Dashboard
+SELECT 
+    'Data Warehouse Status' as metric,
+    (SELECT COUNT(*) FROM products) as total_products,
+    (SELECT COUNT(*) FROM customers) as total_customers,
+    (SELECT COUNT(*) FROM suppliers) as total_suppliers,
+    (SELECT COUNT(*) FROM sales_transactions) as total_sales,
+    (SELECT COUNT(*) FROM purchase_orders) as total_purchases,
+    (SELECT COUNT(*) FROM inventory_snapshots) as total_inventory,
+    (SELECT COUNT(*) FROM return_transactions) as total_returns;
+
+-- 2. Referential Integrity Validation (Should return 0 for all)
+SELECT 'Orphaned Sales Records' as integrity_check, COUNT(*) as violations
+FROM sales_transactions s 
+LEFT JOIN products p ON s.product_id = p.product_id 
+WHERE p.product_id IS NULL
+
+UNION ALL
+
+SELECT 'Orphaned Purchase Records', COUNT(*)
+FROM purchase_orders po 
+LEFT JOIN products p ON po.product_id = p.product_id 
+WHERE p.product_id IS NULL
+
+UNION ALL
+
+SELECT 'Orphaned Inventory Records', COUNT(*)
+FROM inventory_snapshots i 
+LEFT JOIN products p ON i.product_id = p.product_id 
+WHERE p.product_id IS NULL
+
+UNION ALL
+
+SELECT 'Sales with Invalid Customers', COUNT(*)
+FROM sales_transactions s 
+LEFT JOIN customers c ON s.customer_id = c.customer_id 
+WHERE s.customer_id IS NOT NULL AND c.customer_id IS NULL
+
+UNION ALL
+
+SELECT 'Purchases with Invalid Suppliers', COUNT(*)
+FROM purchase_orders po 
+LEFT JOIN suppliers s ON po.supplier_id = s.supplier_id 
+WHERE po.supplier_id IS NOT NULL AND s.supplier_id IS NULL;
+
+-- 3. Data Quality Assessment Report
+SELECT 
+    table_name,
+    total_records,
+    valid_records,
+    invalid_records,
+    ROUND(data_quality_score, 2) as quality_score,
+    CASE 
+        WHEN data_quality_score >= 95 THEN '🟢 EXCELLENT'
+        WHEN data_quality_score >= 85 THEN '🟡 GOOD'
+        WHEN data_quality_score >= 70 THEN '🟠 FAIR'
+        ELSE '🔴 POOR'
+    END as quality_status,
+    duplicate_records,
+    null_critical_fields,
+    outliers_detected
+FROM data_quality_log
+WHERE extraction_timestamp = (SELECT MAX(extraction_timestamp) FROM data_quality_log)
+ORDER BY data_quality_score DESC;
+
+-- =====================================================================
+-- BUSINESS INTELLIGENCE FOR AI FORECASTING
+-- =====================================================================
+
+-- 4. Product Performance Analysis
+SELECT 
+    p.sku,
+    p.product_name,
+    p.sourcing_type,
+    pc.category_name,
+    COUNT(DISTINCT s.transaction_id) as total_transactions,
+    SUM(s.quantity_sold) as total_quantity_sold,
+    AVG(s.quantity_sold) as avg_quantity_per_transaction,
+    COUNT(DISTINCT s.customer_id) as unique_customers,
+    MAX(s.sale_date) as last_sale_date,
+    MIN(s.sale_date) as first_sale_date,
+    EXTRACT(DAY FROM (MAX(s.sale_date) - MIN(s.sale_date))) as active_days
+FROM products p
+JOIN product_categories pc ON p.category_id = pc.category_id
+LEFT JOIN sales_transactions s ON p.product_id = s.product_id
+GROUP BY p.sku, p.product_name, p.sourcing_type, pc.category_name
+ORDER BY total_quantity_sold DESC NULLS LAST;
+
+-- 5. Supplier Performance & Lead Time Analysis
+SELECT 
+    s.supplier_name,
+    COUNT(po.purchase_order_id) as total_orders,
+    ROUND(AVG(po.fulfillment_percentage), 2) as avg_fulfillment_rate,
+    ROUND(AVG(po.lead_time_days), 1) as avg_lead_time_days,
+    ROUND(STDDEV(po.lead_time_days), 1) as lead_time_variability,
+    COUNT(CASE WHEN po.fulfillment_percentage = 100 THEN 1 END) as perfect_orders,
+    ROUND(
+        (COUNT(CASE WHEN po.fulfillment_percentage = 100 THEN 1 END) * 100.0 / COUNT(po.purchase_order_id)), 1
+    ) as perfect_order_rate_pct,
+    MIN(po.lead_time_days) as min_lead_time,
+    MAX(po.lead_time_days) as max_lead_time
+FROM suppliers s
+JOIN purchase_orders po ON s.supplier_id = po.supplier_id
+WHERE po.lead_time_days IS NOT NULL
+GROUP BY s.supplier_name
+ORDER BY perfect_order_rate_pct DESC, avg_lead_time_days ASC;
+
+-- 6. Current Inventory Status & Risk Assessment
+SELECT 
+    p.sku,
+    p.product_name,
+    p.sourcing_type,
+    i.current_stock,
+    i.safety_stock,
+    i.reorder_point,
+    i.days_on_hand,
+    ROUND(i.turnover_rate, 2) as turnover_rate,
+    CASE 
+        WHEN i.current_stock <= i.safety_stock THEN '🔴 CRITICAL - Below Safety Stock'
+        WHEN i.current_stock <= i.reorder_point THEN '🟡 REORDER NEEDED'
+        WHEN i.days_on_hand > 365 THEN '🔵 OVERSTOCK RISK'
+        ELSE '🟢 NORMAL'
+    END as stock_status,
+    p.minimum_order_quantity,
+    ROUND(p.unit_cost * i.current_stock, 2) as inventory_value,
+    ROUND(i.holding_cost_per_unit * i.current_stock, 2) as holding_cost_total
+FROM products p
+JOIN inventory_snapshots i ON p.product_id = i.product_id
+WHERE i.snapshot_date = (
+    SELECT MAX(snapshot_date) 
+    FROM inventory_snapshots i2 
+    WHERE i2.product_id = i.product_id
+)
+ORDER BY 
+    CASE 
+        WHEN i.current_stock <= i.safety_stock THEN 1
+        WHEN i.current_stock <= i.reorder_point THEN 2
+        WHEN i.days_on_hand > 365 THEN 3
+        ELSE 4
+    END,
+    inventory_value DESC;
+
+-- 7. Demand Patterns & Seasonality Analysis
+SELECT 
+    p.sku,
+    p.product_name,
+    EXTRACT(YEAR FROM s.sale_date) as year,
+    EXTRACT(MONTH FROM s.sale_date) as month,
+    SUM(s.quantity_sold) as monthly_demand,
+    COUNT(s.transaction_id) as transaction_count,
+    COUNT(DISTINCT s.customer_id) as unique_customers,
+    ROUND(AVG(s.quantity_sold), 1) as avg_transaction_size,
+    SUM(CASE WHEN s.promotion_indicator THEN s.quantity_sold ELSE 0 END) as promotional_sales
+FROM products p
+JOIN sales_transactions s ON p.product_id = s.product_id
+WHERE s.sale_date >= CURRENT_DATE - INTERVAL '24 months'
+GROUP BY p.sku, p.product_name, EXTRACT(YEAR FROM s.sale_date), EXTRACT(MONTH FROM s.sale_date)
+ORDER BY p.sku, year DESC, month DESC;
+
+-- 8. Return Rate & Quality Analysis
+SELECT 
+    p.sku,
+    p.product_name,
+    SUM(s.quantity_sold) as total_sold,
+    COALESCE(SUM(r.quantity_returned), 0) as total_returned,
+    CASE 
+        WHEN SUM(s.quantity_sold) > 0 THEN 
+            ROUND((COALESCE(SUM(r.quantity_returned), 0) * 100.0 / SUM(s.quantity_sold)), 2)
+        ELSE 0 
+    END as return_rate_percent,
+    COUNT(DISTINCT r.return_id) as return_incidents,
+    STRING_AGG(DISTINCT r.return_reason_code, ', ') as return_reasons
+FROM products p
+LEFT JOIN sales_transactions s ON p.product_id = s.product_id
+LEFT JOIN return_transactions r ON p.product_id = r.product_id
+GROUP BY p.sku, p.product_name
+HAVING SUM(s.quantity_sold) > 0
+ORDER BY return_rate_percent DESC NULLS LAST;
+
+-- 9. Customer Segmentation & Purchase Behavior
+SELECT 
+    c.customer_id,
+    c.customer_name,
+    COUNT(s.transaction_id) as total_transactions,
+    SUM(s.quantity_sold) as total_quantity_purchased,
+    STRING_AGG(DISTINCT s.market_segment, ', ') as market_segments,
+    MAX(s.sale_date) as last_purchase_date,
+    EXTRACT(DAY FROM (CURRENT_DATE - MAX(s.sale_date))) as days_since_last_purchase,
+    COUNT(DISTINCT p.sku) as unique_products_purchased,
+    CASE 
+        WHEN EXTRACT(DAY FROM (CURRENT_DATE - MAX(s.sale_date))) <= 30 THEN '🟢 ACTIVE'
+        WHEN EXTRACT(DAY FROM (CURRENT_DATE - MAX(s.sale_date))) <= 90 THEN '🟡 DECLINING'
+        WHEN EXTRACT(DAY FROM (CURRENT_DATE - MAX(s.sale_date))) <= 180 THEN '🟠 AT RISK'
+        ELSE '🔴 INACTIVE'
+    END as customer_status
+FROM customers c
+JOIN sales_transactions s ON c.customer_id = s.customer_id
+JOIN products p ON s.product_id = p.product_id
+GROUP BY c.customer_id, c.customer_name
+ORDER BY total_quantity_purchased DESC;
+
+-- =====================================================================
+-- AI MODEL PREPARATION QUERIES
+-- =====================================================================
+
+-- 10. Time Series Dataset for Demand Forecasting
+SELECT 
+    p.sku,
+    p.sourcing_type,
+    pc.category_name,
+    DATE_TRUNC('week', s.sale_date) as week_start,
+    SUM(s.quantity_sold) as weekly_demand,
+    COUNT(s.transaction_id) as transaction_count,
+    COUNT(DISTINCT s.customer_id) as unique_customers,
+    SUM(CASE WHEN s.promotion_indicator THEN s.quantity_sold ELSE 0 END) as promotional_demand,
+    EXTRACT(WEEK FROM s.sale_date) as week_of_year,
+    EXTRACT(MONTH FROM s.sale_date) as month,
+    EXTRACT(DOW FROM s.sale_date) as day_of_week
+FROM products p
+JOIN product_categories pc ON p.category_id = pc.category_id
+JOIN sales_transactions s ON p.product_id = s.product_id
+WHERE s.sale_date >= CURRENT_DATE - INTERVAL '2 years'
+GROUP BY p.sku, p.sourcing_type, pc.category_name, DATE_TRUNC('week', s.sale_date),
+         EXTRACT(WEEK FROM s.sale_date), EXTRACT(MONTH FROM s.sale_date), EXTRACT(DOW FROM s.sale_date)
+ORDER BY p.sku, week_start;
+
+-- 11. Supply Chain Performance Dataset
+SELECT 
+    po.product_id,
+    p.sku,
+    s.supplier_name,
+    po.order_date,
+    po.expected_delivery_date,
+    po.actual_delivery_date,
+    po.lead_time_days as actual_lead_time,
+    po.quantity_ordered,
+    po.quantity_received,
+    po.fulfillment_percentage,
+    CASE 
+        WHEN po.actual_delivery_date <= po.expected_delivery_date THEN 'ON_TIME'
+        WHEN po.actual_delivery_date <= po.expected_delivery_date + INTERVAL '7 days' THEN 'SLIGHTLY_LATE'
+        ELSE 'SIGNIFICANTLY_LATE'
+    END as delivery_performance,
+    EXTRACT(MONTH FROM po.order_date) as order_month,
+    EXTRACT(DOW FROM po.order_date) as order_day_of_week
+FROM purchase_orders po
+JOIN products p ON po.product_id = p.product_id
+JOIN suppliers s ON po.supplier_id = s.supplier_id
+WHERE po.actual_delivery_date IS NOT NULL
+ORDER BY po.product_id, po.order_date;
+
+-- 12. SKU Feature Matrix for ML Models
+SELECT 
+    p.sku,
+    p.product_name,
+    p.sourcing_type,
+    pc.category_name,
+    p.unit_cost,
+    p.min_selling_price,
+    (p.min_selling_price - p.unit_cost) as unit_margin,
+    p.minimum_order_quantity,
+    
+    -- Demand features
+    COALESCE(sales_stats.total_sales, 0) as total_sales_quantity,
+    COALESCE(sales_stats.avg_monthly_sales, 0) as avg_monthly_sales,
+    COALESCE(sales_stats.demand_volatility, 0) as demand_coefficient_variation,
+    COALESCE(sales_stats.unique_customers, 0) as customer_base_size,
+    
+    -- Supply features
+    COALESCE(supply_stats.avg_lead_time, 0) as avg_lead_time_days,
+    COALESCE(supply_stats.lead_time_std, 0) as lead_time_variability,
+    COALESCE(supply_stats.avg_fulfillment, 0) as avg_fulfillment_rate,
+    
+    -- Inventory features
+    COALESCE(inventory_stats.current_stock, 0) as current_stock_level,
+    COALESCE(inventory_stats.safety_stock, 0) as safety_stock_level,
+    COALESCE(inventory_stats.reorder_point, 0) as reorder_point,
+    COALESCE(inventory_stats.turnover_rate, 0) as inventory_turnover,
+    COALESCE(inventory_stats.days_on_hand, 0) as current_days_on_hand,
+    
+    -- Risk indicators
+    CASE WHEN COALESCE(inventory_stats.current_stock, 0) <= COALESCE(inventory_stats.safety_stock, 0) THEN 1 ELSE 0 END as stockout_risk_flag,
+    CASE WHEN COALESCE(inventory_stats.days_on_hand, 0) > 365 THEN 1 ELSE 0 END as overstock_risk_flag,
+    COALESCE(return_stats.return_rate, 0) as return_rate_percent
+
+FROM products p
+JOIN product_categories pc ON p.category_id = pc.category_id
+LEFT JOIN (
+    SELECT 
+        product_id,
+        SUM(quantity_sold) as total_sales,
+        AVG(monthly_qty) as avg_monthly_sales,
+        CASE WHEN AVG(monthly_qty) > 0 THEN STDDEV(monthly_qty) / AVG(monthly_qty) ELSE 0 END as demand_volatility,
+        COUNT(DISTINCT customer_id) as unique_customers
+    FROM (
+        SELECT 
+            product_id,
+            customer_id,
+            DATE_TRUNC('month', sale_date) as month,
+            SUM(quantity_sold) as monthly_qty
+        FROM sales_transactions
+        GROUP BY product_id, customer_id, DATE_TRUNC('month', sale_date)
+    ) monthly_sales
+    GROUP BY product_id
+) sales_stats ON p.product_id = sales_stats.product_id
+
+LEFT JOIN (
+    SELECT 
+        product_id,
+        AVG(lead_time_days) as avg_lead_time,
+        STDDEV(lead_time_days) as lead_time_std,
+        AVG(fulfillment_percentage) as avg_fulfillment
+    FROM purchase_orders
+    WHERE lead_time_days IS NOT NULL
+    GROUP BY product_id
+) supply_stats ON p.product_id = supply_stats.product_id
+
+LEFT JOIN (
+    SELECT DISTINCT ON (product_id)
+        product_id,
+        current_stock,
+        safety_stock,
+        reorder_point,
+        turnover_rate,
+        days_on_hand
+    FROM inventory_snapshots
+    ORDER BY product_id, snapshot_date DESC
+) inventory_stats ON p.product_id = inventory_stats.product_id
+
+LEFT JOIN (
+    SELECT 
+        r.product_id,
+        CASE 
+            WHEN SUM(s.quantity_sold) > 0 THEN 
+                (SUM(r.quantity_returned) * 100.0 / SUM(s.quantity_sold))
+            ELSE 0 
+        END as return_rate
+    FROM return_transactions r
+    JOIN sales_transactions s ON r.product_id = s.product_id
+    GROUP BY r.product_id
+) return_stats ON p.product_id = return_stats.product_id
+
+ORDER BY COALESCE(sales_stats.total_sales, 0) DESC;
+
+-- =====================================================================
+-- EXECUTIVE DASHBOARD KPIs
+-- =====================================================================
+
+-- 13. Executive Summary Metrics
+SELECT 
+    'Total Active SKUs' as kpi, COUNT(*)::text as value 
+FROM products WHERE is_active = true
+
+UNION ALL
+SELECT 
+    'Active Customers (90 days)', COUNT(DISTINCT customer_id)::text 
+FROM sales_transactions 
+WHERE sale_date >= CURRENT_DATE - INTERVAL '90 days'
+
+UNION ALL
+SELECT 
+    'Total Inventory Value', 
+    CONCAT('$', TO_CHAR(SUM(p.unit_cost * i.current_stock), 'FM999,999,999.00'))
+FROM products p
+JOIN inventory_snapshots i ON p.product_id = i.product_id
+WHERE i.snapshot_date = (SELECT MAX(snapshot_date) FROM inventory_snapshots)
+
+UNION ALL
+SELECT 
+    'Critical Stock Items',
+    COUNT(*)::text
+FROM products p
+JOIN inventory_snapshots i ON p.product_id = i.product_id
+WHERE i.current_stock <= i.safety_stock
+AND i.snapshot_date = (SELECT MAX(snapshot_date) FROM inventory_snapshots)
+
+UNION ALL
+SELECT 
+    'Perfect Supplier Orders %',
+    CONCAT(ROUND(AVG(CASE WHEN fulfillment_percentage = 100 THEN 100.0 ELSE 0 END), 1), '%')
+FROM purchase_orders
+WHERE order_date >= CURRENT_DATE - INTERVAL '6 months'
+
+UNION ALL
+SELECT 
+    'Avg Data Quality Score',
+    CONCAT(ROUND(AVG(data_quality_score), 1), '/100')
+FROM data_quality_log
+WHERE extraction_timestamp = (SELECT MAX(extraction_timestamp) FROM data_quality_log);
+
+-- 14. Inventory Turnover by Category
+SELECT 
+    pc.category_name,
+    COUNT(p.product_id) as sku_count,
+    ROUND(AVG(i.turnover_rate), 2) as avg_turnover_rate,
+    SUM(p.unit_cost * i.current_stock) as category_inventory_value,
+    COUNT(CASE WHEN i.current_stock <= i.safety_stock THEN 1 END) as critical_items,
+    COUNT(CASE WHEN i.days_on_hand > 365 THEN 1 END) as overstock_items
+FROM product_categories pc
+JOIN products p ON pc.category_id = p.category_id
+JOIN inventory_snapshots i ON p.product_id = i.product_id
+WHERE i.snapshot_date = (SELECT MAX(snapshot_date) FROM inventory_snapshots)
+GROUP BY pc.category_name
+ORDER BY category_inventory_value DESC;
+
+-- =====================================================================
+-- DATA EXPORT QUERIES FOR AI MODELS
+-- =====================================================================
+
+-- 15. Export Query - Demand Forecasting Training Data
+-- Use this query to export data for machine learning model training
+-- Execute with: \copy (SELECT...) TO 'demand_forecast_data.csv' WITH CSV HEADER;
+
+/*
+SELECT 
+    p.sku,
+    p.sourcing_type,
+    pc.category_name,
+    s.sale_date,
+    s.quantity_sold as demand,
+    EXTRACT(YEAR FROM s.sale_date) as year,
+    EXTRACT(MONTH FROM s.sale_date) as month,
+    EXTRACT(WEEK FROM s.sale_date) as week_of_year,
+    EXTRACT(DOW FROM s.sale_date) as day_of_week,
+    s.promotion_indicator::int as is_promotion,
+    s.market_segment,
+    p.unit_cost,
+    p.minimum_order_quantity,
+    COALESCE(lead_times.avg_lead_time, 0) as supplier_lead_time
+FROM sales_transactions s
+JOIN products p ON s.product_id = p.product_id  
+JOIN product_categories pc ON p.category_id = pc.category_id
+LEFT JOIN (
+    SELECT 
+        product_id, 
+        AVG(lead_time_days) as avg_lead_time 
+    FROM purchase_orders 
+    WHERE lead_time_days IS NOT NULL 
+    GROUP BY product_id
+) lead_times ON p.product_id = lead_times.product_id
+WHERE s.sale_date >= CURRENT_DATE - INTERVAL '2 years'
+ORDER BY p.sku, s.sale_date;
+*/

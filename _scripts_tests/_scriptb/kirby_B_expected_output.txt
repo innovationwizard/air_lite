@@ -1,0 +1,9 @@
+python build_ssot.py --input /path/to/your/folder --output /path/to/out
+# outputs:
+#   out/ssot.db
+#   out/dim_client.csv
+#   out/fact_sales.csv
+#   out/fact_returns.csv
+#   out/dim_product_master.csv      (if product master sheet exists)
+#   out/excel_sales.csv             (if Excel ventas exists)
+#   out/profile.json                (includes left-out counters & percentages)

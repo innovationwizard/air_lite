@@ -1,0 +1,52 @@
+1. Datos maestros del producto 
+	- SKU/ID
+	- Nombre
+	- Descripción
+	- Unidad de medida
+	- Categoría
+	- Tipo de abastecimiento: local o internacional
+	- Costo
+	- Precio de venta
+	- Vida útil o Caducidad
+	- Cantidad mínima de pedido (MOQ): Mínimos exigidos por el proveedor.
+
+
+2. Datos de Ventas
+	- Fecha y Hora de Venta
+	- SKU/ID
+	- Cantidad Vendida (Unidades por transacción)
+	- Cliente
+	- Canal
+	- Segmento de Mercado
+	- Indicador de Promoción
+	- Devoluciones y reembolsos
+	- Estimaciones o Registros de Ventas Perdidas (Cantidad de unidades)
+
+
+3. Datos de Inventarios
+	- Fecha y hora
+	- SKU/ID 
+	- Nivel de Inventario Disponible
+	- Ubicación (Bodega, Almacén u otro)
+	- Inventario de Seguridad
+	- Punto de Reorden
+	- Costo de Mantenimiento por unidad por periodo
+	- Costo de Desabastecimiento (Margen por unidad)
+	- Historial de Rotación de Inventario por SKU
+
+
+4. Datos de Compras
+	- Fecha de Orden de Compra
+	- Fecha de Recibido
+	- SKU/ID
+	- ID del Proveedor
+	- Cantidad Pedida menos Recibida (Faltantes o excesos)
+	- Plazo de Entrega
+	- Costo de compra (Puesto en bodega)
+	- Historial del estado del pedido (Pendiente, enviado, retrasado, etc.)
+
+
+5. Datos operativos 
+	- Anulaciones de usuario: Registros de ajustes manuales de pronósticos en Odoo (para entrenar a la IA en la intuición humana).
+
+
