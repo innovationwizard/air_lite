@@ -1,0 +1,37 @@
+[project]
+name = "airefill"
+version = "0.1.0"
+description = "AI-powered inventory optimization and restock system"
+readme = "README.md"
+requires-python = ">=3.9,<3.14"
+dependencies = [
+    "dagster",
+    "dagster-cloud",
+    "dagster-aws",
+    "boto3",
+    "pandas>=2.0.0",
+    "numpy>=1.24.0",
+    "sqlalchemy>=2.0.0",
+    "psycopg2-binary>=2.9.5",
+    "openpyxl>=3.1.0",
+    "scikit-learn",
+    "joblib",
+    "prophet",
+]
+
+[project.optional-dependencies]
+dev = [
+    "dagster-webserver",
+    "pytest",
+]
+
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[tool.dagster]
+module_name = "airefill.definitions"
+code_location_name = "airefill"
+
+[tool.setuptools.packages.find]
+exclude=["airefill_tests"]

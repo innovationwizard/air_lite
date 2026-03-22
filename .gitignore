@@ -15,8 +15,18 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
-lib64/
+/lib/
+/lib64/
+
+# Exception: Don't ignore CDK and frontend source files
+!infra_cdk/lib/**/*.ts
+!infra_cdk/bin/**/*.ts
+!frontend/src/lib/
+
+# But DO ignore compiled files
+infra_cdk/**/*.js
+infra_cdk/**/*.d.ts
+!infra_cdk/jest.config.js
 parts/
 sdist/
 var/
@@ -64,3 +74,32 @@ cdk.out/
 *.db
 *.sqlite
 *.sqlite3
+
+# Data files - NEVER COMMIT BUSINESS DATA
+*.csv
+*.xlsx
+*.xls
+*sample*data*/
+*_archive/
+*_discard/
+db_credentials
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Ignore build output and cdk artifacts
+/dist
+/cdk.out
+# Client data — never commit
+real_data/
+
+# Supabase local
+supabase/.temp/

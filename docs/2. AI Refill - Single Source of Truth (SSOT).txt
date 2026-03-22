@@ -1,0 +1,112 @@
+AI Refill: Single Source of Truth (SSOT)
+
+Document Version: 1.0 (Ratified)
+
+Date: October 2, 2025
+
+Status: Final. 
+
+Concludes Phase 0.
+
+
+1. Project Objective
+To design, build, and deploy a fully automated, scalable, and secure inventory optimization system on AWS. This document is the final, ratified blueprint resulting from Phase 0 and serves as the master planning document for all subsequent development phases.
+
+
+
+
+2. Guiding Principles & Core Rationale
+The architecture and processes defined herein are governed by the following principles, established during the refinement process:
+
+
+Principle of Uninterrupted Automation: The data and ML pipelines are designed to be fully automated and must never be halted or delayed by manual processes. Data that requires human intervention is flagged and skipped, but the core system continues to process valid data to ensure a deliverable is always available.
+
+
+
+
+
+
+Principle of Maximum Speed to First Delivery: The primary goal is delivering a functional system to the first paying client at maximum velocity. This principle justifies decisions such as the single-tenant "clone-per-client" model and deferring non-essential features.
+
+
+
+
+
+
+Principle of Developer as Central Authority: The developer (Jorge Luis Contreras Herrera) is intentionally positioned as the central point for handling data exceptions and reconciliation . This manual "negotiation" process ensures a deep understanding of the client's data and business rules, reinforcing expertise and authority.
+
+
+
+
+3. System Architecture & Design Decisions
+3.1. Tenancy Model
+
+Decision: The system will use a "clone-per-client" single-tenancy model. Each client will receive a completely separate, isolated infrastructure stack deployed via the AWS CDK.
+
+
+Rationale: This decision prioritizes speed to go-live for the first client over the complexity of building a multi-tenant framework for future, unknown clients . Updates will be deployed manually to each stack.
+
+
+<small>Best Practice Recommendation:</small> <small>For managing more than 2-3 clients, consider building a centralized control plane or using a tool like AWS Systems Manager or a custom deployment script to automate the process of deploying updates across all client stacks simultaneously. This will mitigate the operational burden of the manual-update approach.</small>
+
+3.2. Data Ingestion & Orchestration
+
+Decision: A Dagster pipeline, running on containerized AWS Fargate, will manage all data and ML workflows. The ingestion pipeline will fetch incremental data from the client's Odoo API after an initial database dump .
+
+
+
+
+Data Reconciliation Workflow: If the pipeline detects data requiring reconciliation, it will not stop. The conflicting data will be skipped and not ingested. A report detailing the suspicious record and the reason for the flag will be generated for the developer . The developer will then manually "negotiate" with the client to define a new business rule, add it to the code, and trigger a re-ingestion of the historical data .
+
+
+
+
+
+Data Quality Control: The system will perform a "paranoia check" by pulling a random day's worth of sales and lead time data from the 30 days prior to the current ingestion window . If a mismatch is found, a technical report will be generated, but the pipeline will continue its run without interruption.
+
+
+
+<small>Best Practice Recommendation:</small> <small>While keeping the developer-as-authority is the current goal, consider evolving the reconciliation logic. Instead of hardcoding new business rules, store them in a database table or configuration file. This would allow rules to be updated without a full code deployment, separating business logic from application code and increasing long-term agility.</small>
+
+3.3. Database & Storage
+
+Decision: The primary production database will be a managed Aurora Serverless V2 with a PostgreSQL engine for cost optimization and scalability. Immutable audit and application logs will be stored in Amazon S3 with a tiered storage lifecycle (30 days HOT, 90 days WARM, 7 years COLD in Glacier Deep Archive) for cost management and compliance.
+
+
+3.4. Application & API Layer
+
+Decision: The backend will be a serverless API built with Amazon API Gateway and AWS Lambda. The frontend will be a containerized React.js/Next.js application hosted on AWS App Runner. The architecture is explicitly designed so that the user-facing path is decoupled from the backend data generation path. All user interactions are with pre-computed artifacts, meaning backend processing (including Lambda cold starts) has zero impact on the user experience.
+
+
+
+
+3.5. User Role & Access Management (RBAC)
+
+Decision: The system will implement a database-driven RBAC system, which is the enterprise standard. This involves creating dedicated database tables for 
+
+Users, Roles, Permissions, and mapping tables (User_Roles, Role_Permissions).
+
+
+Rationale: This approach decouples access control from the application code, providing flexibility to add or modify roles in the future (e.g., splitting 'Compras' into 12 sub-roles) without requiring a new deployment. API endpoints will be secured by checking for specific permissions (e.g., 
+
+
+'act', 'recommendation'), not hardcoded roles .
+
+4. MLOps Strategy
+
+Decision: Model retraining will be managed by a fully automated Dagster pipeline that triggers Amazon SageMaker jobs. The pipeline will automatically evaluate the new model's performance against the current one using Root Mean Square Error (RMSE) as the initial metric. A new model is promoted to production only if it demonstrates superior performance.
+
+
+
+
+
+
+Rationale: The pipeline is designed to run without any manual sign-offs. The specific statistical thresholds will be treated as an internal "black-box," allowing for developer experimentation in a "sandbox" environment without exposing the complexity to the client or halting the production pipeline .
+
+
+
+<small>Best Practice Recommendation:</small> <small>Integrate Amazon SageMaker's Model Registry into your pipeline. This provides a formal system for versioning, approving, and tracking models, creating a more robust and auditable MLOps workflow than relying solely on S3 storage. It helps formalize the transition from a "sandbox" model to a production candidate.</small>
+
+5. Scope for Go-Live Delivery
+
+Amendment: The functionality to handle new SKUs with no historical data (the "cold start" problem) is explicitly deferred from the initial go-live release . The system will operate on the existing product catalog only. This decision was made to reduce complexity and ensure the deadline for the first delivery is met.

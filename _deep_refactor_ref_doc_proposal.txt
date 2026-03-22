@@ -1,0 +1,67 @@
+Artificial Intelligence
+Refill
+Guatemala
+2025
+Sistema de Optimización de 
+Inventarios y Gestión de Compras
+AI Refill no solo registra datos: Aprende de ellos, predice tendencias y optimiza automáticamente las decisiones de compra.
+
+1
+Las decisiones de reabastecimiento basadas en intuición, no en datos﻿, generan problemas que afectan la rentabilidad:﻿
+Costos elevados de almacenamiento por exceso de inventarios
+Pérdida de ventas por falta de inventario﻿s
+Compras inadecuadas que inmovilizan capital﻿
+El Sistema de Optimización de Inventarios y Gestión de Compras impulsado por Inteligencia Artificial automatiza cada decisión de compra:﻿
+Monitoreo en tiempo real de niveles de inventario﻿s
+Predicción en tiempo real de demanda y tiempos de despacho
+Recomendaciones de reabastecimiento optimizadas por IA
+
+2
+1. Reducir costos de almacenamiento en 15% (6 meses)﻿​​
+Logra la optimización automática de niveles de inventarios mediante algoritmos de Machine Learning que identifican patrones de demanda y ajustan dinámicamente los niveles objetivo﻿.
+Indicador:﻿ Disminución de días de inventario﻿
+Medición:﻿ Comparativo de costes antes/después de implementación﻿
+2. Aumentar rotación de inventario en 20% (12 meses)﻿​
+Logra prevenir los excesos de inventarios y acelerar el movimiento de productos de baja rotación mediante predicciones basadas en aprendizaje en tiempo real.
+Indicador:﻿ Índice de rotación de inventarios﻿
+Medición:﻿ Rotación actual vs. post-implementación﻿
+
+3
+3. Disminuir compras innecesarias en 20% (9 meses)﻿​
+Logra predecir la demanda real mediante Forecasting Inteligente, eliminando así compras por intuición. Logra optimizar órdenes basándose en proyecciones de tendencias﻿ calculadas en tiempo real.
+Indicador:﻿ Reducción de excesos y mejora del valor del inventario﻿
+Medición:﻿ Seguimiento de órdenes de compra y análisis de flujo de caja﻿
+4. Reducir ventas perdidas por falta de inventarios en 15% (6 meses)﻿​
+Logra optimizar los puntos de reorden mediante un sistema proactivo de alertas predictivas que identifica anomalías y la﻿s notifica en tiempo real.
+Indicador:﻿ Porcentaje de pedidos no atendidos por falta de inventario﻿
+Medición:﻿ Comparativo de ventas perdidas antes y después del sistema﻿
+
+
+Impacto adicional:﻿ 
+
+Incremento en el cumplimiento que conlleva un incremento en la satisfacción del cliente.
+
+
+Capacidades Técnicas del Sistema﻿​:
+Ingesta Automatizada de Datos﻿Integración directa con Odoo mediante procesos automatizados que actualizan información diariamente sin intervención humana.
+Machine Learning Predictivo﻿Modelos de IA entrenados con datos históricos que predicen demanda futura, integran patrones estacionales, y ajustan recomendaciones dinámicamente. ﻿
+Alertas Inteligentes en Tiempo Real﻿Sistema proactivo que notifica puntos críticos de reorden, identifica anomalías en datos y previene tanto falta y exceso de inventarios antes de que ocurran.﻿
+Dashboard Ejecutivo y Business Intelligence﻿Visualización en tiempo real de KPIs críticos, análisis de tendencias y recomendaciones accionables para toma de decisiones estratégicas.﻿
+El sistema se re-entrena constantemente para mejorar continuamente su precisión.
+
+Factibilidad realista de los objetivos﻿​:
+1. Reducir costos de almacenamiento en 15% (6 meses)﻿​​
+Rango en la industria: 10% a 30%﻿  
+Estudios de McKinsey muestran reducciones en los niveles de inventario entre un 20% y un 30 %
+Caso de estudio en EEUU: reducción del 40% en 6 meses
+2. Aumentar rotación de inventario en 20% (12 meses)﻿​
+Rango en la industria: 10% a 25%
+Caso de estudio: Amazon incrementó su rotación en 20%
+3. Disminuir compras innecesarias en 20% (9 meses)﻿​
+Rango en la industria: 25% a 30%﻿  
+Reducción en errores en proyecciones de demanda: 20% a 50%
+Caso de estudio en distribución de electrónicos: 40%
+4. Reducir ventas perdidas por falta de inventarios en 15% (6 meses)﻿​
+Rango en la industria: 25% a 35%﻿  
+Caso de estudio: Amazon redujo sus faltas de inventarios en 25%
+Los objetivos son alcanzables y agresivos.

@@ -1,0 +1,78 @@
+Solicitud de Conexión de Artificial Intelligence Refill a Odoo
+
+
+Se solicita la data requerida por motores de Inteligencia Artificial para generar las predicciones de demanda, la optimización de rotación de inventario, las alertas tempranas de faltas de inventario, y las predicciones de desempeño de proveedores. 
+
+
+1. Se solicitan las credenciales para conexión vía API: 
+
+	1.1 Odoo API endpoint URL
+
+	1.2 Database name
+
+	1.3 API key
+
+	1.4 Odoo version number
+
+2. Se solicita acceso tipo Read-only XML-RPC o JSON-RPC:
+
+	2.1 Read permission
+
+	2.2 No write
+
+	2.3 No create
+
+	3.4 No delete
+
+3. Se solicita acceso a los siguientes modelos:
+
+	3.1 Modelo de Productos 
+
+		product.product
+		product.category
+
+
+	3.2 Modelos de Ventas
+
+		sale.order
+		sale.order.line
+
+		
+	3.3 Modelos de Compras 
+
+		purchase.order 
+		purchase.order.line
+
+
+	3.4 Modelos de Inventario 
+
+		stock.quant
+		stock.move 
+		stock.picking
+
+
+	3.5 Modelos de Proveedores
+
+		res.partner 
+		product.supplierinfo
+
+
+	3.6 Modelos de Bodegas 
+
+		stock.warehouse 
+		stock.location
+
+
+	3.7 Modelos de Contabilidad 
+
+		account.move 
+		account.move.line
+
+
+4. Proceso de extracción
+	
+	4.1 Extracción inicial de la serie de tiempo completa hasta un máximo de 24 meses. 
+
+	4.2 Extracción incremental cada 24 horas.
+	
+	4.3 Toda la data permanece encriptada en AWS Aurora PostgreSQL desde el momento de su extracción.

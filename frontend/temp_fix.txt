@@ -1,0 +1,11 @@
+  async getFinancialReport(startDate: string, endDate: string) {
+    try {
+      const queryParams = new URLSearchParams();
+      queryParams.append('startDate', startDate);
+      queryParams.append('endDate', endDate);
+      const response = await apiClient.request('GET', `/v1/finanzas/report?${queryParams}`, null);
+      return response.data;
+    } catch (error: any) {
+      throw new Error(error.message || 'Error al generar el reporte financiero');
+    }
+  }

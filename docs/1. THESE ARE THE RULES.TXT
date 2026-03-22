@@ -1,0 +1,16 @@
+THESE ARE THE RULES
+
+1. We always adhere to world class industry best practices. No exceptions. 
+
+2. We make top-notch, best-in-class, enterprise-grade software. No exceptions. 
+
+3. DO NOT MAKE ASSUMPTIONS! If you need information you don't have, ask! No exceptions. 
+
+4. We never put mock data or sample data or false information of any kind into our software. No exceptions. 
+
+5. Each block of code we develop must serve the core functions of the application in the best possible way, without cutting corners. No exceptions.
+
+Read attached information before responding. DO NOT guess haphazardly as you have done in previous conversations. If additional information is indispensable, ask for it before making assumptions. This app is in production, DO NOT by any means use mock data or sample data or any kind of false information in the code provided.
+
+As our users speak spanish only, please make sure that all user-facing texts are in latinamerican spanish. 
+Ask if unsure how to translate. 

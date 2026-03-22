@@ -1,0 +1,99 @@
+AI Refill - System Design Document (v1.0)
+
+Date: September 29, 2025
+
+Objective: To provide a formal blueprint for the design, architecture, and implementation of the AI Refill system on AWS, meeting all specified business and technical requirements for the go-live delivery.
+
+
+
+Cloud Architecture (AWS) The system will be architected on AWS for best-of-class scalability, security, and automation. The architecture is designed to support an initial daily data refresh cadence, with the flexibility to be adjusted to a maximum hourly data refresh frequency. The target uptime is 99.9%.
+
+
+
+1.1. Data Ingestion & Orchestration:
+
+Orchestration: All data and machine learning pipelines will be managed by Dagster, running on a containerized service (AWS Fargate) for automatic scalability and low maintenance.
+
+Ingestion: A Dagster pipeline will trigger an AWS Fargate task on a configurable schedule. This task will run a Python script to fetch incremental data from client systems, plus a random sample overlap for data quality control redundance.
+
+Staging: Raw data will be landed in an Amazon S3 bucket, which serves as a data lake for raw data and audit purposes.
+
+Alerting: Anomaly and reconciliation alerts will be dispatched via Amazon SNS (Simple Notification Service), formatted for opt-in integration with Email and ready for optional integration with PagerDuty. 
+
+
+
+1.2. Database & Storage:
+
+Production Database: The primary database will be a managed Aurora Serverless V2 (Relational) with PostgreSQL engine for cost optimization. This automatically handles backups, failovers, patching, and scaling (up and down) for a guaranteed 99.9% uptime.
+
+Data Warehouse Ready: The architecture will support future integration with Snowflake for experimental developments.
+
+Logging: Immutable audit logs will be stored in Amazon S3 with tiered storage classes for different retention periods: troubleshooting & debugging 30 days (HOT), audits & incident investigation 90 days (WARM), and compliance and forensic analysis 7 years (COLD: Glacier Deep Archive).
+
+
+
+1.3. Application & API Layer:
+
+Backend API: A serverless API will be built using Amazon API Gateway and AWS Lambda. This provides a secure, scalable, and cost-effective backend to serve recommendations and data.
+
+Web Application: The user-facing application will be a containerized React.js/Next.js web app hosted on AWS App Runner, ensuring the fastest and most direct path to a scalable, secure, and public app, guaranteeing public availability in accordance with the 99.9% target uptime.
+
+
+
+1.4. MLOps for Model Training
+
+This Model Training is the process of creating your model by training it on data. It is computationally expensive, can run for hours or days, and requires significant resources (CPU/GPU).
+
+SageMaker provides a managed environment to run training scripts on powerful, dedicated hardware, including specialized, cost-effective chips like AWS Trainium. The scheduled trigger starts a SageMaker Training Job. The job runs, and its output, the trained model, is saved back to the S3 storage.
+
+
+
+1.5. MLOps for Model Inferences
+
+For Simple Model Inferences that fit within Lambda's 250MB unzipped limit, and can generate the required artifact within the Lambda function timeout. Simple Model Inferences are lightweight, ideal for Lambda's extremely cost-effective runs. Simple Model Inferences are run on-demand, and paid per millisecond, to optimize costs.
+
+For Complex Model Inferences, typically large, requiring significant CPU/GPU, and processed on a batch basis. SageMaker Batch Transform is the ideal tool, purpose-built for offline, asynchronous inference on large datasets. It spins up the necessary compute, runs the inference job, and then shuts down to automatically put a stop to compute costs. For hardware, it enables selection of cost-effective inference chips like AWS Inferentia.
+
+
+
+1.6. MLOps Integrated Architecture
+
+Training Pipeline (As needed):
+
+Trigger (New Data Ingestion) -> SageMaker Training Job (using Trainium if applicable) -> Trained Model saved to S3
+
+Artifact Generation Pipeline (On a schedule):
+
+Trigger (EventBridge cron job) -> Extract Data from Aurora to S3 (Glue or Lambda)-> SageMaker Batch Transform (using Inferentia if applicable) OR AWS Lambda -> Loads Trained Model from S3 -> Processes Data -> Generates Artifacts (JSON files, etc.) -> Promotes Artifacts to S3 versioned.
+
+The MLOps Architecture must be designed, integrated, and built around SageMaker to align with industry gold standards.
+
+
+
+1.7. Business Intelligence:
+
+BI Tool: Metabase, deployed on the App Runner container, connecting directly to the Aurora Serverless v2 (Postgres engine) instance to serve dashboards.
+
+Exports: The system will provide data exports in CSV, Parquet, and via the API.
+
+
+
+
+
+1.8. Infrastructure as Code: AWS CDK
+
+Abstraction: The CDK provides high-level "constructs" that simplify complex resources. For example, creating a secure, best-practice VPC is just a few lines of code, whereas in raw CloudFormation it would be hundreds.
+
+Language Alignment: Since the pipeline is already using Next.js (TypeScript/JavaScript), using TypeScript for CDK code creates a consistent, full-stack development consistency.
+
+CDK fits perfectly into the GitHub Actions workflow defined. Integrated CI/CD pipeline will simply run <cdk deploy> to push infrastructure changes automatically and safely.
+
+
+
+1.9. Security & CI/CD with GitHub Actions:
+
+Security (TLS and IAM) is non-negotiable.
+
+Encryption in Transit (TLS): This is a baseline requirement for all communication. AWS services are built to support this out of the box. IAM Roles: This is the cornerstone of AWS security. Using specific roles for each component (App Runner, Lambda, SageMaker jobs) to enforce the principle of least privilege is the correct approach.
+
+CI/CD with GitHub Actions: Is both a modern standard and a powerful choice. GitHub Actions integrates seamlessly with AWS services. It is particularly well-suited for: App Runner - Directly supports deploying from a GitHub repository, making frontend CI/CD pipeline extremely simple, Backend Components (Lambda, SageMaker) - Can easily run AWS CLI or SDK commands to package and deploy data generation pipelines, and Testing: Can run unit, integration, and end-to-end tests before deployment.

@@ -1,0 +1,147 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Professional Green + Slate + Green Palette */
+    
+    /* Background Colors */
+    --background: 210 40% 98%; /* Slate 50: #F8FAFC */
+    --foreground: 222 47% 11%; /* Slate 900: #0F172A */
+
+    /* Card Colors */
+    --card: 0 0% 100%; /* White */
+    --card-foreground: 222 47% 11%;
+
+    /* Popover Colors */
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 11%;
+
+    /* Primary Color - Green */
+    --primary: 140 100% 33%; /* #00aa44 */
+    --primary-foreground: 0 0% 100%;
+
+    /* Secondary Color - Slate */
+    --secondary: 215 16% 47%; /* Slate 500 */
+    --secondary-foreground: 0 0% 100%;
+
+    /* Muted Colors */
+    --muted: 214 32% 91%; /* Slate 200: #E2E8F0 */
+    --muted-foreground: 215 20% 65%; /* Slate 400 */
+
+    /* Accent Color - Success Green */
+    --accent: 142 71% 45%; /* Green 600: #16A34A */
+    --accent-foreground: 0 0% 100%;
+
+    /* Destructive Color - Error Red */
+    --destructive: 0 84% 60%; /* Red 500 */
+    --destructive-foreground: 0 0% 100%;
+
+    /* Border and Input */
+    --border: 214 32% 91%; /* Slate 200 */
+    --input: 214 32% 91%;
+    --ring: 140 100% 33%; /* Primary green for focus rings */
+
+    /* Border Radius */
+    --radius: 0.5rem;
+  }
+
+  .dark {
+    --background: 222 47% 11%;
+    --foreground: 210 40% 98%;
+
+    --card: 222 47% 11%;
+    --card-foreground: 210 40% 98%;
+
+    --popover: 222 47% 11%;
+    --popover-foreground: 210 40% 98%;
+
+    --primary: 140 100% 33%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 217 19% 27%;
+    --secondary-foreground: 210 40% 98%;
+
+    --muted: 217 19% 27%;
+    --muted-foreground: 215 16% 47%;
+
+    --accent: 142 71% 45%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 62% 30%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 217 19% 27%;
+    --input: 217 19% 27%;
+    --ring: 140 100% 33%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  
+  /* Typography Scale */
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-heading;
+  }
+  
+  h1 {
+    @apply text-4xl font-bold tracking-tight;
+  }
+  
+  h2 {
+    @apply text-3xl font-bold tracking-tight;
+  }
+  
+  h3 {
+    @apply text-2xl font-bold;
+  }
+  
+  h4 {
+    @apply text-xl font-bold;
+  }
+  
+  h5 {
+    @apply text-lg font-bold;
+  }
+  
+  h6 {
+    @apply text-base font-bold;
+  }
+}
+
+@layer utilities {
+  /* Custom utility classes for AI Refill */
+  .text-balance {
+    text-wrap: balance;
+  }
+  
+  /* KPI Card Animations */
+  .kpi-card-hover {
+    @apply transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5;
+  }
+  
+  /* Status Indicators */
+  .status-critical {
+    @apply bg-destructive/10 text-destructive border-destructive/30;
+  }
+  
+  .status-warning {
+    @apply bg-amber-50 text-amber-700 border-amber-200;
+  }
+  
+  .status-success {
+    @apply bg-accent/10 text-accent border-accent/30;
+  }
+  
+  .status-info {
+    @apply bg-primary/10 text-primary border-primary/30;
+  }
+}
+

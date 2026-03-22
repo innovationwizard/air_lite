@@ -1,0 +1,12 @@
+{
+  "ImageRepository": {
+    "ImageIdentifier": "200937443798.dkr.ecr.us-east-2.amazonaws.com/ai-refill-frontend:latest",
+    "ImageRepositoryType": "ECR",
+    "ImageConfiguration": {
+      "Port": "3000",
+      "RuntimeEnvironmentVariables": {
+        "NEXT_PUBLIC_API_URL": "https://api.airefill.app"
+      }
+    }
+  }
+}

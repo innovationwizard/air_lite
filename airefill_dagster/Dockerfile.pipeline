@@ -1,0 +1,5 @@
+FROM python:3.9
+RUN pip install psycopg2-binary
+COPY ./airefill/run_pipeline.py /app/run_pipeline.py
+WORKDIR /app
+CMD ["python", "run_pipeline.py"]
