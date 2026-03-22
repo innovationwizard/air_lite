@@ -8,6 +8,9 @@ const inter = Inter({
   display: 'swap',
 });
 
+// All pages depend on Supabase Auth (via middleware) — skip static prerendering
+export const dynamic = 'force-dynamic';
+
 export const metadata: Metadata = {
   title: 'AI Refill Lite — Optimización Inteligente de Inventarios',
   description:

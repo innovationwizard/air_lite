@@ -248,7 +248,6 @@ export default function BacktestPage() {
           currentRate={savings.holding_cost_rate_used}
           onRateChange={(rate) => {
             setHoldingCostRate(rate);
-            // Recalculate would re-trigger backtest with new rate
           }}
         />
       )}

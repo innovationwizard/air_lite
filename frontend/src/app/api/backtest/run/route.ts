@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+export const dynamic = 'force-dynamic';
+
 const ML_SERVICE_URL = process.env.ML_SERVICE_URL || 'http://localhost:5000';
 const ML_SERVICE_API_KEY = process.env.ML_SERVICE_API_KEY || '';
 
