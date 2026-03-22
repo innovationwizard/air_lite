@@ -23,6 +23,7 @@ function formatMonth(dateStr: string): string {
 }
 
 interface BacktestRun {
+  id: number;
   run_id: number;
   status: string;
   prediction_month: string;
