@@ -6,7 +6,6 @@ import {
   ShoppingCart,
   AlertTriangle,
   RefreshCw,
-  TrendingUp,
   Users,
 } from 'lucide-react';
 import { BacktestSavingsCard } from '@/components/backtest/BacktestSavingsCard';
