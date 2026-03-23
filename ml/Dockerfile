@@ -17,8 +17,17 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Install cmdstan binary
 RUN python -c "import cmdstanpy; cmdstanpy.install_cmdstan(verbose=True)"
 
-# Verify Prophet works with cmdstanpy backend
-RUN python -c "from prophet import Prophet; m = Prophet(); print('Prophet OK')"
+# Debug: find out WHY the backend fails to load
+RUN python -c "\
+import cmdstanpy; \
+print('cmdstan path:', cmdstanpy.cmdstan_path()); \
+import os; \
+print('path exists:', os.path.exists(cmdstanpy.cmdstan_path())); \
+print('contents:', os.listdir(cmdstanpy.cmdstan_path())); \
+from prophet.models import CmdStanPyBackend; \
+b = CmdStanPyBackend(); \
+print('Backend loaded:', b); \
+"
 
 COPY . .
 
