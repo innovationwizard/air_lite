@@ -2,7 +2,7 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# cmdstanpy needs g++, make, and build tools to compile Stan models
+# cmdstanpy needs g++ and make to compile Stan models
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     g++ \
@@ -10,14 +10,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
+
+# Install Python packages first (prophet 1.1.5 will pull cmdstanpy as dep)
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Install cmdstan 2.33.1 (exact version Prophet 1.1.6 expects)
-# Do NOT set CMDSTAN env var — Prophet overrides it internally
-RUN python -c "import cmdstanpy; cmdstanpy.install_cmdstan(version='2.33.1', verbose=True)"
+# Install cmdstan binary
+RUN python -c "import cmdstanpy; cmdstanpy.install_cmdstan(verbose=True)"
 
-# Verify Prophet can load the Stan backend
-RUN python -c "from prophet import Prophet; m = Prophet(); print('Prophet + cmdstan OK')"
+# Verify Prophet works with cmdstanpy backend
+RUN python -c "from prophet import Prophet; m = Prophet(); print('Prophet OK')"
 
 COPY . .
 
