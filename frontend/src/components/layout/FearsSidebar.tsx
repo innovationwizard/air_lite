@@ -9,12 +9,22 @@ import {
   Warehouse,
   Snowflake,
   ShoppingCart,
-  Package,
-  Settings,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-const navigation = [
+interface NavItem {
+  name: string;
+  href: string;
+  icon: React.ComponentType<{ className?: string }>;
+  subtitle: string | null;
+}
+
+interface NavGroup {
+  section: string | null;
+  items: NavItem[];
+}
+
+const navigation: NavGroup[] = [
   {
     section: null,
     items: [
@@ -52,23 +62,6 @@ const navigation = [
         href: '/preocupaciones/compras-innecesarias',
         icon: ShoppingCart,
         subtitle: 'Estoy comprando de más',
-      },
-    ],
-  },
-  {
-    section: null,
-    items: [
-      {
-        name: 'Productos',
-        href: '/productos',
-        icon: Package,
-        subtitle: null,
-      },
-      {
-        name: 'Configuración',
-        href: '/configuracion',
-        icon: Settings,
-        subtitle: null,
       },
     ],
   },
