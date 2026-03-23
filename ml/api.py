@@ -80,32 +80,81 @@ def run_backtest():
 
     supabase = get_supabase()
 
-    # Create the run record synchronously so we can return the run_id
-    run_result = supabase.table('backtest_runs').insert({
-        'training_start_date': '2024-10-01',
-        'training_end_date': '2024-10-01',  # Will be updated by engine
-        'prediction_month': '2024-10-01',   # Will be updated by engine
-        'status': 'running',
-    }).execute()
-
-    run_id = run_result.data[0]['id']
-
     # Run backtest in background thread (Railway has no timeout)
+    # The engine creates its own run record and returns the run_id
+    result_holder = {'run_id': None}
+
     def _run():
         try:
             sb = get_supabase()
-            run_backtest_cycle(sb, training_months, max_products, holding_cost_rate)
+            result = run_backtest_cycle(sb, training_months, max_products, holding_cost_rate)
+            result_holder['run_id'] = result['run_id']
         except Exception as e:
             logger.error('Background backtest failed: %s', e)
 
     thread = threading.Thread(target=_run, daemon=True)
     thread.start()
 
+    # Wait briefly for the run record to be created so we can return the run_id
+    thread.join(timeout=5)
+
     return jsonify({
-        'run_id': run_id,
+        'run_id': result_holder.get('run_id'),
         'status': 'running',
         'message': 'Backtest iniciado. Consulte /backtest/status/{run_id} para ver el progreso.',
     }), 202
+
+
+@app.route('/backtest/run-all', methods=['POST'])
+def run_all_backtests():
+    """
+    Pre-compute all available backtest cycles sequentially.
+    Data spans Oct 2024 – Mar 2026 (18 months).
+    With 3-month minimum training: 14 cycles (predict Jan 2025 through Feb 2026).
+
+    Runs synchronously — Railway has no timeout limit.
+    """
+    data = request.get_json() or {}
+    max_products = int(data.get('max_products', 100))
+    holding_cost_rate = float(data.get('holding_cost_rate', 0.25))
+
+    supabase = get_supabase()
+    results = []
+    errors = []
+
+    # 14 cycles: training_months 3 through 16
+    for training_months in range(3, 17):
+        logger.info('=== Starting cycle: training_months=%d ===', training_months)
+        try:
+            result = run_backtest_cycle(
+                supabase, training_months, max_products, holding_cost_rate,
+            )
+            results.append({
+                'training_months': training_months,
+                'run_id': result['run_id'],
+                'status': 'completed',
+                'products_modeled': result['products_modeled'],
+                'duration_ms': result['duration_ms'],
+            })
+            logger.info(
+                'Cycle %d completed: run_id=%d, %d products, %dms',
+                training_months, result['run_id'],
+                result['products_modeled'], result['duration_ms'],
+            )
+        except Exception as e:
+            logger.error('Cycle %d failed: %s', training_months, e)
+            errors.append({
+                'training_months': training_months,
+                'error': str(e),
+            })
+
+    return jsonify({
+        'total_cycles': len(results) + len(errors),
+        'completed': len(results),
+        'failed': len(errors),
+        'results': results,
+        'errors': errors,
+    })
 
 
 @app.route('/backtest/status/<int:run_id>', methods=['GET'])
