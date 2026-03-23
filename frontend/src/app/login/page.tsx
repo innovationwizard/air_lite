@@ -2,6 +2,7 @@
 
 import { useState, FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
+import Image from 'next/image';
 import { createClient } from '@/lib/supabase/client';
 
 export default function LoginPage() {
@@ -35,9 +36,13 @@ export default function LoginPage() {
     <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4">
       <div className="w-full max-w-sm space-y-8">
         <div className="text-center">
-          <div className="w-14 h-14 rounded-xl bg-emerald-600 flex items-center justify-center mx-auto mb-4">
-            <span className="text-white font-bold text-xl">AI</span>
-          </div>
+          <Image
+            src="/box.svg"
+            alt="AI Refill Lite"
+            width={64}
+            height={64}
+            className="mx-auto mb-4"
+          />
           <h1 className="text-2xl font-bold text-gray-900">AI Refill Lite</h1>
           <p className="text-gray-500 mt-1 text-sm">
             Optimización inteligente de inventarios

@@ -15,7 +15,36 @@ export const metadata: Metadata = {
   title: 'AI Refill Lite — Optimización Inteligente de Inventarios',
   description:
     'Sistema de predicción de demanda y optimización de inventarios impulsado por inteligencia artificial.',
-  metadataBase: new URL('https://www.airefill.app'),
+  icons: {
+    icon: [{ url: '/box.png', type: 'image/png' }],
+    apple: [{ url: '/box.png', type: 'image/png' }],
+  },
+  // metadataBase resolves relative OG image URLs to absolute (required by WhatsApp)
+  // Update this when custom domain is configured
+  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL || 'https://air-lite-app.vercel.app'),
+  openGraph: {
+    title: 'AI Refill Lite — Optimización Inteligente de Inventarios',
+    description:
+      'Sistema de predicción de demanda y optimización de inventarios impulsado por inteligencia artificial.',
+    type: 'website',
+    locale: 'es_GT',
+    images: [
+      {
+        url: '/opengraph-image',
+        width: 1200,
+        height: 630,
+        alt: 'AI Refill Lite — Optimización Inteligente de Inventarios',
+        type: 'image/png',
+      },
+    ],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'AI Refill Lite — Optimización Inteligente de Inventarios',
+    description:
+      'Sistema de predicción de demanda y optimización de inventarios impulsado por inteligencia artificial.',
+    images: ['/opengraph-image'],
+  },
 };
 
 export default function RootLayout({

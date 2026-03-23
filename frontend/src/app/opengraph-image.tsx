@@ -1,7 +1,7 @@
 import { ImageResponse } from 'next/og';
 
 export const runtime = 'edge';
-export const alt = 'AI Refill - Inventory and Reorder Optimization System';
+export const alt = 'AI Refill Lite — Optimización Inteligente de Inventarios';
 export const size = { width: 1200, height: 630 };
 export const contentType = 'image/png';
 
@@ -53,7 +53,7 @@ export default function Image() {
               letterSpacing: '-0.02em',
             }}
           >
-            AI Refill
+            AI Refill Lite
           </div>
           <div
             style={{
@@ -62,7 +62,7 @@ export default function Image() {
               marginTop: 12,
             }}
           >
-            Inventory &amp; Reorder Optimization System
+            Optimización Inteligente de Inventarios
           </div>
         </div>
 
@@ -84,7 +84,7 @@ export default function Image() {
             }}
           >
             <div style={{ width: 8, height: 8, borderRadius: 4, background: '#3b82f6' }} />
-            AI-Powered Forecasting
+            Predicción de Demanda
           </div>
           <div
             style={{
@@ -96,7 +96,7 @@ export default function Image() {
             }}
           >
             <div style={{ width: 8, height: 8, borderRadius: 4, background: '#10b981' }} />
-            Smart Reorder Points
+            Reabastecimiento Inteligente
           </div>
           <div
             style={{
@@ -108,7 +108,7 @@ export default function Image() {
             }}
           >
             <div style={{ width: 8, height: 8, borderRadius: 4, background: '#f59e0b' }} />
-            Real-Time Analytics
+            Análisis en Tiempo Real
           </div>
         </div>
       </div>

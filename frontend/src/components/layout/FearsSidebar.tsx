@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import {
   BarChart3,
@@ -79,9 +80,7 @@ export function FearsSidebar() {
   return (
     <aside className="flex flex-col w-72 bg-white border-r border-gray-200">
       <div className="flex items-center gap-3 px-5 py-4 border-b border-gray-100">
-        <div className="w-8 h-8 rounded-lg bg-emerald-600 flex items-center justify-center">
-          <span className="text-white font-bold text-sm">AI</span>
-        </div>
+        <Image src="/box.svg" alt="AI Refill Lite" width={32} height={32} />
         <div>
           <span className="font-semibold text-gray-900 text-sm">AI Refill</span>
           <span className="text-gray-400 text-xs ml-1">Lite</span>
