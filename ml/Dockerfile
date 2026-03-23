@@ -10,24 +10,22 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
-
-# Install Python packages first (prophet 1.1.5 will pull cmdstanpy as dep)
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Install cmdstan binary
+# Install cmdstan
 RUN python -c "import cmdstanpy; cmdstanpy.install_cmdstan(verbose=True)"
 
-# Debug: find out WHY the backend fails to load
-RUN python -c "\
-import cmdstanpy; \
-print('cmdstan path:', cmdstanpy.cmdstan_path()); \
-import os; \
-print('path exists:', os.path.exists(cmdstanpy.cmdstan_path())); \
-print('contents:', os.listdir(cmdstanpy.cmdstan_path())); \
-from prophet.models import CmdStanPyBackend; \
-b = CmdStanPyBackend(); \
-print('Backend loaded:', b); \
-"
+# Prophet looks for cmdstan at prophet/stan_model/cmdstan-2.33.1
+# but install_cmdstan puts it at ~/.cmdstan/cmdstan-X.Y.Z
+# Symlink the installed version to where Prophet expects it
+RUN CMDSTAN_INSTALLED=$(python -c "import cmdstanpy; print(cmdstanpy.cmdstan_path())") && \
+    PROPHET_EXPECTED="/usr/local/lib/python3.11/site-packages/prophet/stan_model/cmdstan-2.33.1" && \
+    mkdir -p "$(dirname $PROPHET_EXPECTED)" && \
+    ln -sf "$CMDSTAN_INSTALLED" "$PROPHET_EXPECTED" && \
+    echo "Symlinked $CMDSTAN_INSTALLED -> $PROPHET_EXPECTED"
+
+# Verify Prophet can load the backend
+RUN python -c "from prophet import Prophet; m = Prophet(); print('Prophet + cmdstan OK')"
 
 COPY . .
 
