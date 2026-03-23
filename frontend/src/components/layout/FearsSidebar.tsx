@@ -9,8 +9,13 @@ import {
   Warehouse,
   Snowflake,
   ShoppingCart,
+  Settings,
+  Users,
+  Activity,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useUserRole } from '@/lib/auth/useUserRole';
+import { isAuthorized, CAN_VIEW_ADMIN, CAN_VIEW_SYSTEM, ROLE_LABELS, Role } from '@/lib/auth/roles';
 
 interface NavItem {
   name: string;
@@ -22,9 +27,10 @@ interface NavItem {
 interface NavGroup {
   section: string | null;
   items: NavItem[];
+  requiredRoles?: Role[];
 }
 
-const navigation: NavGroup[] = [
+const allNavGroups: NavGroup[] = [
   {
     section: null,
     items: [
@@ -65,10 +71,46 @@ const navigation: NavGroup[] = [
       },
     ],
   },
+  {
+    section: 'Administración',
+    requiredRoles: CAN_VIEW_ADMIN,
+    items: [
+      {
+        name: 'Gestión de Usuarios',
+        href: '/admin/usuarios',
+        icon: Users,
+        subtitle: null,
+      },
+      {
+        name: 'Configuración',
+        href: '/admin/configuracion',
+        icon: Settings,
+        subtitle: null,
+      },
+    ],
+  },
+  {
+    section: 'Sistema',
+    requiredRoles: CAN_VIEW_SYSTEM,
+    items: [
+      {
+        name: 'Panel de Control',
+        href: '/superuser',
+        icon: Activity,
+        subtitle: 'Salud del sistema y ML',
+      },
+    ],
+  },
 ];
 
 export function FearsSidebar() {
   const pathname = usePathname();
+  const { profile } = useUserRole();
+  const userRole = profile?.role;
+
+  const visibleGroups = allNavGroups.filter(
+    (group) => !group.requiredRoles || isAuthorized(userRole, group.requiredRoles),
+  );
 
   return (
     <aside className="flex flex-col w-72 bg-white border-r border-gray-200">
@@ -81,7 +123,7 @@ export function FearsSidebar() {
       </div>
 
       <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
-        {navigation.map((group, groupIdx) => (
+        {visibleGroups.map((group, groupIdx) => (
           <div key={groupIdx} className="space-y-1">
             {group.section && (
               <p className="px-3 pt-4 pb-1 text-xs font-semibold text-gray-400 uppercase tracking-wider">
@@ -122,6 +164,15 @@ export function FearsSidebar() {
           </div>
         ))}
       </nav>
+
+      {profile && (
+        <div className="px-5 py-3 border-t border-gray-100">
+          <p className="text-xs text-gray-500 truncate">{profile.email}</p>
+          <p className="text-xs font-medium text-emerald-600">
+            {ROLE_LABELS[userRole as Role] ?? userRole}
+          </p>
+        </div>
+      )}
     </aside>
   );
 }
