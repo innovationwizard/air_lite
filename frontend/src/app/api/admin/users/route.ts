@@ -5,7 +5,7 @@ import { requireAuth } from '@/lib/auth/server';
 import { CAN_MANAGE_USERS, Role } from '@/lib/auth/roles';
 import { createServiceRoleClient } from '@/lib/supabase/server';
 
-const VALID_ROLES: Role[] = ['admin', 'gerencia', 'compras', 'ventas', 'inventario', 'financiero'];
+const VALID_ROLES: Role[] = ['admin', 'gerencia', 'compras', 'ventas', 'inventario', 'financiero', 'testuser'];
 
 /** GET /api/admin/users — list all users with profiles */
 export async function GET() {
