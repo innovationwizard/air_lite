@@ -15,7 +15,7 @@ interface UserRecord {
   lastSignIn: string | null;
 }
 
-const ASSIGNABLE_ROLES: Role[] = ['admin', 'gerencia', 'compras', 'ventas', 'inventario', 'financiero'];
+const ASSIGNABLE_ROLES: Role[] = ['admin', 'gerencia', 'compras', 'ventas', 'inventario', 'financiero', 'testuser'];
 
 export default function UsuariosPage() {
   const [users, setUsers] = useState<UserRecord[]>([]);
