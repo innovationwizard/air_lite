@@ -12,7 +12,7 @@ const inter = Inter({
 export const dynamic = 'force-dynamic';
 
 export const metadata: Metadata = {
-  title: 'AI Refill Lite — Optimización Inteligente de Inventarios',
+  title: 'AI Refill — Optimización Inteligente de Inventarios',
   description:
     'Sistema de predicción de demanda y optimización de inventarios impulsado por inteligencia artificial.',
   icons: {
@@ -23,7 +23,7 @@ export const metadata: Metadata = {
   // Update this when custom domain is configured
   metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL || 'https://air-lite-app.vercel.app'),
   openGraph: {
-    title: 'AI Refill Lite — Optimización Inteligente de Inventarios',
+    title: 'AI Refill — Optimización Inteligente de Inventarios',
     description:
       'Sistema de predicción de demanda y optimización de inventarios impulsado por inteligencia artificial.',
     type: 'website',
@@ -33,14 +33,14 @@ export const metadata: Metadata = {
         url: '/opengraph-image',
         width: 1200,
         height: 630,
-        alt: 'AI Refill Lite — Optimización Inteligente de Inventarios',
+        alt: 'AI Refill — Optimización Inteligente de Inventarios',
         type: 'image/png',
       },
     ],
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'AI Refill Lite — Optimización Inteligente de Inventarios',
+    title: 'AI Refill — Optimización Inteligente de Inventarios',
     description:
       'Sistema de predicción de demanda y optimización de inventarios impulsado por inteligencia artificial.',
     images: ['/opengraph-image'],

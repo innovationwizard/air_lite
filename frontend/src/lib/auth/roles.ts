@@ -1,7 +1,7 @@
 /**
  * RBAC role definitions and authorization helpers.
  *
- * 7 roles: superuser, admin, gerencia, compras, ventas, inventario, financiero
+ * 8 roles: superuser, admin, gerencia, compras, ventas, inventario, financiero, testuser
  * Superuser bypasses all checks.
  */
 
@@ -13,6 +13,7 @@ export const ROLES = {
   VENTAS: 'ventas',
   INVENTARIO: 'inventario',
   FINANCIERO: 'financiero',
+  TESTUSER: 'testuser',
 } as const;
 
 export type Role = (typeof ROLES)[keyof typeof ROLES];
@@ -34,8 +35,11 @@ export const CAN_VIEW_ADMIN: Role[] = ['superuser', 'admin'];
 
 /** All roles can view backtest results and fear pages */
 export const CAN_VIEW_OPERATIONAL: Role[] = [
-  'superuser', 'admin', 'gerencia', 'compras', 'ventas', 'inventario', 'financiero',
+  'superuser', 'admin', 'gerencia', 'compras', 'ventas', 'inventario', 'financiero', 'testuser',
 ];
+
+/** Roles that can only see backtest + POC (no fear pages, no admin) */
+export const CAN_VIEW_POC_ONLY: Role[] = ['testuser'];
 
 /**
  * Check if a role is authorized for an action.
@@ -84,4 +88,5 @@ export const ROLE_LABELS: Record<Role, string> = {
   ventas: 'Ventas',
   inventario: 'Inventario',
   financiero: 'Financiero',
+  testuser: 'Usuario de Prueba',
 };

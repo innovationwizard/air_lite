@@ -18,6 +18,9 @@ import { cn } from '@/lib/utils';
 import { useUserRole } from '@/lib/auth/useUserRole';
 import { isAuthorized, CAN_VIEW_ADMIN, CAN_VIEW_SYSTEM, ROLE_LABELS, Role } from '@/lib/auth/roles';
 
+/** All roles except testuser — testuser only sees backtest + POC */
+const CAN_VIEW_RISKS: Role[] = ['superuser', 'admin', 'gerencia', 'compras', 'ventas', 'inventario', 'financiero'];
+
 interface NavItem {
   name: string;
   href: string;
@@ -44,7 +47,8 @@ const allNavGroups: NavGroup[] = [
     ],
   },
   {
-    section: 'Mis Preocupaciones',
+    section: 'Riesgos Empresariales',
+    requiredRoles: CAN_VIEW_RISKS,
     items: [
       {
         name: 'Desabastecimiento',
@@ -73,7 +77,7 @@ const allNavGroups: NavGroup[] = [
     ],
   },
   {
-    section: 'POC Cliente',
+    section: 'Prueba de Concepto',
     items: [
       {
         name: 'Programación de Compras',
@@ -127,7 +131,7 @@ export function FearsSidebar() {
   return (
     <aside className="flex flex-col w-72 bg-white border-r border-gray-200">
       <div className="flex items-center gap-3 px-5 py-4 border-b border-gray-100">
-        <Image src="/box.svg" alt="AI Refill Lite" width={32} height={32} />
+        <Image src="/box.svg" alt="AI Refill" width={32} height={32} />
         <div>
           <span className="font-semibold text-gray-900 text-sm">AI Refill</span>
           <span className="text-gray-400 text-xs ml-1">Lite</span>

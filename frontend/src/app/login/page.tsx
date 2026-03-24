@@ -38,12 +38,12 @@ export default function LoginPage() {
         <div className="text-center">
           <Image
             src="/box.svg"
-            alt="AI Refill Lite"
+            alt="AI Refill"
             width={64}
             height={64}
             className="mx-auto mb-4"
           />
-          <h1 className="text-2xl font-bold text-gray-900">AI Refill Lite</h1>
+          <h1 className="text-2xl font-bold text-gray-900">AI Refill</h1>
           <p className="text-gray-500 mt-1 text-sm">
             Optimización inteligente de inventarios
           </p>
