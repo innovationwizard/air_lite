@@ -174,13 +174,17 @@ def run_all_purchase_schedules():
     results = []
     errors = []
 
-    # Start with 3 months training, then add weeks
-    # Week 0: train Oct-Dec 2024, predict first week of Jan 2025
-    # Week 1: train Oct-Dec 2024 + 1 week, predict second week of Jan 2025
-    # Continue until we run out of data (Mar 2026)
+    # Check how many cycles already completed to resume from where we left off
+    existing = supabase.table('purchase_schedule_runs').select(
+        'id', count='exact'
+    ).eq('status', 'completed').execute()
+    start_offset = existing.count if existing.count else 0
+
     training_months = 3
-    week_offset = 0
+    week_offset = start_offset
     max_weeks = 70  # Safety limit
+
+    logger.info('Resuming from week_offset=%d (%d already completed)', week_offset, start_offset)
 
     while week_offset < max_weeks:
         logger.info('=== Purchase schedule: week_offset=%d ===', week_offset)

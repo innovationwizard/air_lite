@@ -26,4 +26,4 @@ COPY . .
 
 EXPOSE 5000
 
-CMD ["gunicorn", "--bind", "0.0.0.0:5000", "--timeout", "600", "--workers", "1", "api:app"]
+CMD ["gunicorn", "--bind", "0.0.0.0:5000", "--timeout", "3600", "--workers", "1", "api:app"]
