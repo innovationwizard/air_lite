@@ -274,6 +274,7 @@ export default function BacktestPage() {
               reasoning={savings.rotation_reasoning}
               icon={<RefreshCw className="w-5 h-5 text-emerald-600" />}
               accentColor="bg-emerald-50"
+              headlineOverride={`${savings.actual_turnover_rate.toFixed(1)}x → ${savings.optimized_turnover_rate.toFixed(1)}x`}
             />
           </div>
 

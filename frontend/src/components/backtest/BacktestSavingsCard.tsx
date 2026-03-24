@@ -11,6 +11,8 @@ interface BacktestSavingsCardProps {
   reasoning: string;
   icon: React.ReactNode;
   accentColor: string;
+  /** Override the headline (e.g. for non-monetary metrics like turnover rate) */
+  headlineOverride?: string;
 }
 
 export function BacktestSavingsCard({
@@ -20,6 +22,7 @@ export function BacktestSavingsCard({
   reasoning,
   icon,
   accentColor,
+  headlineOverride,
 }: BacktestSavingsCardProps) {
   const [expanded, setExpanded] = useState(false);
 
@@ -37,7 +40,7 @@ export function BacktestSavingsCard({
             <div>
               <p className="text-sm font-medium text-gray-500">{title}</p>
               <p className="text-2xl font-bold text-gray-900">
-                GTQ {savingsGtq.toLocaleString('es-GT', { maximumFractionDigits: 0 })}
+                {headlineOverride ?? `GTQ ${savingsGtq.toLocaleString('es-GT', { maximumFractionDigits: 0 })}`}
               </p>
             </div>
           </div>
