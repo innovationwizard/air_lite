@@ -12,6 +12,7 @@ import {
   Settings,
   Users,
   Activity,
+  Truck,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useUserRole } from '@/lib/auth/useUserRole';
@@ -68,6 +69,17 @@ const allNavGroups: NavGroup[] = [
         href: '/preocupaciones/compras-innecesarias',
         icon: ShoppingCart,
         subtitle: 'Estoy comprando de más',
+      },
+    ],
+  },
+  {
+    section: 'POC Cliente',
+    items: [
+      {
+        name: 'Programación de Compras',
+        href: '/poc/programacion',
+        icon: Truck,
+        subtitle: 'Carvajal y Reyma — 2 semanas máx.',
       },
     ],
   },
