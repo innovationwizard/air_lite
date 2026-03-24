@@ -96,14 +96,23 @@ def calculate_storage_savings(
     savings = max(0, actual_holding_cost - optimized_holding_cost)
     savings_pct = (savings / actual_holding_cost * 100) if actual_holding_cost > 0 else 0
 
-    reasoning = (
-        f'El costo actual de almacenamiento fue de GTQ {actual_holding_cost:,.0f} '
-        f'(tasa aplicada: {holding_cost_rate_annual*100:.0f}% anual). '
-        f'Con AI Refill, los niveles de inventario optimizados habrían reducido '
-        f'el inventario promedio de {actual_total_units:,.0f} a {optimized_total_units:,.0f} '
-        f'unidades, resultando en un costo de almacenamiento de GTQ {optimized_holding_cost:,.0f}. '
-        f'Ahorro: GTQ {savings:,.0f} ({savings_pct:.1f}%).'
-    )
+    if savings > 0:
+        reasoning = (
+            f'El costo actual de almacenamiento fue de GTQ {actual_holding_cost:,.0f} '
+            f'(tasa aplicada: {holding_cost_rate_annual*100:.0f}% anual). '
+            f'Con AI Refill, los niveles de inventario optimizados habrían reducido '
+            f'el inventario promedio de {actual_total_units:,.0f} a {optimized_total_units:,.0f} '
+            f'unidades, resultando en un costo de almacenamiento de GTQ {optimized_holding_cost:,.0f}. '
+            f'Ahorro: GTQ {savings:,.0f} ({savings_pct:.1f}%).'
+        )
+    else:
+        reasoning = (
+            f'El costo actual de almacenamiento fue de GTQ {actual_holding_cost:,.0f} '
+            f'(tasa aplicada: {holding_cost_rate_annual*100:.0f}% anual). '
+            f'El inventario actual promedio ({actual_total_units:,.0f} unidades) ya es menor '
+            f'o igual al nivel óptimo calculado ({optimized_total_units:,.0f} unidades), '
+            f'por lo que no se identifican ahorros adicionales en almacenamiento.'
+        )
 
     return {
         'actual_storage_cost': round(actual_holding_cost, 4),
