@@ -3,6 +3,7 @@
 export const dynamic = 'force-dynamic';
 
 import { useState, useEffect } from 'react';
+import { Play, ChevronRight } from 'lucide-react';
 
 interface ScheduleRun {
   id: number;
@@ -58,18 +59,10 @@ const formatWeek = (start: string, end: string) => {
   return `${sStr} – ${eStr}`;
 };
 
-const dayNames: Record<string, string> = {
-  'lun': 'Lunes',
-  'mar': 'Martes',
-  'mié': 'Miércoles',
-  'jue': 'Jueves',
-  'vie': 'Viernes',
-  'sáb': 'Sábado',
-  'dom': 'Domingo',
-};
 
 export default function ProgramacionPage() {
   const [runs, setRuns] = useState<ScheduleRun[]>([]);
+  const [currentIndex, setCurrentIndex] = useState(-1); // -1 = start screen
   const [selectedRun, setSelectedRun] = useState<ScheduleRun | null>(null);
   const [lines, setLines] = useState<ScheduleLine[]>([]);
   const [loading, setLoading] = useState(true);
@@ -86,7 +79,10 @@ export default function ProgramacionPage() {
       .catch(() => setLoading(false));
   }, []);
 
-  const loadRunDetail = async (run: ScheduleRun) => {
+  const loadRunByIndex = async (index: number) => {
+    if (index < 0 || index >= runs.length) return;
+    setCurrentIndex(index);
+    const run = runs[index];
     setSelectedRun(run);
     setDetailLoading(true);
     setExpandedProduct(null);
@@ -99,6 +95,11 @@ export default function ProgramacionPage() {
     }
     setDetailLoading(false);
   };
+
+  const handleStart = () => loadRunByIndex(0);
+  const handleNext = () => loadRunByIndex(currentIndex + 1);
+  const hasStarted = currentIndex >= 0;
+  const isLastRun = currentIndex === runs.length - 1;
 
   // Group lines by date for the selected run
   const linesByDate = lines.reduce((acc, line) => {
@@ -118,12 +119,6 @@ export default function ProgramacionPage() {
     return acc;
   }, {} as Record<string, { lines: ScheduleLine[]; totalUnits: number; totalValue: number }>);
 
-  // Cumulative totals across all runs
-  const cumulativeUnits = runs.reduce((sum, r) => sum + (r.total_units_recommended || 0), 0);
-  const cumulativeValue = runs.reduce((sum, r) => sum + (r.total_value_recommended || 0), 0);
-  const avgProductsPerWeek = runs.length > 0
-    ? Math.round(runs.reduce((sum, r) => sum + (r.products_scheduled || 0), 0) / runs.length)
-    : 0;
 
   if (loading) {
     return (
@@ -136,67 +131,78 @@ export default function ProgramacionPage() {
     );
   }
 
+  // ═══════════════════════════════════════════════
+  // START SCREEN
+  // ═══════════════════════════════════════════════
+  if (!hasStarted) {
+    return (
+      <div className="p-6 max-w-5xl mx-auto space-y-8">
+        <div className="text-center space-y-2">
+          <h1 className="text-3xl font-bold text-gray-900">
+            Programación de Compras Semanal
+          </h1>
+          <p className="text-gray-500 text-lg">
+            Proveedores Carvajal y Reyma — Política de inventario máximo: 2 semanas
+          </p>
+        </div>
+
+        <button
+          onClick={handleStart}
+          className="w-full bg-gradient-to-br from-emerald-600 to-emerald-700 rounded-2xl p-12 text-white text-center shadow-xl hover:from-emerald-500 hover:to-emerald-600 transition-all cursor-pointer group"
+        >
+          <div className="flex flex-col items-center gap-6">
+            <div className="w-20 h-20 rounded-full bg-white/20 flex items-center justify-center group-hover:bg-white/30 transition-colors">
+              <Play className="w-10 h-10 text-white ml-1" />
+            </div>
+            <div>
+              <p className="text-2xl font-bold mb-2">
+                Iniciar Prueba de Concepto
+              </p>
+              <p className="text-emerald-100 text-lg">
+                Productos de Carvajal y Reyma, ciclos semanales
+              </p>
+            </div>
+          </div>
+        </button>
+
+        {runs.length > 0 && (
+          <p className="text-center text-sm text-gray-400">
+            {runs.length} semanas de datos listos para analizar
+          </p>
+        )}
+      </div>
+    );
+  }
+
+  // ═══════════════════════════════════════════════
+  // PLAYBACK
+  // ═══════════════════════════════════════════════
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">
-      {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">
-          Programación de Compras Semanal
-        </h1>
-        <p className="text-gray-600 mt-1">
-          Proveedores Carvajal y Reyma — Política de inventario máximo: 2 semanas
-        </p>
-        <p className="text-sm text-gray-500 mt-1">
-          La IA analiza la demanda histórica y el inventario actual para recomendar
-          qué comprar, cuánto y cuándo, respetando el límite de 14 días de inventario máximo.
-        </p>
+      {/* Header with progress */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">
+            Programación de Compras Semanal
+          </h1>
+          <p className="text-gray-500">
+            Semana {currentIndex + 1} de {runs.length} — Carvajal y Reyma
+          </p>
+        </div>
+        <button
+          onClick={() => { setCurrentIndex(-1); setSelectedRun(null); setLines([]); }}
+          className="text-sm text-gray-400 hover:text-gray-600"
+        >
+          Reiniciar
+        </button>
       </div>
 
-      {/* KPI Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="bg-white border rounded-lg p-4">
-          <p className="text-sm text-gray-500">Semanas analizadas</p>
-          <p className="text-2xl font-bold text-gray-900">{runs.length}</p>
-        </div>
-        <div className="bg-white border rounded-lg p-4">
-          <p className="text-sm text-gray-500">Productos promedio/semana</p>
-          <p className="text-2xl font-bold text-gray-900">{avgProductsPerWeek}</p>
-        </div>
-        <div className="bg-white border rounded-lg p-4">
-          <p className="text-sm text-gray-500">Unidades recomendadas (total)</p>
-          <p className="text-2xl font-bold text-gray-900">{formatNumber(cumulativeUnits)}</p>
-        </div>
-        <div className="bg-white border rounded-lg p-4">
-          <p className="text-sm text-gray-500">Valor total recomendado</p>
-          <p className="text-2xl font-bold text-emerald-700">{formatGTQ(cumulativeValue)}</p>
-        </div>
-      </div>
-
-      {/* Timeline */}
-      <div className="bg-white border rounded-lg p-4">
-        <h2 className="text-sm font-semibold text-gray-700 mb-3">
-          Seleccione una semana para ver la programación detallada
-        </h2>
-        <div className="flex flex-wrap gap-2">
-          {runs.map((run) => (
-            <button
-              key={run.id}
-              onClick={() => loadRunDetail(run)}
-              className={`px-3 py-2 rounded-md text-xs font-medium transition-colors ${
-                selectedRun?.id === run.id
-                  ? 'bg-emerald-600 text-white'
-                  : run.products_scheduled > 0
-                  ? 'bg-emerald-50 text-emerald-800 hover:bg-emerald-100 border border-emerald-200'
-                  : 'bg-gray-50 text-gray-500 hover:bg-gray-100 border border-gray-200'
-              }`}
-            >
-              {formatWeek(run.schedule_week_start, run.schedule_week_end)}
-              {run.products_scheduled > 0 && (
-                <span className="ml-1 opacity-75">({run.products_scheduled})</span>
-              )}
-            </button>
-          ))}
-        </div>
+      {/* Progress bar */}
+      <div className="w-full bg-gray-200 rounded-full h-2">
+        <div
+          className="bg-emerald-600 h-2 rounded-full transition-all duration-500"
+          style={{ width: `${((currentIndex + 1) / runs.length) * 100}%` }}
+        />
       </div>
 
       {/* Selected Week Detail */}
@@ -388,6 +394,55 @@ export default function ProgramacionPage() {
           )}
         </div>
       )}
+
+      {/* NEXT BUTTON */}
+      <div className="flex justify-center pt-4">
+        {!isLastRun ? (
+          <button
+            onClick={handleNext}
+            className="flex items-center gap-3 px-8 py-4 bg-emerald-600 text-white rounded-xl text-lg font-semibold hover:bg-emerald-500 transition-colors shadow-lg"
+          >
+            Siguiente semana: {runs[currentIndex + 1] && formatWeek(runs[currentIndex + 1].schedule_week_start, runs[currentIndex + 1].schedule_week_end)}
+            <ChevronRight className="w-6 h-6" />
+          </button>
+        ) : (
+          <div className="text-center space-y-4 py-4">
+            <p className="text-2xl font-bold text-gray-900">
+              Prueba de concepto finalizada
+            </p>
+            <p className="text-gray-500">
+              {runs.length} semanas analizadas — Carvajal y Reyma
+            </p>
+            <button
+              onClick={() => { setCurrentIndex(-1); setSelectedRun(null); setLines([]); }}
+              className="px-6 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+            >
+              Volver al inicio
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Timeline breadcrumbs */}
+      <div className="bg-white rounded-xl border border-gray-200 p-4">
+        <div className="flex items-center gap-1 overflow-x-auto pb-1">
+          {runs.map((run, i) => (
+            <button
+              key={run.id}
+              onClick={() => loadRunByIndex(i)}
+              className={`px-2 py-1 rounded text-xs font-medium whitespace-nowrap transition-colors ${
+                i === currentIndex
+                  ? 'bg-emerald-600 text-white'
+                  : i < currentIndex
+                  ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'
+                  : 'bg-gray-100 text-gray-400'
+              }`}
+            >
+              S{i + 1}
+            </button>
+          ))}
+        </div>
+      </div>
 
       {/* Methodology */}
       <div className="bg-gray-50 border rounded-lg p-5 text-sm text-gray-600">
