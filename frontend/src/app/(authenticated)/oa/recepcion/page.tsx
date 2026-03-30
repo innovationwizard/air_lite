@@ -3,7 +3,7 @@
 export const dynamic = 'force-dynamic';
 
 import { useState, useEffect } from 'react';
-import { Container, Calendar, AlertTriangle, Warehouse } from 'lucide-react';
+import { Container, Calendar, AlertTriangle, Warehouse, Play, CheckCircle } from 'lucide-react';
 
 interface TruckRow {
   id: number;
@@ -55,8 +55,12 @@ const saturationColor = (pct: number) => {
 
 const STATUS_COLORS: Record<string, string> = {
   programado: 'bg-blue-100 text-blue-700',
+  scheduled: 'bg-blue-100 text-blue-700',
+  arrived: 'bg-indigo-100 text-indigo-700',
   en_descarga: 'bg-amber-100 text-amber-700',
+  unloading: 'bg-amber-100 text-amber-700',
   completado: 'bg-green-100 text-green-700',
+  completed: 'bg-green-100 text-green-700',
   cancelado: 'bg-gray-100 text-gray-600',
 };
 
@@ -66,17 +70,25 @@ const PRIORITY_COLORS: Record<string, string> = {
   baja: 'bg-green-100 text-green-700',
 };
 
+const canStart = (status: string) =>
+  ['programado', 'scheduled', 'arrived'].includes(status?.toLowerCase());
+
+const canComplete = (status: string) =>
+  ['en_descarga', 'unloading'].includes(status?.toLowerCase());
+
 export default function RecepcionPage() {
   const [data, setData] = useState<ReceptionRow | null>(null);
   const [loading, setLoading] = useState(true);
   const [empty, setEmpty] = useState(false);
   const [warehouseFilter, setWarehouseFilter] = useState('1');
+  const [actionLoading, setActionLoading] = useState<number | null>(null);
+  const [successMsg, setSuccessMsg] = useState('');
   const [selectedDate, setSelectedDate] = useState(() => {
     const today = new Date();
     return today.toISOString().split('T')[0];
   });
 
-  useEffect(() => {
+  const loadData = () => {
     setLoading(true);
     setEmpty(false);
     setData(null);
@@ -98,7 +110,57 @@ export default function RecepcionPage() {
         setData(null);
         setLoading(false);
       });
+  };
+
+  useEffect(() => {
+    loadData();
+    setSuccessMsg('');
   }, [selectedDate, warehouseFilter]);
+
+  const handleStart = async (truck: TruckRow) => {
+    setActionLoading(truck.id);
+    setSuccessMsg('');
+    try {
+      await fetch('/api/oa/reception', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: truck.id,
+          status: 'unloading',
+          started_at: new Date().toISOString(),
+        }),
+      });
+      loadData();
+    } catch {
+      // silently fail
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleComplete = async (truck: TruckRow) => {
+    setActionLoading(truck.id);
+    setSuccessMsg('');
+    try {
+      await fetch('/api/oa/reception', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: truck.id,
+          status: 'completed',
+          completed_at: new Date().toISOString(),
+        }),
+      });
+      // Recalculate unload times
+      await fetch('/api/oa/recalc-unload', { method: 'POST' });
+      setSuccessMsg('Descarga registrada \u2014 tiempos de descarga recalculados');
+      loadData();
+    } catch {
+      // silently fail
+    } finally {
+      setActionLoading(null);
+    }
+  };
 
   const satColor = data ? saturationColor(data.saturation_pct) : saturationColor(0);
   const warehouseLabel = data?.warehouse_name
@@ -137,6 +199,14 @@ export default function RecepcionPage() {
           className="border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
         />
       </div>
+
+      {/* Success message */}
+      {successMsg && (
+        <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-200 text-emerald-700 px-4 py-3 rounded-lg text-sm">
+          <CheckCircle className="w-4 h-4 flex-shrink-0" />
+          <span>{successMsg}</span>
+        </div>
+      )}
 
       {loading ? (
         <div className="bg-white rounded-xl border border-gray-200 p-8 text-center text-gray-400">
@@ -217,18 +287,20 @@ export default function RecepcionPage() {
                     <th className="text-center px-4 py-3 font-medium text-gray-500">Prioridad</th>
                     <th className="text-center px-4 py-3 font-medium text-gray-500">Estado</th>
                     <th className="text-right px-4 py-3 font-medium text-gray-500"># Hot List</th>
+                    <th className="text-center px-4 py-3 font-medium text-gray-500">Acciones</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
                   {data.trucks.length === 0 ? (
                     <tr>
-                      <td colSpan={7} className="px-4 py-8 text-center text-gray-400">
+                      <td colSpan={8} className="px-4 py-8 text-center text-gray-400">
                         No hay recepciones programadas para esta fecha
                       </td>
                     </tr>
                   ) : (
                     data.trucks.map((truck) => {
                       const hotCount = truck.hot_list_products?.length ?? 0;
+                      const isActionLoading = actionLoading === truck.id;
                       return (
                         <tr key={truck.id} className="hover:bg-gray-50">
                           <td className="px-4 py-3 font-medium text-gray-900">
@@ -267,6 +339,35 @@ export default function RecepcionPage() {
                             ) : (
                               <span className="text-gray-300">0</span>
                             )}
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            <div className="flex items-center justify-center gap-2">
+                              {canStart(truck.status) && (
+                                <button
+                                  onClick={() => handleStart(truck)}
+                                  disabled={isActionLoading}
+                                  className="inline-flex items-center gap-1 px-3 py-1 bg-amber-500 text-white rounded-lg text-xs font-medium hover:bg-amber-600 transition-colors disabled:opacity-50"
+                                  title="Iniciar descarga"
+                                >
+                                  <Play className="w-3 h-3" />
+                                  Iniciar
+                                </button>
+                              )}
+                              {canComplete(truck.status) && (
+                                <button
+                                  onClick={() => handleComplete(truck)}
+                                  disabled={isActionLoading}
+                                  className="inline-flex items-center gap-1 px-3 py-1 bg-emerald-600 text-white rounded-lg text-xs font-medium hover:bg-emerald-700 transition-colors disabled:opacity-50"
+                                  title="Completar descarga"
+                                >
+                                  <CheckCircle className="w-3 h-3" />
+                                  Completar
+                                </button>
+                              )}
+                              {!canStart(truck.status) && !canComplete(truck.status) && (
+                                <span className="text-xs text-gray-400">&mdash;</span>
+                              )}
+                            </div>
                           </td>
                         </tr>
                       );

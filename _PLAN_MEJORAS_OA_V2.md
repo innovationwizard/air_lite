@@ -2,7 +2,8 @@
 
 **Fuente**: _Respuestas.pdf (respuestas a preguntas criticas) + Especificaciones.pdf + _ODOO_EXPLORATION_RESULTS.md
 **Fecha**: 2026-03-30
-**Estado**: Plan aprobado para ejecucion
+**Estado**: STALE — Superseded by _PLAN_MEJORAS_OA_V3.md (2026-03-30)
+**Nota**: Este documento contiene estimaciones que resultaron incorrectas (volumen de productos, match de IDs). Ver V3 para datos corregidos.
 
 ---
 

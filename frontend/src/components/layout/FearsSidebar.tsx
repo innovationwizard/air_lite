@@ -17,6 +17,8 @@ import {
   FileCheck,
   Gauge,
   Container,
+  AlertOctagon,
+  FileText,
   Wrench,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -110,6 +112,12 @@ const allNavGroups: NavGroup[] = [
         subtitle: 'KPIs de facturación',
       },
       {
+        name: 'Pedidos Extraordinarios',
+        href: '/oa/extraordinarios',
+        icon: AlertOctagon,
+        subtitle: 'Ampliación de OA',
+      },
+      {
         name: 'Espacio en Bodega',
         href: '/oa/espacio-bodega',
         icon: Warehouse,
@@ -120,6 +128,12 @@ const allNavGroups: NavGroup[] = [
         href: '/oa/recepcion',
         icon: Container,
         subtitle: 'Ventanas de descarga',
+      },
+      {
+        name: 'Reporte Proveedor',
+        href: '/oa/reporte-proveedor',
+        icon: FileText,
+        subtitle: 'Compartir con Carvajal/Reyma',
       },
       {
         name: 'Configuración OA',
