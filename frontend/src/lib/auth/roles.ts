@@ -38,6 +38,11 @@ export const CAN_VIEW_OPERATIONAL: Role[] = [
   'superuser', 'admin', 'gerencia', 'compras', 'ventas', 'inventario', 'financiero', 'testuser',
 ];
 
+/** Roles that can access OA (Open Orders) module */
+export const CAN_VIEW_OA: Role[] = [
+  'superuser', 'admin', 'gerencia', 'compras', 'inventario', 'financiero',
+];
+
 /** Roles that can only see backtest + POC (no fear pages, no admin) */
 export const CAN_VIEW_POC_ONLY: Role[] = ['testuser'];
 
@@ -58,6 +63,7 @@ export function isAuthorized(userRole: Role | string | null | undefined, allowed
 export const PAGE_PERMISSIONS: Record<string, Role[]> = {
   '/backtest': CAN_VIEW_OPERATIONAL,
   '/preocupaciones': CAN_VIEW_OPERATIONAL,
+  '/oa': CAN_VIEW_OA,
   '/superuser': CAN_VIEW_SYSTEM,
   '/admin': CAN_VIEW_ADMIN,
   '/configuracion': CAN_VIEW_ADMIN,

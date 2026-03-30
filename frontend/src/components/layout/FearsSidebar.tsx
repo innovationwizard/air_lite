@@ -13,10 +13,15 @@ import {
   Users,
   Activity,
   Truck,
+  ClipboardList,
+  FileCheck,
+  Gauge,
+  Container,
+  Wrench,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useUserRole } from '@/lib/auth/useUserRole';
-import { isAuthorized, CAN_VIEW_ADMIN, CAN_VIEW_SYSTEM, ROLE_LABELS, Role } from '@/lib/auth/roles';
+import { isAuthorized, CAN_VIEW_ADMIN, CAN_VIEW_SYSTEM, CAN_VIEW_OA, ROLE_LABELS, Role } from '@/lib/auth/roles';
 
 /** All roles except testuser — testuser only sees backtest + POC */
 const CAN_VIEW_RISKS: Role[] = ['superuser', 'admin', 'gerencia', 'compras', 'ventas', 'inventario', 'financiero'];
@@ -73,6 +78,54 @@ const allNavGroups: NavGroup[] = [
         href: '/preocupaciones/compras-innecesarias',
         icon: ShoppingCart,
         subtitle: 'Estoy comprando de más',
+      },
+    ],
+  },
+  {
+    section: 'Órdenes Abiertas',
+    requiredRoles: CAN_VIEW_OA,
+    items: [
+      {
+        name: 'Excepciones del Día',
+        href: '/oa/excepciones',
+        icon: AlertTriangle,
+        subtitle: 'Hot List y Hold List',
+      },
+      {
+        name: 'Dashboard Proveedor',
+        href: '/oa/dashboard-proveedor',
+        icon: Gauge,
+        subtitle: 'Semáforo por producto',
+      },
+      {
+        name: 'Plan Maestro',
+        href: '/oa/plan-maestro',
+        icon: ClipboardList,
+        subtitle: 'OA mensual S1-S4',
+      },
+      {
+        name: 'Cumplimiento',
+        href: '/oa/cumplimiento',
+        icon: FileCheck,
+        subtitle: 'KPIs de facturación',
+      },
+      {
+        name: 'Espacio en Bodega',
+        href: '/oa/espacio-bodega',
+        icon: Warehouse,
+        subtitle: 'Capacidad y saturación m³',
+      },
+      {
+        name: 'Recepción',
+        href: '/oa/recepcion',
+        icon: Container,
+        subtitle: 'Ventanas de descarga',
+      },
+      {
+        name: 'Configuración OA',
+        href: '/oa/configuracion',
+        icon: Wrench,
+        subtitle: 'Bodega, rampas, tiempos',
       },
     ],
   },

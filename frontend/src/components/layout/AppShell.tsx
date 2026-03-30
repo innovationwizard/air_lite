@@ -3,6 +3,7 @@
 import { ReactNode } from 'react';
 import { FearsSidebar } from './FearsSidebar';
 import { UserMenu } from './UserMenu';
+import OAAlertBanner from './OAAlertBanner';
 
 interface AppShellProps {
   children: ReactNode;
@@ -22,6 +23,7 @@ export function AppShell({ children }: AppShellProps) {
           </div>
           <UserMenu />
         </header>
+        <OAAlertBanner />
         <main className="flex-1 overflow-y-auto p-6">
           {children}
         </main>
