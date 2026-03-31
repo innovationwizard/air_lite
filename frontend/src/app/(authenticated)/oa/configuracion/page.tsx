@@ -3,7 +3,7 @@
 export const dynamic = 'force-dynamic';
 
 import { useState, useEffect } from 'react';
-import { Wrench, Plus, Save, Check } from 'lucide-react';
+import { Wrench, Plus, Save, Check, Pencil, Trash2, X } from 'lucide-react';
 
 interface UnloadingTime {
   id?: number;
@@ -59,6 +59,10 @@ export default function ConfiguracionPage() {
   const [savingConfig, setSavingConfig] = useState(false);
   const [savingRow, setSavingRow] = useState<number | null>(null);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  const [editingIdx, setEditingIdx] = useState<number | null>(null);
+  const [editRow, setEditRow] = useState<UnloadingTime | null>(null);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
 
   // New row form state
   const [newRow, setNewRow] = useState<UnloadingTime>({
@@ -120,10 +124,17 @@ export default function ConfiguracionPage() {
     }
   };
 
-  const handleSaveUnloadRow = async (row: UnloadingTime, index?: number) => {
-    if (index !== undefined) setSavingRow(index);
+  const reloadUnloadingTimes = async () => {
+    const res = await fetch('/api/oa/warehouse-config?type=unloading');
+    const data = await res.json();
+    const rows: UnloadingTime[] = Array.isArray(data) ? data : data.data ?? [];
+    setUnloadingTimes(rows);
+  };
+
+  const handleAddUnloadRow = async () => {
+    setSavingRow(-1);
     try {
-      const { id, created_at, updated_at, ...body } = row;
+      const { id, created_at, updated_at, ...body } = newRow;
       void id; void created_at; void updated_at;
       const res = await fetch('/api/oa/warehouse-config?type=unloading', {
         method: 'POST',
@@ -134,20 +145,56 @@ export default function ConfiguracionPage() {
         const err = await res.json().catch(() => ({}));
         throw new Error(err.error || 'Error al guardar');
       }
-      showMessage('success', 'Tiempo de descarga guardado');
-      // Reload unloading times
-      const reloadRes = await fetch('/api/oa/warehouse-config?type=unloading');
-      const reloaded = await reloadRes.json();
-      const rows: UnloadingTime[] = Array.isArray(reloaded) ? reloaded : reloaded.data ?? [];
-      setUnloadingTimes(rows);
-      // Reset new row form if adding
-      if (index === undefined) {
-        setNewRow({ supplier_id: '', unit_type: 'furgon_53', estimated_hours: 1, notes: '' });
-      }
+      showMessage('success', 'Tiempo de descarga agregado');
+      await reloadUnloadingTimes();
+      setNewRow({ supplier_id: '', unit_type: 'furgon_53', estimated_hours: 1, notes: '' });
     } catch (e: unknown) {
       showMessage('error', e instanceof Error ? e.message : 'Error desconocido');
     } finally {
       setSavingRow(null);
+    }
+  };
+
+  const handleEditSave = async () => {
+    if (!editRow || editingIdx === null) return;
+    setSavingRow(editingIdx);
+    try {
+      const res = await fetch('/api/oa/warehouse-config?type=unloading', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(editRow),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'Error al guardar');
+      }
+      showMessage('success', 'Tiempo de descarga actualizado');
+      await reloadUnloadingTimes();
+      setEditingIdx(null);
+      setEditRow(null);
+    } catch (e: unknown) {
+      showMessage('error', e instanceof Error ? e.message : 'Error desconocido');
+    } finally {
+      setSavingRow(null);
+    }
+  };
+
+  const handleDelete = async (id: number) => {
+    setDeletingId(id);
+    try {
+      const res = await fetch(`/api/oa/warehouse-config?type=unloading&id=${id}`, {
+        method: 'DELETE',
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'Error al eliminar');
+      }
+      showMessage('success', 'Tiempo de descarga eliminado');
+      await reloadUnloadingTimes();
+    } catch (e: unknown) {
+      showMessage('error', e instanceof Error ? e.message : 'Error desconocido');
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -323,25 +370,99 @@ export default function ConfiguracionPage() {
                   </td>
                 </tr>
               )}
-              {unloadingTimes.map((ut, idx) => (
-                <tr key={ut.id ?? idx} className="hover:bg-gray-50">
-                  <td className="px-4 py-3 text-gray-900">{ut.supplier_id}</td>
-                  <td className="px-4 py-3 text-gray-500">
-                    {UNIT_TYPE_LABELS[ut.unit_type] ?? ut.unit_type}
-                  </td>
-                  <td className="px-4 py-3 text-right text-gray-900">{ut.estimated_hours}</td>
-                  <td className="px-4 py-3 text-gray-500">{ut.notes || '\u2014'}</td>
-                  <td className="px-4 py-3 text-center">
-                    <button
-                      onClick={() => handleSaveUnloadRow(ut, idx)}
-                      disabled={savingRow === idx}
-                      className="text-emerald-600 hover:text-emerald-800 transition-colors text-xs font-medium disabled:opacity-50"
-                    >
-                      {savingRow === idx ? 'Guardando...' : 'Re-guardar'}
-                    </button>
-                  </td>
-                </tr>
-              ))}
+              {unloadingTimes.map((ut, idx) => {
+                const isEditing = editingIdx === idx;
+                if (isEditing && editRow) {
+                  return (
+                    <tr key={ut.id ?? idx} className="bg-amber-50/40">
+                      <td className="px-4 py-2">
+                        <input
+                          type="text"
+                          value={editRow.supplier_id}
+                          onChange={(e) => setEditRow({ ...editRow, supplier_id: e.target.value })}
+                          className={inputClass}
+                        />
+                      </td>
+                      <td className="px-4 py-2">
+                        <select
+                          value={editRow.unit_type}
+                          onChange={(e) => setEditRow({ ...editRow, unit_type: e.target.value })}
+                          className={inputClass}
+                        >
+                          {UNIT_TYPE_OPTIONS.map((o) => (
+                            <option key={o.value} value={o.value}>{o.label}</option>
+                          ))}
+                        </select>
+                      </td>
+                      <td className="px-4 py-2">
+                        <input
+                          type="number"
+                          min={0}
+                          step={0.5}
+                          value={editRow.estimated_hours}
+                          onChange={(e) => setEditRow({ ...editRow, estimated_hours: Number(e.target.value) })}
+                          className={`${inputClass} w-24 text-right`}
+                        />
+                      </td>
+                      <td className="px-4 py-2">
+                        <input
+                          type="text"
+                          value={editRow.notes}
+                          onChange={(e) => setEditRow({ ...editRow, notes: e.target.value })}
+                          className={inputClass}
+                        />
+                      </td>
+                      <td className="px-4 py-2 text-center">
+                        <div className="flex items-center justify-center gap-2">
+                          <button
+                            onClick={handleEditSave}
+                            disabled={savingRow === idx}
+                            className="inline-flex items-center gap-1 px-3 py-1.5 bg-emerald-600 text-white rounded-lg text-xs font-medium hover:bg-emerald-700 transition-colors disabled:opacity-50"
+                          >
+                            <Save className="w-3.5 h-3.5" />
+                            {savingRow === idx ? 'Guardando...' : 'Guardar'}
+                          </button>
+                          <button
+                            onClick={() => { setEditingIdx(null); setEditRow(null); }}
+                            className="inline-flex items-center gap-1 px-2 py-1.5 text-gray-500 hover:text-gray-700 transition-colors text-xs"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                }
+                return (
+                  <tr key={ut.id ?? idx} className="hover:bg-gray-50">
+                    <td className="px-4 py-3 text-gray-900">{ut.supplier_id}</td>
+                    <td className="px-4 py-3 text-gray-500">
+                      {UNIT_TYPE_LABELS[ut.unit_type] ?? ut.unit_type}
+                    </td>
+                    <td className="px-4 py-3 text-right text-gray-900">{ut.estimated_hours}</td>
+                    <td className="px-4 py-3 text-gray-500">{ut.notes || '\u2014'}</td>
+                    <td className="px-4 py-3 text-center">
+                      <div className="flex items-center justify-center gap-2">
+                        <button
+                          onClick={() => { setEditingIdx(idx); setEditRow({ ...ut }); }}
+                          className="text-amber-600 hover:text-amber-800 transition-colors"
+                          title="Editar"
+                        >
+                          <Pencil className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => ut.id && handleDelete(ut.id)}
+                          disabled={deletingId === ut.id}
+                          className="text-red-500 hover:text-red-700 transition-colors disabled:opacity-50"
+                          title="Eliminar"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
 
               {/* Inline add row */}
               <tr className="bg-emerald-50/30">
@@ -390,8 +511,8 @@ export default function ConfiguracionPage() {
                 </td>
                 <td className="px-4 py-2 text-center">
                   <button
-                    onClick={() => handleSaveUnloadRow(newRow)}
-                    disabled={!newRow.supplier_id}
+                    onClick={handleAddUnloadRow}
+                    disabled={!newRow.supplier_id || savingRow === -1}
                     className="inline-flex items-center gap-1 px-3 py-1.5 bg-emerald-600 text-white rounded-lg text-xs font-medium hover:bg-emerald-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <Plus className="w-3.5 h-3.5" />

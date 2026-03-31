@@ -36,6 +36,32 @@ export async function GET(request: NextRequest) {
   }
 }
 
+export async function DELETE(request: NextRequest) {
+  try {
+    const supabase = createServiceRoleClient();
+    const { searchParams } = new URL(request.url);
+    const type = searchParams.get('type');
+    const id = searchParams.get('id');
+
+    if (!id) {
+      return NextResponse.json({ error: 'ID requerido' }, { status: 400 });
+    }
+
+    const table = type === 'unloading' ? 'unloading_times' : 'warehouse_config';
+    const { error } = await supabase.from(table).delete().eq('id', Number(id));
+
+    if (error) throw error;
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error('Warehouse config DELETE error:', error);
+    return NextResponse.json(
+      { error: 'Error al eliminar registro' },
+      { status: 500 },
+    );
+  }
+}
+
 export async function POST(request: NextRequest) {
   try {
     const supabase = createServiceRoleClient();
