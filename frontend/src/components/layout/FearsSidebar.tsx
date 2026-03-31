@@ -25,8 +25,11 @@ import { cn } from '@/lib/utils';
 import { useUserRole } from '@/lib/auth/useUserRole';
 import { isAuthorized, CAN_VIEW_ADMIN, CAN_VIEW_SYSTEM, CAN_VIEW_OA, ROLE_LABELS, Role } from '@/lib/auth/roles';
 
-/** All roles except testuser — testuser only sees backtest + POC */
-const CAN_VIEW_RISKS: Role[] = ['superuser', 'admin', 'gerencia', 'compras', 'ventas', 'inventario', 'financiero'];
+/** Roles that can see Riesgos Empresariales — excludes testuser (POC-only) and compras (backtest+OA only) */
+const CAN_VIEW_RISKS: Role[] = ['superuser', 'admin', 'gerencia', 'ventas', 'inventario', 'financiero'];
+
+/** Roles that can see Prueba de Concepto — everyone except compras (compras only sees backtest+OA) */
+const CAN_VIEW_POC: Role[] = ['superuser', 'admin', 'gerencia', 'ventas', 'inventario', 'financiero', 'testuser'];
 
 interface NavItem {
   name: string;
@@ -145,6 +148,7 @@ const allNavGroups: NavGroup[] = [
   },
   {
     section: 'Prueba de Concepto',
+    requiredRoles: CAN_VIEW_POC,
     items: [
       {
         name: 'Programación de Compras',
