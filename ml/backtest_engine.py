@@ -17,7 +17,6 @@ from datetime import date, timedelta
 from calendar import monthrange
 from typing import Optional
 
-import numpy as np
 import pandas as pd
 from prophet import Prophet
 from supabase import Client
@@ -309,7 +308,6 @@ def calculate_all_savings(
         + (stockouts.get('stockout_savings_gtq') or 0)
     )
 
-    month_name = prediction_start.strftime('%B %Y')
     # Spanish month names
     spanish_months = {
         'January': 'enero', 'February': 'febrero', 'March': 'marzo',

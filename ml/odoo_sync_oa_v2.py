@@ -187,7 +187,6 @@ def sync_product_volumes(execute_kw):
 
 
 def main():
-    import urllib.parse  # noqa: F811 — needed for URL encoding in sync
     uid, execute_kw = connect_odoo()
 
     if not SUPABASE_URL or not SUPABASE_KEY:

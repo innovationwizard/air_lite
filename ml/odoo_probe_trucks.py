@@ -6,7 +6,6 @@ Specifically targets outgoing delivery orders where loading data would live.
 
 import json
 import os
-import sys
 import xmlrpc.client
 
 ODOO_URL = os.environ.get('ODOO_URL', '')

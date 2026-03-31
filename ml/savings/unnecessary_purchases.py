@@ -52,7 +52,6 @@ def calculate_purchase_savings(
 
     for row in (purchase_result.data or []):
         product_id = row['product_id']
-        actual_qty = row['actual_purchased_qty'] or 0
         actual_value = row['actual_purchased_value'] or 0
         avg_unit_cost = row['avg_unit_cost'] or 0
         inventory_at_start = row['inventory_at_start'] or 0

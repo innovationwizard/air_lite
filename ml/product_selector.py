@@ -8,7 +8,6 @@ included and why, and which are excluded and why.
 import logging
 from datetime import date
 
-import pandas as pd
 from supabase import Client
 
 logger = logging.getLogger(__name__)

@@ -12,8 +12,7 @@ Policy constraint: inventory must never exceed 14 days of forecasted demand.
 
 import logging
 import math
-from datetime import date, timedelta, datetime
-from typing import Optional
+from datetime import date, timedelta
 
 import pandas as pd
 from prophet import Prophet
@@ -279,8 +278,6 @@ def run_purchase_schedule_cycle(
 
         for product in products:
             product_id = product['product_id']
-            product_name = product.get('product_name', '')
-            product_sku = product.get('product_sku', '')
             product_uom = product.get('product_uom', '')
             product_cost = float(product.get('product_cost', 0) or 0)
             supplier_name = product.get('supplier_name', '')
@@ -331,8 +328,8 @@ def run_purchase_schedule_cycle(
                 batch = all_lines[i:i+200]
                 supabase.table('purchase_schedule_lines').insert(batch).execute()
 
-        total_units = sum(l['recommended_qty'] for l in all_lines)
-        total_value = sum(l['recommended_value'] for l in all_lines)
+        total_units = sum(line['recommended_qty'] for line in all_lines)
+        total_value = sum(line['recommended_value'] for line in all_lines)
         duration_ms = int((time.time() - start_time) * 1000)
 
         # Update run record

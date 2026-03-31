@@ -24,7 +24,7 @@ SUPABASE_URL = os.environ.get('SUPABASE_URL', '')
 SUPABASE_SERVICE_KEY = os.environ.get('SUPABASE_SERVICE_KEY', '')
 
 
-def get_supabase() -> 'Client':
+def get_supabase():
     return create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
 
 
@@ -78,8 +78,6 @@ def run_backtest():
         'Backtest requested: training_months=%d, max_products=%d, holding_cost_rate=%.2f',
         training_months, max_products, holding_cost_rate,
     )
-
-    supabase = get_supabase()
 
     # Run backtest in background thread (Railway has no timeout)
     # The engine creates its own run record and returns the run_id
