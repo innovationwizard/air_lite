@@ -29,10 +29,10 @@ interface WarehouseConfig {
 }
 
 const UNIT_TYPE_OPTIONS = [
-  { value: 'furgon_53', label: "Furg\u00f3n 53'" },
+  { value: 'furgon_53', label: "Furgón 53'" },
   { value: 'contenedor_40', label: "Contenedor 40'" },
   { value: 'contenedor_45', label: "Contenedor 45'" },
-  { value: 'camion_local', label: 'Cami\u00f3n Local' },
+  { value: 'camion_local', label: 'Camión Local' },
 ];
 
 const UNIT_TYPE_LABELS: Record<string, string> = Object.fromEntries(
@@ -53,19 +53,22 @@ const inputClass =
   'border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white w-full focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500';
 
 export default function ConfiguracionPage() {
-  const [config, setConfig] = useState<WarehouseConfig>(DEFAULT_CONFIG);
+  const [configs, setConfigs] = useState<WarehouseConfig[]>([]);
   const [unloadingTimes, setUnloadingTimes] = useState<UnloadingTime[]>([]);
   const [loading, setLoading] = useState(true);
-  const [savingConfig, setSavingConfig] = useState(false);
-  const [savingRow, setSavingRow] = useState<number | null>(null);
+  const [saving, setSaving] = useState<string | null>(null);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
-  const [editingIdx, setEditingIdx] = useState<number | null>(null);
-  const [editRow, setEditRow] = useState<UnloadingTime | null>(null);
-  const [deletingId, setDeletingId] = useState<number | null>(null);
+  // Warehouse config CRUD state
+  const [cfgEditIdx, setCfgEditIdx] = useState<number | null>(null);
+  const [cfgEditRow, setCfgEditRow] = useState<WarehouseConfig | null>(null);
+  const [cfgAdding, setCfgAdding] = useState(false);
+  const [cfgNewRow, setCfgNewRow] = useState<WarehouseConfig>({ ...DEFAULT_CONFIG });
 
-  // New row form state
-  const [newRow, setNewRow] = useState<UnloadingTime>({
+  // Unloading times CRUD state
+  const [utEditIdx, setUtEditIdx] = useState<number | null>(null);
+  const [utEditRow, setUtEditRow] = useState<UnloadingTime | null>(null);
+  const [utNewRow, setUtNewRow] = useState<UnloadingTime>({
     supplier_id: '',
     unit_type: 'furgon_53',
     estimated_hours: 1,
@@ -81,9 +84,7 @@ export default function ConfiguracionPage() {
         const configRows: WarehouseConfig[] = Array.isArray(configJson)
           ? configJson
           : configJson.data ?? [];
-        if (configRows.length > 0) {
-          setConfig(configRows[0]);
-        }
+        setConfigs(configRows);
         const unloadRows: UnloadingTime[] = Array.isArray(unloadJson)
           ? unloadJson
           : unloadJson.data ?? [];
@@ -98,15 +99,26 @@ export default function ConfiguracionPage() {
     setTimeout(() => setMessage(null), 4000);
   };
 
-  const updateField = <K extends keyof WarehouseConfig>(key: K, value: WarehouseConfig[K]) => {
-    setConfig((prev) => ({ ...prev, [key]: value }));
+  const reloadConfigs = async () => {
+    const res = await fetch('/api/oa/warehouse-config');
+    const data = await res.json();
+    setConfigs(Array.isArray(data) ? data : data.data ?? []);
   };
 
-  const handleSaveConfig = async () => {
-    setSavingConfig(true);
+  const reloadUnloadingTimes = async () => {
+    const res = await fetch('/api/oa/warehouse-config?type=unloading');
+    const data = await res.json();
+    setUnloadingTimes(Array.isArray(data) ? data : data.data ?? []);
+  };
+
+  // ── Warehouse config handlers ──
+
+  const handleCfgSave = async (row: WarehouseConfig, isNew: boolean) => {
+    setSaving(isNew ? 'cfg-new' : `cfg-${row.id}`);
     try {
-      const { id, created_at, updated_at, ...body } = config;
-      void id; void created_at; void updated_at;
+      const { created_at, updated_at, ...body } = row;
+      void created_at; void updated_at;
+      if (isNew) delete (body as Record<string, unknown>).id;
       const res = await fetch('/api/oa/warehouse-config', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -116,26 +128,47 @@ export default function ConfiguracionPage() {
         const err = await res.json().catch(() => ({}));
         throw new Error(err.error || 'Error al guardar');
       }
-      showMessage('success', 'Configuraci\u00f3n guardada exitosamente');
+      showMessage('success', isNew ? 'Bodega agregada' : 'Bodega actualizada');
+      await reloadConfigs();
+      if (isNew) {
+        setCfgAdding(false);
+        setCfgNewRow({ ...DEFAULT_CONFIG });
+      } else {
+        setCfgEditIdx(null);
+        setCfgEditRow(null);
+      }
     } catch (e: unknown) {
       showMessage('error', e instanceof Error ? e.message : 'Error desconocido');
     } finally {
-      setSavingConfig(false);
+      setSaving(null);
     }
   };
 
-  const reloadUnloadingTimes = async () => {
-    const res = await fetch('/api/oa/warehouse-config?type=unloading');
-    const data = await res.json();
-    const rows: UnloadingTime[] = Array.isArray(data) ? data : data.data ?? [];
-    setUnloadingTimes(rows);
+  const handleCfgDelete = async (id: number) => {
+    setSaving(`cfg-del-${id}`);
+    try {
+      const res = await fetch(`/api/oa/warehouse-config?id=${id}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'Error al eliminar');
+      }
+      showMessage('success', 'Bodega eliminada');
+      await reloadConfigs();
+    } catch (e: unknown) {
+      showMessage('error', e instanceof Error ? e.message : 'Error desconocido');
+    } finally {
+      setSaving(null);
+    }
   };
 
-  const handleAddUnloadRow = async () => {
-    setSavingRow(-1);
+  // ── Unloading times handlers ──
+
+  const handleUtSave = async (row: UnloadingTime, isNew: boolean) => {
+    setSaving(isNew ? 'ut-new' : `ut-${row.id}`);
     try {
-      const { id, created_at, updated_at, ...body } = newRow;
-      void id; void created_at; void updated_at;
+      const { created_at, updated_at, ...body } = row;
+      void created_at; void updated_at;
+      if (isNew) delete (body as Record<string, unknown>).id;
       const res = await fetch('/api/oa/warehouse-config?type=unloading', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -145,46 +178,25 @@ export default function ConfiguracionPage() {
         const err = await res.json().catch(() => ({}));
         throw new Error(err.error || 'Error al guardar');
       }
-      showMessage('success', 'Tiempo de descarga agregado');
+      showMessage('success', isNew ? 'Tiempo de descarga agregado' : 'Tiempo de descarga actualizado');
       await reloadUnloadingTimes();
-      setNewRow({ supplier_id: '', unit_type: 'furgon_53', estimated_hours: 1, notes: '' });
-    } catch (e: unknown) {
-      showMessage('error', e instanceof Error ? e.message : 'Error desconocido');
-    } finally {
-      setSavingRow(null);
-    }
-  };
-
-  const handleEditSave = async () => {
-    if (!editRow || editingIdx === null) return;
-    setSavingRow(editingIdx);
-    try {
-      const res = await fetch('/api/oa/warehouse-config?type=unloading', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(editRow),
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.error || 'Error al guardar');
+      if (isNew) {
+        setUtNewRow({ supplier_id: '', unit_type: 'furgon_53', estimated_hours: 1, notes: '' });
+      } else {
+        setUtEditIdx(null);
+        setUtEditRow(null);
       }
-      showMessage('success', 'Tiempo de descarga actualizado');
-      await reloadUnloadingTimes();
-      setEditingIdx(null);
-      setEditRow(null);
     } catch (e: unknown) {
       showMessage('error', e instanceof Error ? e.message : 'Error desconocido');
     } finally {
-      setSavingRow(null);
+      setSaving(null);
     }
   };
 
-  const handleDelete = async (id: number) => {
-    setDeletingId(id);
+  const handleUtDelete = async (id: number) => {
+    setSaving(`ut-del-${id}`);
     try {
-      const res = await fetch(`/api/oa/warehouse-config?type=unloading&id=${id}`, {
-        method: 'DELETE',
-      });
+      const res = await fetch(`/api/oa/warehouse-config?type=unloading&id=${id}`, { method: 'DELETE' });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
         throw new Error(err.error || 'Error al eliminar');
@@ -194,9 +206,55 @@ export default function ConfiguracionPage() {
     } catch (e: unknown) {
       showMessage('error', e instanceof Error ? e.message : 'Error desconocido');
     } finally {
-      setDeletingId(null);
+      setSaving(null);
     }
   };
+
+  // ── Config row renderer ──
+
+  const renderCfgForm = (row: WarehouseConfig, onChange: (r: WarehouseConfig) => void, onSave: () => void, onCancel: () => void, isSaving: boolean) => (
+    <div className="bg-amber-50/40 rounded-lg border border-amber-200 p-4 space-y-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Etiqueta de bodega</label>
+          <input type="text" value={row.warehouse_label} onChange={(e) => onChange({ ...row, warehouse_label: e.target.value })} placeholder="Ej: Bodega Central Guatemala" className={inputClass} />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Número de rampas/andenes</label>
+          <input type="number" min={1} value={row.num_docks} onChange={(e) => onChange({ ...row, num_docks: Number(e.target.value) })} className={inputClass} />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Horario laboral inicio</label>
+          <input type="time" value={row.working_hours_start} onChange={(e) => onChange({ ...row, working_hours_start: e.target.value })} className={inputClass} />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Horario laboral fin</label>
+          <input type="time" value={row.working_hours_end} onChange={(e) => onChange({ ...row, working_hours_end: e.target.value })} className={inputClass} />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Capacidad máxima (m³)</label>
+          <input type="number" min={0} value={row.max_capacity_m3} onChange={(e) => onChange({ ...row, max_capacity_m3: Number(e.target.value) })} className={inputClass} />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Tiempo de limpieza entre unidades (min)</label>
+          <input type="number" min={0} value={row.dock_cleanup_minutes} onChange={(e) => onChange({ ...row, dock_cleanup_minutes: Number(e.target.value) })} className={inputClass} />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Umbral de horas extra</label>
+          <input type="time" value={row.overtime_threshold} onChange={(e) => onChange({ ...row, overtime_threshold: e.target.value })} className={inputClass} />
+        </div>
+      </div>
+      <div className="flex items-center gap-2">
+        <button onClick={onSave} disabled={isSaving || !row.warehouse_label} className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm font-medium hover:bg-emerald-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+          <Save className="w-4 h-4" />
+          {isSaving ? 'Guardando...' : 'Guardar'}
+        </button>
+        <button onClick={onCancel} className="inline-flex items-center gap-1 px-3 py-2 text-gray-500 hover:text-gray-700 transition-colors text-sm">
+          <X className="w-4 h-4" /> Cancelar
+        </button>
+      </div>
+    </div>
+  );
 
   if (loading) {
     return (
@@ -204,12 +262,12 @@ export default function ConfiguracionPage() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
             <Wrench className="w-6 h-6 text-emerald-600" />
-            Configuraci&oacute;n de Bodega
+            Configuración de Bodega
           </h1>
-          <p className="text-gray-500 mt-1">Par&aacute;metros operativos para c&aacute;lculos de OA</p>
+          <p className="text-gray-500 mt-1">Parámetros operativos para cálculos de OA</p>
         </div>
         <div className="bg-white rounded-xl border border-gray-200 p-8 text-center text-gray-400">
-          Cargando configuraci&oacute;n...
+          Cargando configuración...
         </div>
       </div>
     );
@@ -221,9 +279,9 @@ export default function ConfiguracionPage() {
       <div>
         <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
           <Wrench className="w-6 h-6 text-emerald-600" />
-          Configuraci&oacute;n de Bodega
+          Configuración de Bodega
         </h1>
-        <p className="text-gray-500 mt-1">Par&aacute;metros operativos para c&aacute;lculos de OA</p>
+        <p className="text-gray-500 mt-1">Parámetros operativos para cálculos de OA</p>
       </div>
 
       {/* Toast message */}
@@ -240,112 +298,85 @@ export default function ConfiguracionPage() {
         </div>
       )}
 
-      {/* General config */}
+      {/* ── Warehouse configs (Parámetros Generales) ── */}
       <div className="bg-white rounded-xl border border-gray-200 p-6">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">Par&aacute;metros Generales</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Etiqueta de bodega
-            </label>
-            <input
-              type="text"
-              value={config.warehouse_label}
-              onChange={(e) => updateField('warehouse_label', e.target.value)}
-              placeholder="Ej: Bodega Central Guatemala"
-              className={inputClass}
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              N&uacute;mero de rampas/andenes
-            </label>
-            <input
-              type="number"
-              min={1}
-              value={config.num_docks}
-              onChange={(e) => updateField('num_docks', Number(e.target.value))}
-              className={inputClass}
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Horario laboral inicio
-            </label>
-            <input
-              type="time"
-              value={config.working_hours_start}
-              onChange={(e) => updateField('working_hours_start', e.target.value)}
-              className={inputClass}
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Horario laboral fin
-            </label>
-            <input
-              type="time"
-              value={config.working_hours_end}
-              onChange={(e) => updateField('working_hours_end', e.target.value)}
-              className={inputClass}
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Capacidad m&aacute;xima (m&sup3;)
-            </label>
-            <input
-              type="number"
-              min={0}
-              value={config.max_capacity_m3}
-              onChange={(e) => updateField('max_capacity_m3', Number(e.target.value))}
-              className={inputClass}
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Tiempo de limpieza entre unidades (min)
-            </label>
-            <input
-              type="number"
-              min={0}
-              value={config.dock_cleanup_minutes}
-              onChange={(e) => updateField('dock_cleanup_minutes', Number(e.target.value))}
-              className={inputClass}
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Umbral de horas extra
-            </label>
-            <input
-              type="time"
-              value={config.overtime_threshold}
-              onChange={(e) => updateField('overtime_threshold', e.target.value)}
-              className={inputClass}
-            />
-          </div>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-semibold text-gray-900">Parámetros Generales</h2>
+          {!cfgAdding && (
+            <button
+              onClick={() => { setCfgAdding(true); setCfgEditIdx(null); setCfgEditRow(null); }}
+              className="inline-flex items-center gap-1 px-3 py-1.5 bg-emerald-600 text-white rounded-lg text-xs font-medium hover:bg-emerald-700 transition-colors"
+            >
+              <Plus className="w-3.5 h-3.5" /> Nueva Bodega
+            </button>
+          )}
         </div>
 
-        <div className="mt-6">
-          <button
-            onClick={handleSaveConfig}
-            disabled={savingConfig}
-            className="inline-flex items-center gap-2 px-6 py-2.5 bg-emerald-600 text-white rounded-lg text-sm font-medium hover:bg-emerald-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <Save className="w-4 h-4" />
-            {savingConfig ? 'Guardando...' : 'Guardar Par\u00e1metros'}
-          </button>
+        <div className="space-y-4">
+          {configs.length === 0 && !cfgAdding && (
+            <p className="text-center text-gray-400 py-8">No hay bodegas configuradas</p>
+          )}
+
+          {configs.map((cfg, idx) => {
+            if (cfgEditIdx === idx && cfgEditRow) {
+              return (
+                <div key={cfg.id ?? idx}>
+                  {renderCfgForm(
+                    cfgEditRow,
+                    (r) => setCfgEditRow(r),
+                    () => handleCfgSave(cfgEditRow, false),
+                    () => { setCfgEditIdx(null); setCfgEditRow(null); },
+                    saving === `cfg-${cfg.id}`,
+                  )}
+                </div>
+              );
+            }
+            return (
+              <div key={cfg.id ?? idx} className="rounded-lg border border-gray-200 p-4 hover:border-gray-300 transition-colors">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <h3 className="font-semibold text-gray-900">{cfg.warehouse_label || 'Sin nombre'}</h3>
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-x-8 gap-y-1 mt-2 text-sm text-gray-600">
+                      <span><span className="text-gray-400">Rampas:</span> {cfg.num_docks}</span>
+                      <span><span className="text-gray-400">Horario:</span> {cfg.working_hours_start} – {cfg.working_hours_end}</span>
+                      <span><span className="text-gray-400">Capacidad:</span> {cfg.max_capacity_m3.toLocaleString()} m³</span>
+                      <span><span className="text-gray-400">Limpieza:</span> {cfg.dock_cleanup_minutes} min</span>
+                      <span><span className="text-gray-400">Horas extra:</span> {cfg.overtime_threshold}</span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 ml-4 flex-shrink-0">
+                    <button
+                      onClick={() => { setCfgEditIdx(idx); setCfgEditRow({ ...cfg }); setCfgAdding(false); }}
+                      className="text-amber-600 hover:text-amber-800 transition-colors"
+                      title="Editar"
+                    >
+                      <Pencil className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => cfg.id && handleCfgDelete(cfg.id)}
+                      disabled={saving === `cfg-del-${cfg.id}`}
+                      className="text-red-500 hover:text-red-700 transition-colors disabled:opacity-50"
+                      title="Eliminar"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+
+          {cfgAdding && renderCfgForm(
+            cfgNewRow,
+            (r) => setCfgNewRow(r),
+            () => handleCfgSave(cfgNewRow, true),
+            () => { setCfgAdding(false); setCfgNewRow({ ...DEFAULT_CONFIG }); },
+            saving === 'cfg-new',
+          )}
         </div>
       </div>
 
-      {/* Unloading times */}
+      {/* ── Unloading times ── */}
       <div className="bg-white rounded-xl border border-gray-200 p-6">
         <h2 className="text-lg font-semibold text-gray-900 mb-4">
           Tiempos de Descarga por Proveedor
@@ -371,61 +402,37 @@ export default function ConfiguracionPage() {
                 </tr>
               )}
               {unloadingTimes.map((ut, idx) => {
-                const isEditing = editingIdx === idx;
-                if (isEditing && editRow) {
+                const isEditing = utEditIdx === idx;
+                if (isEditing && utEditRow) {
                   return (
                     <tr key={ut.id ?? idx} className="bg-amber-50/40">
                       <td className="px-4 py-2">
-                        <input
-                          type="text"
-                          value={editRow.supplier_id}
-                          onChange={(e) => setEditRow({ ...editRow, supplier_id: e.target.value })}
-                          className={inputClass}
-                        />
+                        <input type="text" value={utEditRow.supplier_id} onChange={(e) => setUtEditRow({ ...utEditRow, supplier_id: e.target.value })} className={inputClass} />
                       </td>
                       <td className="px-4 py-2">
-                        <select
-                          value={editRow.unit_type}
-                          onChange={(e) => setEditRow({ ...editRow, unit_type: e.target.value })}
-                          className={inputClass}
-                        >
+                        <select value={utEditRow.unit_type} onChange={(e) => setUtEditRow({ ...utEditRow, unit_type: e.target.value })} className={inputClass}>
                           {UNIT_TYPE_OPTIONS.map((o) => (
                             <option key={o.value} value={o.value}>{o.label}</option>
                           ))}
                         </select>
                       </td>
                       <td className="px-4 py-2">
-                        <input
-                          type="number"
-                          min={0}
-                          step={0.5}
-                          value={editRow.estimated_hours}
-                          onChange={(e) => setEditRow({ ...editRow, estimated_hours: Number(e.target.value) })}
-                          className={`${inputClass} w-24 text-right`}
-                        />
+                        <input type="number" min={0} step={0.5} value={utEditRow.estimated_hours} onChange={(e) => setUtEditRow({ ...utEditRow, estimated_hours: Number(e.target.value) })} className={`${inputClass} w-24 text-right`} />
                       </td>
                       <td className="px-4 py-2">
-                        <input
-                          type="text"
-                          value={editRow.notes}
-                          onChange={(e) => setEditRow({ ...editRow, notes: e.target.value })}
-                          className={inputClass}
-                        />
+                        <input type="text" value={utEditRow.notes} onChange={(e) => setUtEditRow({ ...utEditRow, notes: e.target.value })} className={inputClass} />
                       </td>
                       <td className="px-4 py-2 text-center">
                         <div className="flex items-center justify-center gap-2">
                           <button
-                            onClick={handleEditSave}
-                            disabled={savingRow === idx}
+                            onClick={() => handleUtSave(utEditRow, false)}
+                            disabled={saving === `ut-${ut.id}`}
                             className="inline-flex items-center gap-1 px-3 py-1.5 bg-emerald-600 text-white rounded-lg text-xs font-medium hover:bg-emerald-700 transition-colors disabled:opacity-50"
                           >
                             <Save className="w-3.5 h-3.5" />
-                            {savingRow === idx ? 'Guardando...' : 'Guardar'}
+                            {saving === `ut-${ut.id}` ? 'Guardando...' : 'Guardar'}
                           </button>
-                          <button
-                            onClick={() => { setEditingIdx(null); setEditRow(null); }}
-                            className="inline-flex items-center gap-1 px-2 py-1.5 text-gray-500 hover:text-gray-700 transition-colors text-xs"
-                          >
+                          <button onClick={() => { setUtEditIdx(null); setUtEditRow(null); }} className="text-gray-500 hover:text-gray-700 transition-colors">
                             <X className="w-3.5 h-3.5" />
                           </button>
                         </div>
@@ -436,26 +443,15 @@ export default function ConfiguracionPage() {
                 return (
                   <tr key={ut.id ?? idx} className="hover:bg-gray-50">
                     <td className="px-4 py-3 text-gray-900">{ut.supplier_id}</td>
-                    <td className="px-4 py-3 text-gray-500">
-                      {UNIT_TYPE_LABELS[ut.unit_type] ?? ut.unit_type}
-                    </td>
+                    <td className="px-4 py-3 text-gray-500">{UNIT_TYPE_LABELS[ut.unit_type] ?? ut.unit_type}</td>
                     <td className="px-4 py-3 text-right text-gray-900">{ut.estimated_hours}</td>
                     <td className="px-4 py-3 text-gray-500">{ut.notes || '\u2014'}</td>
                     <td className="px-4 py-3 text-center">
                       <div className="flex items-center justify-center gap-2">
-                        <button
-                          onClick={() => { setEditingIdx(idx); setEditRow({ ...ut }); }}
-                          className="text-amber-600 hover:text-amber-800 transition-colors"
-                          title="Editar"
-                        >
+                        <button onClick={() => { setUtEditIdx(idx); setUtEditRow({ ...ut }); }} className="text-amber-600 hover:text-amber-800 transition-colors" title="Editar">
                           <Pencil className="w-4 h-4" />
                         </button>
-                        <button
-                          onClick={() => ut.id && handleDelete(ut.id)}
-                          disabled={deletingId === ut.id}
-                          className="text-red-500 hover:text-red-700 transition-colors disabled:opacity-50"
-                          title="Eliminar"
-                        >
+                        <button onClick={() => ut.id && handleUtDelete(ut.id)} disabled={saving === `ut-del-${ut.id}`} className="text-red-500 hover:text-red-700 transition-colors disabled:opacity-50" title="Eliminar">
                           <Trash2 className="w-4 h-4" />
                         </button>
                       </div>
@@ -467,52 +463,25 @@ export default function ConfiguracionPage() {
               {/* Inline add row */}
               <tr className="bg-emerald-50/30">
                 <td className="px-4 py-2">
-                  <input
-                    type="text"
-                    value={newRow.supplier_id}
-                    onChange={(e) => setNewRow((p) => ({ ...p, supplier_id: e.target.value }))}
-                    placeholder="Ej: PROV-001"
-                    className={inputClass}
-                  />
+                  <input type="text" value={utNewRow.supplier_id} onChange={(e) => setUtNewRow((p) => ({ ...p, supplier_id: e.target.value }))} placeholder="Ej: PROV-001" className={inputClass} />
                 </td>
                 <td className="px-4 py-2">
-                  <select
-                    value={newRow.unit_type}
-                    onChange={(e) => setNewRow((p) => ({ ...p, unit_type: e.target.value }))}
-                    className={inputClass}
-                  >
+                  <select value={utNewRow.unit_type} onChange={(e) => setUtNewRow((p) => ({ ...p, unit_type: e.target.value }))} className={inputClass}>
                     {UNIT_TYPE_OPTIONS.map((o) => (
-                      <option key={o.value} value={o.value}>
-                        {o.label}
-                      </option>
+                      <option key={o.value} value={o.value}>{o.label}</option>
                     ))}
                   </select>
                 </td>
                 <td className="px-4 py-2">
-                  <input
-                    type="number"
-                    min={0}
-                    step={0.5}
-                    value={newRow.estimated_hours}
-                    onChange={(e) =>
-                      setNewRow((p) => ({ ...p, estimated_hours: Number(e.target.value) }))
-                    }
-                    className={`${inputClass} w-24 text-right`}
-                  />
+                  <input type="number" min={0} step={0.5} value={utNewRow.estimated_hours} onChange={(e) => setUtNewRow((p) => ({ ...p, estimated_hours: Number(e.target.value) }))} className={`${inputClass} w-24 text-right`} />
                 </td>
                 <td className="px-4 py-2">
-                  <input
-                    type="text"
-                    value={newRow.notes}
-                    onChange={(e) => setNewRow((p) => ({ ...p, notes: e.target.value }))}
-                    placeholder="Notas opcionales"
-                    className={inputClass}
-                  />
+                  <input type="text" value={utNewRow.notes} onChange={(e) => setUtNewRow((p) => ({ ...p, notes: e.target.value }))} placeholder="Notas opcionales" className={inputClass} />
                 </td>
                 <td className="px-4 py-2 text-center">
                   <button
-                    onClick={handleAddUnloadRow}
-                    disabled={!newRow.supplier_id || savingRow === -1}
+                    onClick={() => handleUtSave(utNewRow, true)}
+                    disabled={!utNewRow.supplier_id || saving === 'ut-new'}
                     className="inline-flex items-center gap-1 px-3 py-1.5 bg-emerald-600 text-white rounded-lg text-xs font-medium hover:bg-emerald-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <Plus className="w-3.5 h-3.5" />
