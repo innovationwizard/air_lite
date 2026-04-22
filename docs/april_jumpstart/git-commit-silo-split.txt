@@ -1,0 +1,31 @@
+Split app into role-specific surfaces so Wilmer (Compras) and Mario
+(Operaciones) each land on their own tool instead of the generic
+backtest page.
+
+• New `operaciones` role — DB CHECK constraint, route_permissions
+  rows, TS constants (CAN_VIEW_COMPRAS, CAN_VIEW_OPERACIONES),
+  getDefaultPage() dispatch, and a seeded user_profiles row for
+  operaciones@airefill.app. Also reconciles the pre-existing
+  `testuser` drift between TS and the DB CHECK.
+
+• Días de Inventario v1 at /operaciones/dias-inventario — new RPC
+  rpc_days_of_inventory() joining inventory_daily × sale_orders ×
+  product_suppliers to produce per-SKU × per-bodega days of supply
+  with hot/ok/hold/no_demand status. 2,710 rows across 17 warehouses.
+  API paginates around the project-wide 1k PostgREST cap.
+
+• Sidebar restructured with Compras and Operaciones sections using
+  silo-doc copy. Wilmer's group links to /backtest (forecast),
+  /poc/programacion (purchase scheduling), and OA. Mario's group
+  links to Días de Inventario, Hot List (desabastecimiento), Hold
+  List (capital-congelado), and OA.
+
+• New /compras and /operaciones landing pages with role-specific
+  framing. Each surfaces a "snapshot al 3 de marzo 2026" note so
+  staleness is disclosed, not hidden.
+
+• Backtest: yellow "en validación" banner + per-card pill on
+  Storage, Stockout, and Rotation savings. Compras Innecesarias
+  stays unmarked — it's the one fully-validated goal.
+
+Grounded in docs/april_jumpstart/_REFACTOR_PLAN_APR22.md.

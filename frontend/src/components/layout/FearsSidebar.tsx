@@ -20,6 +20,7 @@ import {
   AlertOctagon,
   FileText,
   Wrench,
+  ScanEye,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useUserRole } from '@/lib/auth/useUserRole';
@@ -30,6 +31,7 @@ import {
   CAN_VIEW_OA,
   CAN_VIEW_COMPRAS,
   CAN_VIEW_OPERACIONES,
+  CAN_VIEW_GERENCIA,
   ROLE_LABELS,
   Role,
 } from '@/lib/auth/roles';
@@ -62,6 +64,18 @@ const allNavGroups: NavGroup[] = [
         href: '/backtest',
         icon: BarChart3,
         subtitle: null,
+      },
+    ],
+  },
+  {
+    section: 'Gerencia',
+    requiredRoles: CAN_VIEW_GERENCIA,
+    items: [
+      {
+        name: 'Validación Histórica',
+        href: '/gerencia/validacion',
+        icon: ScanEye,
+        subtitle: 'Sistema vs compradores vs realidad',
       },
     ],
   },

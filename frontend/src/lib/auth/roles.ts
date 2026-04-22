@@ -54,6 +54,11 @@ export const CAN_VIEW_COMPRAS: Role[] = [
   'superuser', 'admin', 'gerencia', 'compras',
 ];
 
+/** Roles that can access the Gerencia silo (Alexis-facing validation) */
+export const CAN_VIEW_GERENCIA: Role[] = [
+  'superuser', 'admin', 'gerencia',
+];
+
 /** Roles that can only see backtest + POC (no fear pages, no admin) */
 export const CAN_VIEW_POC_ONLY: Role[] = ['testuser'];
 
@@ -77,6 +82,7 @@ export const PAGE_PERMISSIONS: Record<string, Role[]> = {
   '/oa': CAN_VIEW_OA,
   '/compras': CAN_VIEW_COMPRAS,
   '/operaciones': CAN_VIEW_OPERACIONES,
+  '/gerencia': CAN_VIEW_GERENCIA,
   '/superuser': CAN_VIEW_SYSTEM,
   '/admin': CAN_VIEW_ADMIN,
   '/configuracion': CAN_VIEW_ADMIN,
@@ -93,6 +99,8 @@ export function getDefaultPage(role: Role | string): string {
       return '/compras';
     case ROLES.OPERACIONES:
       return '/operaciones';
+    case ROLES.GERENCIA:
+      return '/gerencia/validacion';
     case ROLES.ADMIN:
       return '/backtest';
     default:

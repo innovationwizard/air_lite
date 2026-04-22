@@ -1,0 +1,864 @@
+So this is where we say our final goodbye
+Ladies and gentlemen, it was a pleasure meeting you
+But this is where I take my leave
+Thank you
+Thank you
+Thank you
+If you're looking for a little trouble
+And the neon lights ain't enough
+Get on your knees and pray for the password
+That let you into our little club
+There's a place at the end of the alley
+Where the drifters, they never come back
+So let's forget the little children and women
+And the sun can rise wherever it's at
+So can you come?
+Ooh, ooh, it's a little rendezvous
+Ooh, ooh, and the little band is swinging it for you
+Ooh, ooh, and there's dancing too
+Ooh, ooh, it's a little rendezvous
+If you're looking for a little scandal
+Where your troubles, they can all be forgot
+If you want a little place to lay low
+To take your mind off the little you got
+You can take all the boys with the horns
+And the girls that can play the drums
+We'll take the things that don't need our help
+And we'll put them all back where they're from
+So can you...
+Don David, muy buenos días
+Hola, ¿qué tal? ¿cómo estás?
+Este... triste
+No hombre, no me asustes
+Sí, fíjate vos qué
+Allí era
+Estoy tratando, pero ya
+No me duraron, no te puedo decir cuántos años de uso y abuso, ¿verdad?
+Sí
+Así que nos pasamos al audio de la compu
+Porque es lo que hay
+Ok
+Dando seguimiento a la situación, Jorge
+Fíjate que te explico
+El gerente general
+Ya me está preguntando
+Mira, ¿qué sucedió?
+Porque ya la demo
+Ya llevamos bastante tiempo
+No hemos tenido respuesta
+¿Qué sucedió?
+Y le empecé a explicar
+Que habíamos hecho el levantado de la bodega
+Una bodega solo para tener un poco de dimensionamiento
+Y aparte, pues ya nos habíamos conectado a un ambiente de pruebas
+Para revisar de que todo estuviera adicto
+Y me dice
+Sí, pero ya mucho tiempo
+Necesito una respuesta
+Necesito saber
+¿Qué está sucediendo?
+Quisiera ver el avance
+O sea, quiero entenderlo
+Porque al final
+Yo no quiero hacerlo perder su tiempo
+Y tampoco quiero hacer perder mi tiempo
+Entonces
+Yo lo que quiero es entender
+¿Cómo es que
+O se puede hacer la proyección
+O que me muestra las proyecciones
+De febrero, marzo, abril y mayo?
+Por ejemplo
+¿Cómo debió haber vendido?
+¿Qué se debe haber comprado?
+Versus lo que compramos actualmente
+Quiero entender
+¿Qué tan desfasado está?
+¿O qué tan atinada está la situación?
+Ese es uno
+Y número dos
+Es el tema del cubicaje
+Para saber cuántos furgones hay
+Versus
+O sea, perdón
+¿Cuántos furgones representa mi compra?
+Versus mi espacio de almacenamiento
+Como ya se levantó
+Y que tomáramos en cuenta
+No solamente
+El espacio de las cuatro bodegas
+Si fuera necesario
+Sino que también agregaran
+Doce
+Perdón, entre ocho a doce furgones
+Extras en patio
+Para que podamos ver
+Qué tanto se está dimensionando
+Los productos
+Eso es lo que quiere verlo
+Pero es como
+¿Qué pasó?
+Claro
+El cubicaje pendiente
+Eso sí
+Vamos a tener que hacer levantamiento
+Con
+Tal vez no necesariamente
+Con metro
+Estuve analizando
+La toma que hice
+Y sí me da valores
+Bastante cerca
+Estoy abajo de cinco pulgadas
+De error
+En dimensiones
+Eso es bueno
+Pero no tenemos
+Todas las bodegas
+Entonces sí voy a necesitar
+Ir
+Y mapear
+Cada una de ellas
+Para tener el cubicaje
+Me faltan
+Los tiempos
+De
+Bueno, de todo
+¿A qué hora entra el furgón?
+¿A qué hora comienzan a descargar?
+¿A qué hora terminan de descargar?
+Y un dato muy importante
+Para poder ya tener el cubicaje
+Predecible
+Es
+¿Qué va?
+¿Dónde?
+En el recorrido
+Me hablaron en términos generales
+Y eso está bien
+Pero tengo la impresión
+De que no existe
+Una regla dura
+O un conjunto
+De reglas flexibles
+En su defecto
+Que el sistema pueda
+Que yo le pueda dar al sistema
+Para que corra las proyecciones
+Digamos
+Martes
+Metan tales
+Que hubo
+En el RAC
+Número 5
+Pero el miércoles
+Metanlo en el 6
+Porque viene
+Un furgón en camino
+Que salió
+No sé cuándo
+Y es el tipo
+De
+Movimientos
+Ya más
+Avanzados
+Entonces yo
+Yo te diría
+Que para el gerente
+Cubicaje pendiente
+Nos hace falta
+Mucha data
+De
+Espacios disponibles
+Que
+Se puede meter
+En cada espacio
+Y que
+No se puede meter
+En cada espacio
+A nivel de
+No te diría
+De SKU
+Totales
+Pero al menos
+De los SKU
+Que tengan más movimiento
+Y sí
+Definitivamente
+Necesito los tiempos
+De los contenedores
+Necesito
+Poder predecir
+Cuándo
+Va a llegar algo
+Y qué
+Trae
+Ok
+Con el tema
+De los tiempos
+No tenemos
+Nada de esa información
+Entonces tendríamos
+Que trabajar ahorita
+Sin eso
+O
+Aproximarlo
+Te diría
+Comenzarlo
+Comenzarlo
+Comencemos a llevar
+Ese tiempo
+Porque hacer
+El interruptivo
+Es
+Demasiado trabajo
+No creo
+Que valga la pena
+Comenzar a llenar
+Hacia atrás
+Esos tiempos
+Pero sí
+Creo
+Que vale la pena
+Comenzar a meter
+En
+Odoo
+Esos tiempos
+A partir de hoy
+O mañana
+O el lunes
+Entrante
+Pero
+Ya tenerlos disponibles
+Ok
+Eso
+Es un poquito
+Complicado
+Pero
+Voy a buscar
+La forma
+Que pase
+Sin embargo
+Te digo
+Ahorita lo que
+Necesitamos
+Es como
+La demo
+Para demostrar
+De que
+Si vale
+La situación
+Porque todavía
+El gerente
+Está
+Incrédulo
+Está como
+No
+No
+No
+Y
+Me dice
+Mira
+Pero es que
+Necesito vender
+La idea
+No solo a mí
+También a la junta directiva
+Ok
+Pero
+Necesito eso
+Entonces
+Yo antes de ponerme
+A trabajar
+Todos esos temas
+Me gustaría
+Primero
+Tener el ok
+O sea
+El decir
+El proyecto
+Si
+Si va a estar
+Si va a funcionar
+Y tomémonos
+El tiempo
+Pues
+Hacemos
+La planificación
+Cronograma
+Las cosas necesarias
+Y decir
+El tiempo promedio
+Que nos vamos a tardar
+Yo consideraría
+Siendo
+Un poquito
+Pesimista
+Diría
+Seis meses
+En lo que se levanta
+En lo que prueban
+En los errores
+Etcétera
+Pero para que eso pase
+Primero necesito
+El ok de ellos
+Porque ahorita
+Ya logramos convencer
+A la mayoría
+Pero a él no
+Eso está bien
+Eso está bien
+Yo creo que
+La reunión que tuvimos
+En persona
+Wilmer y Mario
+Son los nombres
+Correcto
+Correcto
+A ellos
+Creo que
+Los podemos
+Ayudar
+Directamente
+Y terminar
+De subirlos
+Al barco
+Porque lo que
+Ellos
+Hacen
+No todo
+No todo
+Pero
+Por ejemplo
+El forecast
+Eso si ya lo podemos
+Generar
+El forecast
+De que es lo que
+Sale
+Cuál es la demanda
+El inventario
+Y el cubicaje
+Todavía no
+Si
+Eso si
+Pero
+Como te digo
+Lo que yo quiero
+Es
+Convencer al gerente
+O sea
+Él es mi mayor
+Él
+Ajá
+Sin eso
+Aunque queramos
+Ayudar a los demás
+No nos va a servir
+Porque
+No hay nada
+Él es el tomador
+De decisiones
+Máximo
+Exactamente
+Entonces necesito
+Que se pueda convencer
+O sea
+Mostrarle
+Y decirle
+Mira esto es
+En este momento
+Tengo
+Me hace falta
+Correr pruebas
+Pero puedo
+Entregarte hoy
+Una página
+Para Wilmer
+Una página
+Para Mario
+Y si yo
+Fuera capaz
+De producir
+Así
+Mágicamente
+Una página
+Para convencer
+Al gerente
+Que dirías vos
+Que esa página
+Necesita tener
+Va
+Número uno
+La proyección
+De los meses
+Que te digo
+Porque
+Él va a decir
+Voy a ir a buscar
+El SKU
+X
+Y
+Sistema
+El estudio
+Me dice
+Mira había que comprar
+52 mil faros
+Luego voy a
+A las proyecciones
+De mis compradores
+Y ellos
+Compraron
+41 mil faros
+Y luego voy a ver
+Ok
+Cuánto dejé de vender
+Al dejar de vender
+Voy a decir
+Ok
+Cuál estuvo más
+Atinado
+A la realidad
+O la de ellos
+No te estoy diciendo
+Que la proyección
+Se acaba
+Que los dos
+Porque si no
+Pero por ejemplo
+Si uno
+Él tiene bastantes
+Escribidos
+Donde él dice
+Ya los conoce
+Sabe cómo es
+La tendencia
+Y dice
+Ahí va la situación
+Entonces cuando vea
+Los tuyos
+Y digamos
+La tendencia
+Es de 40 mil
+Fardos
+Y tú me dijiste
+En la aplicación
+Y él mira
+Hay que comprar
+121 mil
+Fardos
+Es como
+Ah sí
+De una vez me tira
+Por la ventana
+Entonces
+Desde ahí
+Yo te puedo decir
+Eso es lo más duro
+Hacer de que
+Que él vea
+Que la
+El desfase
+Pues puede existir
+O va a existir
+Eso
+Es más que de cajón
+En lo que va aprendiendo
+La situación
+Pero
+La idea es
+Qué tan acertada
+Está la herramienta
+Versus
+Lo cómo están
+Los compradores
+Porque él dice
+De qué me sirve
+Comprar la herramienta
+Adquirirla
+Y toda la situación
+El desarrollo
+Todo lo que va a conllevar
+Si me miente
+Exactamente
+Si me miente
+Y dos
+Si lo mismo
+Que estoy haciendo
+Con estos dos compradores
+Es lo mismo
+Que tengo en la herramienta
+Como que
+No me convence
+Eso es como que
+Te puedo decir
+El top 1
+De lo que
+Él va a ver
+Así es
+El top 2
+Que considero yo
+Es
+Cuánto
+Me representó
+En dinero
+Esa proyección
+Cuánto tenía
+Que haber gastado
+Ok
+Y ver
+Cuánto tuve que
+Cuánto tendría que vender
+O voy a vender
+En la proyección
+Como tal
+Para que pueda decir
+Ok
+Yo tenía que haber comprado
+46 mil fardos
+Eso me representó
+En costo
+No sé
+100 mil quetzales
+Pero en mi venta
+Era
+En promedio
+De 125 mil
+Tuve
+25 mil
+Extras
+Etcétera
+O sea
+Cuánto
+Tendría que haber ganado
+En base a tu proyección
+Clarísimo
+Ahí prácticamente
+No estoy tocando
+Nada de cubicajes
+Pero
+Si se pudiera
+Sería excelente
+Solo para que
+Tones en cuenta
+Como
+De la bodega 1
+Estos productos
+Que es Carvajal
+Y Reima
+Representarían
+Tanto esta bodega
+Es como decirte
+Mira mil metros cúbicos
+Pero la bodega
+Es de 500 metros cúbicos
+Que tendría que haber comprado
+Lunes
+Miércoles
+Viernes
+O que tuvo que haber pasado
+Para que
+Uno
+Lograra caber
+Ese producto
+En esa bodega
+Específicamente
+Solo es para que
+Ellos digan
+Ah ok
+Si si me cuadro
+Y dos
+Cada cuánto
+Lo tuve que haber comprado
+Y cuántos furgones
+Necesitaba
+Porque el furgón
+En sí
+Es un
+Son medidas
+Estándar
+Correcto
+Toma una medida
+Estándar
+Y ahí
+Ya podemos
+Convencer a Alexis
+Para que Alexis
+Diga ok
+Yo dije que
+Ibamos a comprar
+46 mil fardos
+Tú me decís
+56 mil
+El desfase
+Es de esto
+Cuántos furgones
+Me representa
+Cuántos furgones
+Estaba en patio
+Mira
+Con eso
+Yo creo que
+Lograríamos pegarle
+El 80%
+Como mínimo
+De lo que
+Él dice
+Bueno
+Si
+Si vale la pena
+La herramienta
+Después ya
+Empezamos a ver
+Los puntos
+De lo de
+Wilmer
+Mario
+Lo de Alexis
+El levantamiento
+De las bodegas
+Ver cuáles
+Van a ser
+Las reglas
+De dónde
+Se va a posicionar
+Cada cuánto
+Entran los proveedores
+Ya puedo decir
+Bueno
+Como caso
+Obligatorio
+En el ingreso
+Tienen que poner
+Este
+Este
+Y este
+Campo
+Fijos
+Yo ya los pongo
+En la pantalla
+Principal
+Y les digo
+Por favor
+Tomen tiempo
+Así es
+Ya ahí
+Ya que tenga yo
+El ok
+Del gerente
+Caminamos
+Caminamos
+Porque si alguien
+Se me quiere
+Atrancar
+Ya tengo el apoyo
+No solo el gerente
+General
+Sino que
+El gerente de operaciones
+Que es Mario
+Y si no tengo a Wilmer
+O sea
+Tengo las cabezas
+Que pueden jalar
+A alguien
+Que no me esté
+Haciendo caso
+Correcto
+Pregunta técnica
+Subiste la API
+A producción
+No
+A producción
+No
+Porque
+Te explico esto
+Porque él me dijo
+Mira
+Yo quiero ver
+La proyección
+Porque ya cerramos
+Enero
+Ya cerramos
+Marzo
+Y abril
+Casi abril
+Eso me va a decir
+A mí
+Hoy
+Si las proyecciones
+De él
+Son ciertas
+Porque ya tiene
+De enero
+Para atrás
+Ya pudo haber visto
+Enero
+Febrero
+Marzo
+Del 2025
+Y otros datos
+Pero
+Eso me va a tomar
+A mí la decisión
+De decir
+Ah ok
+Entonces
+Si es cierto
+Ah entonces
+Es data
+Que está ocultándome
+Como las cartas
+Para ver
+Si yo le pego
+A un dato
+Que no conozco
+Exactamente
+Para ver
+Que la herramienta
+Si sea cierta
+Porque si no
+Si te doy la información
+Hasta hoy
+Y
+Y
+Ajá
+Y cómo voy a hacer
+Que es cierto
+Ya
+Ok
+Me queda claro
+Por el momento
+No tengo más preguntas
+Y
+Ofrezco
+Entregarte algo
+El día de hoy
+A mí me gustaría
+Ver eso
+Pero
+Poder agendarlo
+Para el jueves
+Para que así me expliquen
+Mira esto es
+Entonces yo logro
+Reunir información
+De algún otro lado
+Y voy como que
+Mira
+No estás pegando
+O sea
+Estás pegando
+No estás pegando
+O sea
+La idea es
+Qué tan desfasado
+Vas a estar
+Porque
+Después de eso
+Tengo que reunirme
+Con él
+Y obviamente
+Te voy a reunir
+Ativa
+Porque tú eres
+Quien lo va a presentar
+Así es
+Y ahí es donde
+Van a venir
+Con todo eso
+El jueves
+Es mañana
+Sí
+Mañana
+Pero no
+Eso
+Para mañana
+Solo es conmigo
+Solo es para que veamos
+Qué tan desfasado
+Porque si me decís
+Mira
+Son 100.000 fardos
+Y
+La venta promedio
+Eran de 15.000 fardos
+Es como
+Está muy desfasado
+Correcto
+Prácticamente eso es
+No sé
+A qué hora
+Tú me dices
+Y agendamos
+Déjame ver
+Si encuentro
+Mi calendario
+Tengo cosas
+A partir de las 12
+Yo pienso que
+Temprano
+Nos queda mejor
+¿Me quedará bien
+Esta misma hora?
+¿O a las 10?
+Si pudieras
+Más temprano
+Me quedaría mejor
+Pero si no
+Te aparto
+A las 10
+Lo más temprano
+Que puedo ahorita
+Sería a las 9 y media
+Lo más temprano
+Ok
+Pongamos 9 y media
+Ok
+Prácticamente
+Eso es
+Y lo otro
+Que te quiero preguntar
+Es lo del video
+Que me mandaste
+Para conectarme
+Con
+Lo estuve viendo
+Pero
+Me quedé
+En el punto 4 y 5
+No me dejaba
+Entonces
+No sé si te puedo mostrar
+Y tú me dices
+Mira
+Aquí estás metiendo la pata
+Espérame que yo
+Ya no me acuerdo del video
+Voy a sacar
+El documento
+Yo aquí tengo el documento
+Para mostrarte
+Este
+Aquí está
+Pasos y comandos
+Ah sí
+El BEMB
+Ok
+Mostrame
+Ya logré entrar
+A la
+Ven
+Ahorita te voy a mostrar
+Pantalla
+Dame unos segundos
+Que estoy agregando
+La reunión de mañana
+Va
+Estoy de vuelta
+Con vos
+Mostrame
+Ahorita te voy a mostrar
+Me dice
+Ahorita te voy a mostrar

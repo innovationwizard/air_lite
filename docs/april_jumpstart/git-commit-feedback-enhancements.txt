@@ -1,0 +1,59 @@
+Add Gerencia validación surface so Luis can see, SKU-by-SKU and in GTQ,
+where the App pegs reality and where it doesn't.
+
+Feedback (2026-04-22, David) locked the real blocker:
+Wilmer and Mario are not decisive gatekeepers; Luis (Gerente General) is, and
+he explicitly asked for three things — per-SKU holdout backtest with
+App-vs-Humanos-vs-reality comparison, monetary translation in GTQ, and
+cubicaje proyectado. This commit ships the first two, scoped to Carvajal +
+Reyma (the two suppliers Jorge named as the biggest pain).
+
+What's in:
+
+  - supabase/migrations/20260422000004_rpc_gerencia_backtest_validation.sql
+    — rpc_gerencia_validation(p_run_id, p_carvajal_reyma_only) + a companion
+    rpc_gerencia_validation_runs() for the cycle selector. Aggregates Carvajal
+    across its active supplier entities (excluding "NO USAR"). Reyma SKUs are
+    matched by products.name ILIKE '%REYMA%' as a documented fallback because
+    product_suppliers has zero Reyma rows as of today.
+
+  - supabase/migrations/20260422000005_warehouse_capacity.sql — adds
+    capacity_m3 to warehouses; seeds warehouse id 1 (Bodega Central) at
+    10,007.28 m³ based on the Planos and user memory. Zacapa/Peten/Zona 11
+    left NULL pending Mario field-validation.
+
+  - /gerencia/validacion page with cycle selector defaulting to run 58
+    (predicción para febrero 2025 — el primer mes que David mencionó), a
+    4-series table (App predijo | Humanos compraron | Se vendió | Acierto),
+    monetary columns (cost, revenue, margen proyectado vs real, delta), and
+    a holdout-methodology banner that literally writes the training window
+    for each cycle.
+
+  - RBAC: CAN_VIEW_GERENCIA added, PAGE_PERMISSIONS entry for /gerencia,
+    getDefaultPage('gerencia') now returns '/gerencia/validacion'. Sidebar
+    has a new Gerencia section visible to gerencia/admin/superuser.
+
+Honesty carried into the UI, not hidden:
+
+  - Yellow "metodología — holdout honesto" banner explains the training
+    cutoff on every view.
+  - Gross-vs-net-of-credit-notes status is surfaced as a footnote question
+    to raise with David at the 9:30 preview.
+  - "Reyma por nombre" is a visible label, not a silent match.
+  - margin_uplift is explicitly called a "techo teórico" because it assumes
+    the predicted demand would have sold at list price.
+
+Docs added alongside the code:
+
+  - docs/april_jumpstart/_GERENTE_GENERAL_PLAN_APR22.md — the full plan,
+    four revisions, tying every scope decision back to a line of the
+    feedback transcript.
+  - docs/april_jumpstart/_CHEATSHEET_DAVID_APR23.md — live-data cheat sheet
+    for the Apr-23 9:30 preview with David: headline numbers per cycle,
+    top-5 SKUs per month, top-5 overshoots and undershoots, and a 40-second
+    opening script.
+
+Not in this commit (deliberate, post demo work per the plan): cubicaje
+proyectado tab, fleet-vehicle seed, credit-note netting in the revenue
+pipeline, and the operational rollout of the (already existing, 0%-populated)
+Odoo container-timestamp fields.
