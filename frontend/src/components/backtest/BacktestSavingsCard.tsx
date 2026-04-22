@@ -13,6 +13,8 @@ interface BacktestSavingsCardProps {
   accentColor: string;
   /** Override the headline (e.g. for non-monetary metrics like turnover rate) */
   headlineOverride?: string;
+  /** Flag the metric as pending validation (shows an "En validación" pill). */
+  enValidacion?: boolean;
 }
 
 export function BacktestSavingsCard({
@@ -23,6 +25,7 @@ export function BacktestSavingsCard({
   icon,
   accentColor,
   headlineOverride,
+  enValidacion = false,
 }: BacktestSavingsCardProps) {
   const [expanded, setExpanded] = useState(false);
 
@@ -38,7 +41,17 @@ export function BacktestSavingsCard({
               {icon}
             </div>
             <div>
-              <p className="text-sm font-medium text-gray-500">{title}</p>
+              <div className="flex items-center gap-2">
+                <p className="text-sm font-medium text-gray-500">{title}</p>
+                {enValidacion && (
+                  <span
+                    className="px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wide bg-amber-100 text-amber-800"
+                    title="Métrica en validación con datos adicionales de Odoo"
+                  >
+                    En validación
+                  </span>
+                )}
+              </div>
               <p className="text-2xl font-bold text-gray-900">
                 {headlineOverride ?? `GTQ ${savingsGtq.toLocaleString('es-GT', { maximumFractionDigits: 0 })}`}
               </p>

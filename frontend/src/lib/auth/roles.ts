@@ -1,7 +1,7 @@
 /**
  * RBAC role definitions and authorization helpers.
  *
- * 8 roles: superuser, admin, gerencia, compras, ventas, inventario, financiero, testuser
+ * 9 roles: superuser, admin, gerencia, compras, ventas, inventario, financiero, testuser, operaciones
  * Superuser bypasses all checks.
  */
 
@@ -14,6 +14,7 @@ export const ROLES = {
   INVENTARIO: 'inventario',
   FINANCIERO: 'financiero',
   TESTUSER: 'testuser',
+  OPERACIONES: 'operaciones',
 } as const;
 
 export type Role = (typeof ROLES)[keyof typeof ROLES];
@@ -35,12 +36,22 @@ export const CAN_VIEW_ADMIN: Role[] = ['superuser', 'admin'];
 
 /** All roles can view backtest results and fear pages */
 export const CAN_VIEW_OPERATIONAL: Role[] = [
-  'superuser', 'admin', 'gerencia', 'compras', 'ventas', 'inventario', 'financiero', 'testuser',
+  'superuser', 'admin', 'gerencia', 'compras', 'ventas', 'inventario', 'financiero', 'testuser', 'operaciones',
 ];
 
 /** Roles that can access OA (Open Orders) module */
 export const CAN_VIEW_OA: Role[] = [
-  'superuser', 'admin', 'gerencia', 'compras', 'inventario', 'financiero',
+  'superuser', 'admin', 'gerencia', 'compras', 'inventario', 'financiero', 'operaciones',
+];
+
+/** Roles that can access the Operaciones silo (Mario's tool) */
+export const CAN_VIEW_OPERACIONES: Role[] = [
+  'superuser', 'admin', 'gerencia', 'operaciones',
+];
+
+/** Roles that can access the Compras silo (Wilmer's tool) */
+export const CAN_VIEW_COMPRAS: Role[] = [
+  'superuser', 'admin', 'gerencia', 'compras',
 ];
 
 /** Roles that can only see backtest + POC (no fear pages, no admin) */
@@ -64,6 +75,8 @@ export const PAGE_PERMISSIONS: Record<string, Role[]> = {
   '/backtest': CAN_VIEW_OPERATIONAL,
   '/preocupaciones': CAN_VIEW_OPERATIONAL,
   '/oa': CAN_VIEW_OA,
+  '/compras': CAN_VIEW_COMPRAS,
+  '/operaciones': CAN_VIEW_OPERACIONES,
   '/superuser': CAN_VIEW_SYSTEM,
   '/admin': CAN_VIEW_ADMIN,
   '/configuracion': CAN_VIEW_ADMIN,
@@ -76,6 +89,10 @@ export function getDefaultPage(role: Role | string): string {
   switch (role) {
     case ROLES.SUPERUSER:
       return '/superuser';
+    case ROLES.COMPRAS:
+      return '/compras';
+    case ROLES.OPERACIONES:
+      return '/operaciones';
     case ROLES.ADMIN:
       return '/backtest';
     default:
@@ -95,4 +112,5 @@ export const ROLE_LABELS: Record<Role, string> = {
   inventario: 'Inventario',
   financiero: 'Financiero',
   testuser: 'Usuario de Prueba',
+  operaciones: 'Operaciones',
 };

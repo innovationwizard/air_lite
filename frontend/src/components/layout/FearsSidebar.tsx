@@ -23,12 +23,21 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useUserRole } from '@/lib/auth/useUserRole';
-import { isAuthorized, CAN_VIEW_ADMIN, CAN_VIEW_SYSTEM, CAN_VIEW_OA, ROLE_LABELS, Role } from '@/lib/auth/roles';
+import {
+  isAuthorized,
+  CAN_VIEW_ADMIN,
+  CAN_VIEW_SYSTEM,
+  CAN_VIEW_OA,
+  CAN_VIEW_COMPRAS,
+  CAN_VIEW_OPERACIONES,
+  ROLE_LABELS,
+  Role,
+} from '@/lib/auth/roles';
 
-/** Roles that can see Riesgos Empresariales — excludes testuser (POC-only) and compras (backtest+OA only) */
+/** Roles that can see the legacy Riesgos Empresariales grouping — excludes silo roles that now have dedicated sections */
 const CAN_VIEW_RISKS: Role[] = ['superuser', 'admin', 'gerencia', 'ventas', 'inventario', 'financiero'];
 
-/** Roles that can see Prueba de Concepto — everyone except compras (compras only sees backtest+OA) */
+/** Roles that can see the legacy Prueba de Concepto grouping — compras/operaciones see these items in their own silo sections */
 const CAN_VIEW_POC: Role[] = ['superuser', 'admin', 'gerencia', 'ventas', 'inventario', 'financiero', 'testuser'];
 
 interface NavItem {
@@ -53,6 +62,60 @@ const allNavGroups: NavGroup[] = [
         href: '/backtest',
         icon: BarChart3,
         subtitle: null,
+      },
+    ],
+  },
+  {
+    section: 'Compras',
+    requiredRoles: CAN_VIEW_COMPRAS,
+    items: [
+      {
+        name: 'Inicio Compras',
+        href: '/compras',
+        icon: ShoppingCart,
+        subtitle: 'Resumen del silo de Compras',
+      },
+      {
+        name: 'Forecast de Demanda',
+        href: '/backtest',
+        icon: BarChart3,
+        subtitle: '12 meses automatizados',
+      },
+      {
+        name: 'Programación de Compras',
+        href: '/poc/programacion',
+        icon: Truck,
+        subtitle: 'Carvajal y Reyma',
+      },
+    ],
+  },
+  {
+    section: 'Operaciones',
+    requiredRoles: CAN_VIEW_OPERACIONES,
+    items: [
+      {
+        name: 'Inicio Operaciones',
+        href: '/operaciones',
+        icon: Warehouse,
+        subtitle: 'Resumen del silo de Operaciones',
+      },
+      {
+        name: 'Días de Inventario',
+        href: '/operaciones/dias-inventario',
+        icon: Gauge,
+        subtitle: 'Días por SKU y bodega',
+      },
+      {
+        name: 'Hot List',
+        href: '/preocupaciones/desabastecimiento',
+        icon: AlertTriangle,
+        subtitle: 'Por agotarse — asegurar primero',
+      },
+      {
+        name: 'Hold List',
+        href: '/preocupaciones/capital-congelado',
+        icon: Snowflake,
+        subtitle: 'Sobrante — no traer más',
       },
     ],
   },

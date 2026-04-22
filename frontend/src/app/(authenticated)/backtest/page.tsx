@@ -241,6 +241,11 @@ export default function BacktestPage() {
             </div>
           </div>
 
+          {/* Validation banner — three of four metrics are being cross-checked against Odoo */}
+          <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            <span className="font-semibold">Tres de las cuatro métricas están en validación</span> con datos adicionales de Odoo (notas de crédito y snapshot actualizado). Los valores finales pueden variar. &quot;Compras Innecesarias&quot; ya está validada.
+          </div>
+
           {/* 4 Savings Cards */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <BacktestSavingsCard
@@ -250,6 +255,7 @@ export default function BacktestPage() {
               reasoning={savings.storage_reasoning}
               icon={<Warehouse className="w-5 h-5 text-blue-600" />}
               accentColor="bg-blue-50"
+              enValidacion
             />
             <BacktestSavingsCard
               title="Compras Innecesarias"
@@ -266,6 +272,7 @@ export default function BacktestPage() {
               reasoning={savings.stockout_reasoning}
               icon={<AlertTriangle className="w-5 h-5 text-amber-600" />}
               accentColor="bg-amber-50"
+              enValidacion
             />
             <BacktestSavingsCard
               title="Rotación de Inventario"
@@ -275,6 +282,7 @@ export default function BacktestPage() {
               icon={<RefreshCw className="w-5 h-5 text-emerald-600" />}
               accentColor="bg-emerald-50"
               headlineOverride={`${savings.actual_turnover_rate.toFixed(1)}x → ${savings.optimized_turnover_rate.toFixed(1)}x`}
+              enValidacion
             />
           </div>
 

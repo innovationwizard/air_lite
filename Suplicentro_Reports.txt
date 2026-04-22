@@ -1,0 +1,294 @@
+TRANSCRIPCIÓN LIMPIA — SUPLICENTRO, REUNIÓN DE DIAGNÓSTICO OPERATIVO
+================================================================================
+Participantes identificados: Mario (Gerente de Operaciones), Wilmer (Comprador/Analista de Forecast), Alexis (Compras Importados), Luis (Sistemas/IT), Ángel (Líder de Bodega), Jorge (Dimensionamiento), Roberto (Gerencia Comercial/Ventas)
+Visitante externo: Consultor evaluando implementación de herramienta de forecasting/planificación
+================================================================================
+
+PARTE 1 — INTRODUCCIÓN Y CONTEXTO DE LA VISITA
+--------------------------------------------------------------------------------
+
+[Fragmento inicial incomprensible — referencia a situación previa, posible segunda visita]
+
+Te comento, los que van a estar conmigo son: el gerente de operaciones, el comprador —que es el que se encarga de las compras locales— y el de importación, que es el que trae el producto de El Salvador para acá.
+
+Ellos te van a dar una pequeña introducción. Cualquier cantidad de preguntas que tengas, ese es el objetivo: entender el alcance del proyecto que se necesite.
+
+Lo único que tenemos que hacer es que aquí puedan tener cualquier contexto para que, si necesitan volver, tengan base. El segundo paso ya viene indirectamente después. Hoy literalmente es para mí, porque yo parqueé mi agenda aquí. Si tú necesitas tres horas, cuatro horas, o lo que sea, pues yo voy a la bodega, voy a donde sea.
+
+PARTE 2 — DESCRIPCIÓN DE LAS BODEGAS
+--------------------------------------------------------------------------------
+
+Son cuatro bodegas. No hay ningún problema con el acceso. Lo que vamos a necesitar es no obstruir el espacio de los colaboradores, es lo único.
+
+Esta es la bodega número cuatro. El movimiento de esta bodega es de esta pared para acá. Este es el espacio que está [referencia visual].
+
+En algunas ocasiones, cuando el producto se acumula, se desborda para acá. Pero podemos regular. Hay dos furgones afuera — porque hay productos de mucho volumen.
+
+[Referencia a furgón/contenedor:] El mismo tiene como nueve metros por diez metros de altura, por dos o tres [metros de ancho/profundidad — incomprensible exacto].
+
+En la bodega número uno está el espacio de salida del producto. Viene un camión, se carga el producto, se prepara ahí, y sale. De igual forma, en la misma bodega hay un plan de devolución — todo el producto que viene devuelto de los proveedores.
+
+Entre los proveedores, todos los ingresos tienen diferentes rampas. [Referencia a rampa 4 o 5.] De igual forma, en la bodega tres las rampas van aparte, para que la bodega uno solo sea rampa de despacho. Si sale el producto, es despacho.
+
+[Fragmento incomprensible — referencia a producción y separación de áreas.]
+
+PARTE 3 — DOLOR #1: ANÁLISIS DE FORECAST (PRONÓSTICO DE DEMANDA)
+================================================================================
+
+No tenemos una herramienta maestra. No hay una máquina ni un Excel que nos diga... Básicamente el análisis es súper sencillo: relacionado al detalle del forecast, es entender más o menos cómo estuvo la venta en los últimos seis meses, la temporalidad en los últimos tres meses. En base a eso generamos una proyección del siguiente mes. También en algunos casos se considera la proyección del crecimiento que ha tenido en todos los meses, para entender cuánto es la proyección para el siguiente mes.
+
+>>> REPORTE ACTUAL DE FORECAST (HECHO A MANO):
+    - Insumo: venta histórica de últimos 6 meses
+    - Ventana de temporalidad: últimos 3 meses
+    - Cálculo: proyección del siguiente mes basada en tendencia y crecimiento
+    - Limitación: no pueden proyectar más allá de 3 meses con precisión
+    - Herramienta: Excel manual
+    - Proceso: totalmente manual, no escalable
+
+Lo que sí nos cuesta mucho es que, por el proceso tan manual que es, no podemos proyectar más allá de tres meses. Lo podemos hacer, pero no va a ser certero.
+
+Es bien complejo, porque hay proveedores que ya están preguntando desde julio: "¿Cómo va a estar la venta de los próximos tres meses? Porque hay que empezar a fabricar." Y al final, ¿cómo podemos nosotros comprometernos con algo que al final no sabemos si va a pasar?
+
+Entonces, ahí empezamos con el tema de cuál es el número correcto para enviar. También está el tema de qué tan a futuro podemos proyectar, y si la herramienta es la correcta o no.
+
+PARTE 4 — DOLOR #2: DIFERENCIA ENTRE COMPRAS LOCALES E IMPORTADAS
+================================================================================
+
+Hay una diferencia en cómo trabajamos locales y cómo trabajamos importados.
+
+Importados es mucho a experiencia, mucho a "me acuerdo que sí lo pidieron" y "me acuerdo que no". La idea de poder proponer una prueba y entender qué podemos hacer es prácticamente partir de ahí: entender cómo podemos unificar ambos análisis. No importa si estoy viendo lo local o importado, que el resultado sea homogéneo.
+
+Obviamente hay que hacer distinciones: mi proyección para importado tengo que pedirla a 90 días, y la otra a 5 días, porque tengo que cubrir tiempos de tránsito. Pero que el análisis sea lineal para todo el proceso.
+
+PARTE 5 — DOLOR #3: FLEXIBILIDAD Y LIMITACIONES DEL SISTEMA (ODOO)
+================================================================================
+
+El sistema la verdad no es como... No sé qué tanto has interactuado con información del sistema. Nosotros que sí necesitamos información del sistema de forma diaria, es un dolor. El sistema no te da la información fácil. La puedes sacar de 10 formas diferentes, y las 10 formas diferentes te dan información distinta.
+
+>>> PROBLEMAS CON ODOO (SISTEMA ERP ACTUAL):
+    - Múltiples formas de extraer la misma información dan resultados distintos
+    - No hay una ruta estándar para obtener datos confiables
+    - Los reportes de datos vienen en formato difícil de trabajar ("como si fuéramos Macintosh")
+    - Se requiere descargar, pegar, modificar manualmente cada reporte
+    - Alto riesgo de error humano al manipular datos manualmente
+    - El sistema funciona bien como ERP pero no como WMS (Warehouse Management System)
+
+Hoy yo creo un reporte nuevo de ventas, agarro el filtro, pongo todo lo ordenado, agarro el filtro de qué fecha quiero ver, lo descargo, lo pego, lo modifico — porque también el reporte de los datos te lo manda en un formato difícil de trabajar. Ahí también corre el riesgo de tocar algo que no tienes que tocar. Ha pasado.
+
+De ahí te vas a otro archivo que es el inventario, de esta bodega o de cualquier bodega. Y de verdad, Odoo creo que funciona muy bien a nivel ERP, pero no a nivel WMS. Entonces es un proceso totalmente diferente; queremos usarlo para trabajar dentro del almacén, cuando realmente no se puede.
+
+Hoy lo tenemos porque al final ahí está toda nuestra información: ahí colocamos la venta, ahí colocamos nuestro inventario, ahí colocamos todo.
+
+>>> LO QUE SE LE PIDIÓ A LUIS (IT):
+    - Que la información de Odoo se cargue a un servidor
+    - Poder consultar el servidor directamente
+    - Hacer consultas tipo: "¿cuánto hay del producto X?" y que responda directamente
+    - Actualmente están trabajando en montar un servidor local que copie la información de Odoo
+
+PARTE 6 — DOLOR #4: PROBLEMA DE CÓDIGOS ARCHIVADOS Y PÉRDIDA DE HISTÓRICO
+================================================================================
+
+Hay un problema que no hemos podido arreglar: si llevábamos un año vendiendo un código y nos dimos cuenta que hay que cambiar la unidad de medida, no se puede modificar en Odoo. Entonces hay que archivar el código y crear uno nuevo de forma correcta.
+
+El tema es que toda la historia se fue con el código que archivaste. El código que acabas de crear está en cero kilómetro. Cuando nosotros analizamos la venta, dice que no ha vendido nada. ¿Entonces qué comprar? Si no tenés histórico de venta, ¿qué comprar?
+
+>>> WORKAROUND ACTUAL (MANUAL):
+    - Descargar toda la información incluyendo códigos archivados
+    - Cambiar manualmente el código (no la descripción, porque el código sigue siendo el mismo)
+    - Aparecen dos líneas: una con venta histórica (ej. enero 2024 a diciembre 2025) y otra solo con venta reciente
+    - Se unifican manualmente los dos códigos en una sola línea
+    - Proceso lento, propenso a errores
+
+Nos pasó con un caso específico: se hizo el análisis de venta con el histórico, y no aparecía venta de tres o cuatro códigos que eran top. No se contaron para pedir, y se quedaron sin inventario. Gracias a Dios era un análisis de un punto de venta pequeño. Pero nos quedamos sin inventario en ambos lados.
+
+PARTE 7 — PROCESO ACTUAL DE REUNIÓN DE FORECAST
+================================================================================
+
+>>> PROCESO DE FORECAST ACTUAL:
+    1. Wilmer hace el análisis de forecast (histórico + proyección)
+    2. Ventas manda su propio forecast de lo que proyectan vender
+    3. Se comparan ambos análisis
+    4. Todas las diferencias significativas se revisan en reunión
+    5. Ejemplo: "A mí el análisis me da 100 y ustedes están poniendo 500, ¿cuál es la razón?"
+    6. Se ajusta y se acuerda un número final
+
+    Evolución:
+    - Antes: 150 códigos por reunión por proveedor para revisar
+    - Ahora: no más de 20-25 códigos
+    - Antes: todos los proveedores se revisaban
+    - Ahora: solo 3-4 proveedores críticos
+
+    Ejemplo exitoso: Baica (top 3 proveedor) — ya no se realiza revisión porque está super controlado
+
+La forma funciona, pero no es la mejor forma. Tenemos que hacer 3-4 esfuerzos diferentes para poder consolidar el análisis. Y como no es fácil de hacer, tampoco tenemos una visibilidad tan frecuente. Lo ideal sería que todos los días pudiéramos ver el estado actual del inventario. No lo hacemos porque el tiempo se nos va en otras cosas, en corregir, en el proceso manual.
+
+PARTE 8 — DOLOR CON IMPORTADOS: CONTENEDORES Y FRECUENCIA
+================================================================================
+
+En el caso de un contenedor de China o Colombia: se hace una orden de compra, se mandan a pedir, y vienen siete u ocho contenedores. Pero resulta que esos siete u ocho contenedores son inventario de un mes y medio o dos meses.
+
+Entonces me zambullo siete contenedores completos que van a estar aquí parqueados durante dos meses. Y antes de que termine el mes, llegan otros siete. Pero de dos códigos que se acaban en dos semanas, tengo que esperar otra vez un mes y medio a que venga el siguiente contenedor a ver si trae esos dos códigos. Y resulta que no, que trae más de los que ya tenemos.
+
+>>> PROBLEMA CENTRAL — FRECUENCIA DE ABASTECIMIENTO vs. FRECUENCIA DE VENTA:
+    - No coincide el abastecimiento con la venta real
+    - Ejemplo: venden 125 unidades en el mes, compran 125, llega el producto el 2 del mes, pero se vende el 30 del mes — no coincidió
+    - Los top 7 códigos nunca han logrado tener inventario de seguridad
+    - La planificación de llegada siempre coincide mal con la necesidad
+    - Si pudieran predecir en qué día se va a necesitar, podrían planificar mejor
+
+PARTE 9 — NECESIDAD: VISIBILIDAD EN TIEMPO REAL PARA GERENCIA
+================================================================================
+
+Lo que Roberto (gerencia) pregunta a veces hasta dos veces al día: "¿Cómo estamos? ¿Cuántos días de inventario tengo? ¿Qué viene en tránsito?"
+
+Quiere saberlo, pero el sistema no se lo da fácil. Entonces tenemos que hacerlo manualmente: cuántos días tenemos acá, cuántos días vienen en tránsito, sumarlo todo.
+
+>>> REPORTES QUE ROBERTO NECESITA Y HOY NO TIENE:
+    - Días de inventario por código/categoría en tiempo real
+    - Inventario en tránsito
+    - Visibilidad para reaccionar: decirle al proveedor de El Salvador o México "no me mandes esto, no lo quiero este mes"
+    - Hoy esperan el cierre de mes (que tarda ~15 días) para saber cómo les fue
+    - No pueden ver a medio mes si van bien o mal en ventas
+    - Roberto (y Mario) quisieran verlo en un dashboard o en su celular — como en empresas anteriores donde los gerentes miraban desde su celular
+
+>>> REPORTE DE CUMPLIMIENTO DE PROVEEDORES (HECHO A MANO):
+    - Hoy: se meten a la orden de compra, ven que cumplieron el 90% de la orden
+    - Pero NO ven si lo cumplieron en tiempo
+    - Porque una orden puede tener 10 entregas diferentes
+    - Para armar este reporte: descargan todas las órdenes de compra, cruzan fecha programada vs. fecha real de ingreso al sistema
+    - Son 16 pasos diferentes para armar un solo reporte al proveedor
+    - Se necesita: % cumplimiento de cantidad + % cumplimiento en tiempo + detalle por entrega
+
+PARTE 10 — PRODUCTO FABRICADO Y MATERIAL DE EMPAQUE
+================================================================================
+
+Suplicentro no es fabricante. Tercerizan toda la fabricación con diferentes maquiladores: uno hace cucharas, otro el vaso, otro el plato, otro la bandeja — diferentes productos con diferentes proveedores.
+
+>>> MATERIAL DE EMPAQUE — PROBLEMA ACTUAL:
+    - Compran: bolsa, film stretch, sticker, caja corrugada — todo se lo entregan al fabricante
+    - En el sistema Odoo existe una "receta" por producto terminado (BOM)
+    - Pero el manejo es manual, en Excel, diferente al resto de las compras
+    - Problema de unidades de medida: el conteo de bolsas es distinto al del producto terminado
+    - El sistema tiene un bug/complejidad con unidades de medida que cambia la receta al modificar
+    - No saben con certeza cuánto inventario de material de empaque hay realmente
+    - Hay bolsas acumuladas desde 2021-2022 que ya se están despintando (100 mil unidades aprox.)
+    - El proveedor de bolsas solo cubre garantía de 6 meses — pérdida de dinero
+    - Se compra de más por falta de visibilidad del consumo real
+
+El consumo y abastecimiento de material de empaque lo hacen por unidad, pero compran por paquete (un paquete puede tener un millar de bolsas, un ciento, o 500). Es un laberinto de conversión de unidades.
+
+Ejemplo concreto: tienen un cliente que consume cubiertos todo el mes en maquila. Hacen el requerimiento, el proveedor (maquilador) entrega, pero no saben si en cierta parte del mes se quedó sin stock de materia prima para seguir produciendo. Cuando vuelven a pedir, el maquilador dice "ahora solo puedo entregar 20 mil porque el material no alcanzó." Ni el proveedor avisó, ni Suplicentro lo previó, porque no tienen visibilidad del consumo.
+
+PARTE 11 — HOMÓLOGOS Y SUSTITUTOS
+================================================================================
+
+>>> PROBLEMA DE CÓDIGOS HOMÓLOGOS/SUSTITUTOS:
+    - Hay códigos que no puedes comprar simultáneamente — debe ser uno u otro
+    - Son de distintos proveedores pero cumplen la misma función
+    - Un código debe ser "padre" y los otros "hijos" (sustitutos)
+    - Si un producto se va a tardar 2 meses, no pueden generar los dos al mismo tiempo
+    - Este análisis HOY SE HACE EN LA MENTE de una persona — no está en ningún sistema
+    - Ejemplo: vaso de cartón 8/11 oz tenía 8 códigos sustitutos, venían solo de uno y no compraban el otro
+    - No hay ningún lugar donde estén mapeados los sustitutos/homólogos para tomar decisiones
+
+PARTE 12 — CLASIFICACIÓN ABC Y CRITICIDAD
+================================================================================
+
+>>> PROBLEMA: NO EXISTE CLASIFICACIÓN DE CRITICIDAD EN EL SISTEMA
+    - Hay códigos que atienden supermercados o institucional (Walmart, La Despensa, etc.)
+    - Deben tener inventario siempre ("never be out")
+    - Si no tienen, el cliente cambia de proveedor permanentemente
+    - Estos códigos deben ser tratados con inventario de seguridad mayor, como si fueran importados
+    - En el sistema NO existe marcador de criticidad (alta, media, baja)
+    - No hay forma de identificar cuáles son "never be out"
+    - Se lleva un registro parcial "en el Excel" y "en la mente" de la persona
+    - Se necesita: clasificación A/B/C con frecuencia de reabastecimiento diferenciada
+
+PARTE 13 — COMPRAS POR CENTRO DE DISTRIBUCIÓN
+================================================================================
+
+Un porcentaje muy alto del volumen lo compra directamente cada punto de venta (La Despensa, el siguiente centro, etc.). Los proveedores directos son de México, El Salvador, Colombia y algunos locales de volumen.
+
+El análisis de compra se hace por centro de distribución, no es general. Cada centro genera su propia orden. Wilmer ya puede ver por centro de distribución, pero a nivel de forecast se consolida el total. Ya en distribución se separa: cuánto para cada punto.
+
+>>> COMPLEJIDAD ADICIONAL:
+    - No se puede separar por vendedor porque los vendedores se cruzan entre zonas
+    - Solución actual: usar el pedido como unidad de análisis (no importa de dónde viene el vendedor, si el pedido se origina desde la bodega central, se asigna a la bodega central)
+    - Falta estandarización en la asignación
+
+PARTE 14 — TEMA CULTURAL Y USABILIDAD
+================================================================================
+
+Es un tema de cultura. No es un tema del sistema ni de la operación. A nivel comercial, si hay alguna visibilidad tipo dashboard, que sea "aprieto aquí y veo, y ya." Porque si es Excel, no lo van a usar.
+
+Ejemplo: los vendedores no saben si hay inventario disponible. Nos llaman para preguntar. Probablemente hay como cinco formas de verlo en el sistema, pero no saben ni dónde. Solo hacen el pedido y si no hay, se enteran después.
+
+Si en la solución va a haber algún panorama de visibilidad o algún dashboard para alguien externo que no maneja la operación: háganlo con colores, con gráficos simples. Mientras más bonito, mientras más fácil de tocar, mientras más personalizado, mejor.
+
+PARTE 15 — RESUMEN DEL MENSAJE CLAVE
+================================================================================
+
+El sistema (Odoo) no es malo. Al final mantiene toda la operación. No se puede decir que es un mal sistema. Simplemente hay que encontrar la ruta correcta de información que necesitamos.
+
+Lo que más quisiéramos es que la herramienta quede lo más adaptada posible para poder tener una observación objetiva de los datos, sin depender de que "Wilmer compró malo" o "Alexis no hizo bien algo". Que tengamos la información de forma clara y que ellos la puedan analizar con su experiencia encima.
+
+La información está, existe, funciona. Hoy sacamos el chance de ahí. Lo que necesitamos es entender cómo interpretar el sistema de manera correcta para que el resultado sea diferente.
+
+PARTE 16 — RECORRIDO POR BODEGAS (DIMENSIONAMIENTO)
+================================================================================
+
+[Inicia recorrido físico por bodegas con Ángel (líder de bodega) y Jorge (dimensionamiento)]
+
+Las bodegas tienen medidas en metros lineales. Para esta bodega se está considerando 3.5 metros de altura para calcular volumen. Es un promedio porque hay productos que pueden llegar a más de 4 metros y otros que solo llegan a una tarima. Todos los pallets son iguales: uno por uno punto dos [1 x 1.2 m].
+
+[Se usa aplicación del iPhone para escaneo 3D / medición con LiDAR para dimensionar las bodegas]
+
+[Fragmentos incomprensibles durante el recorrido — referencias a mediciones de volumen, metro cúbico, ubicación de productos]
+
+Esta es la bodega de temperatura controlada [referencia a producto de baja rotación].
+
+[Fin de la transcripción útil — resto es ruido de grabación]
+
+================================================================================
+RESUMEN DE REPORTES QUE NECESITAN Y HOY HACEN A MANO
+================================================================================
+
+1. FORECAST DE DEMANDA
+   - Insumo: venta últimos 6 meses + temporalidad 3 meses + crecimiento
+   - Salida: proyección mensual por código/proveedor
+   - Hoy: Excel manual, no escalable, no puede proyectar >3 meses
+
+2. REPORTE DE CUMPLIMIENTO DE PROVEEDORES
+   - Necesitan: % cumplimiento en cantidad + % cumplimiento en tiempo + detalle por entrega
+   - Hoy: cruzar manualmente órdenes de compra con movimientos de ingreso (~16 pasos)
+
+3. DASHBOARD DE INVENTARIO EN TIEMPO REAL
+   - Días de inventario por código
+   - Inventario en tránsito
+   - Estado de ventas vs. proyección a medio mes
+   - Accesible desde celular para gerencia
+
+4. REPORTE DE MATERIAL DE EMPAQUE (BOM)
+   - Consumo real vs. abastecimiento por receta
+   - Conversión de unidades correcta
+   - Visibilidad de stock real de materiales
+
+5. MAPA DE HOMÓLOGOS/SUSTITUTOS
+   - Códigos padre-hijo por categoría
+   - Reglas de no comprar simultáneamente
+   - Hoy: solo en la mente de una persona
+
+6. CLASIFICACIÓN ABC / CRITICIDAD
+   - Códigos "never be out" para clientes institucionales
+   - Frecuencia de reabastecimiento diferenciada por tipo
+   - Inventario de seguridad por criticidad
+
+7. ANÁLISIS DE FRECUENCIA DE VENTA vs. FRECUENCIA DE ABASTECIMIENTO
+   - Predicción por día/semana de cuándo se vende cada código
+   - Optimización de compra para coincidir abastecimiento con demanda real
+   - Reducir uso de espacio en bodega
+
+8. VISIBILIDAD DE PEDIDOS RESERVADOS
+   - Qué tiene reservado cada vendedor/cliente
+   - Para cuándo está programado el despacho
+   - Impacto en inventario disponible real

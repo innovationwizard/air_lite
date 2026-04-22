@@ -1,0 +1,60 @@
+TRANSCRIPCIÓN LIMPIA — SUPLICENTRO, REUNIÓN DE DIAGNÓSTICO OPERATIVO
+================================================================================
+Participantes identificados: Mario (Gerente de Operaciones), Wilmer (Comprador/Analista de Forecast), Alexis (Compras Importados), Luis (Sistemas/IT), Ángel (Líder de Bodega), Jorge (Dimensionamiento), Roberto (Gerencia Comercial/Ventas)
+Visitante externo: Consultor evaluando implementación de herramienta de forecasting/planificación
+================================================================================
+
+PARTE 1 — INTRODUCCIÓN Y CONTEXTO DE LA VISITA
+--------------------------------------------------------------------------------
+
+[Fragmento inicial incomprensible — referencia a situación previa, posible segunda visita]
+
+Te comento, los que van a estar conmigo son: el gerente de operaciones, el comprador —que es el que se encarga de las compras locales— y el de importación, que es el que trae el producto de El Salvador para acá.
+
+Ellos te van a dar una pequeña introducción. Cualquier cantidad de preguntas que tengas, ese es el objetivo: entender el alcance del proyecto que se necesite.
+
+Lo único que tenemos que hacer es que aquí puedan tener cualquier contexto para que, si necesitan volver, tengan base. El segundo paso ya viene indirectamente después. Hoy literalmente es para mí, porque yo parqueé mi agenda aquí. Si tú necesitas tres horas, cuatro horas, o lo que sea, pues yo voy a la bodega, voy a donde sea.
+
+================================================================================
+RESUMEN DE REPORTES QUE NECESITAN Y HOY HACEN A MANO
+================================================================================
+
+1. FORECAST DE DEMANDA
+   - Insumo: venta últimos 6 meses + temporalidad 3 meses + crecimiento
+   - Salida: proyección mensual por código/proveedor
+   - Hoy: Excel manual, no escalable, no puede proyectar >3 meses
+
+2. REPORTE DE CUMPLIMIENTO DE PROVEEDORES
+   - Necesitan: % cumplimiento en cantidad + % cumplimiento en tiempo + detalle por entrega
+   - Hoy: cruzar manualmente órdenes de compra con movimientos de ingreso (~16 pasos)
+
+3. DASHBOARD DE INVENTARIO EN TIEMPO REAL
+   - Días de inventario por código
+   - Inventario en tránsito
+   - Estado de ventas vs. proyección a medio mes
+   - Accesible desde celular para gerencia
+
+4. REPORTE DE MATERIAL DE EMPAQUE (BOM)
+   - Consumo real vs. abastecimiento por receta
+   - Conversión de unidades correcta
+   - Visibilidad de stock real de materiales
+
+5. MAPA DE HOMÓLOGOS/SUSTITUTOS
+   - Códigos padre-hijo por categoría
+   - Reglas de no comprar simultáneamente
+   - Hoy: solo en la mente de una persona
+
+6. CLASIFICACIÓN ABC / CRITICIDAD
+   - Códigos "never be out" para clientes institucionales
+   - Frecuencia de reabastecimiento diferenciada por tipo
+   - Inventario de seguridad por criticidad
+
+7. ANÁLISIS DE FRECUENCIA DE VENTA vs. FRECUENCIA DE ABASTECIMIENTO
+   - Predicción por día/semana de cuándo se vende cada código
+   - Optimización de compra para coincidir abastecimiento con demanda real
+   - Reducir uso de espacio en bodega
+
+8. VISIBILIDAD DE PEDIDOS RESERVADOS
+   - Qué tiene reservado cada vendedor/cliente
+   - Para cuándo está programado el despacho
+   - Impacto en inventario disponible real
