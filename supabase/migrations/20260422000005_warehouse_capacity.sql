@@ -1,7 +1,7 @@
 -- ============================================================================
 -- Warehouse cubicaje capacity — Central seeded, others left NULL
 -- ============================================================================
--- Alexis (Gerente General) asked on 2026-04-22 (lines 80-98 of the feedback
+-- Luis (Gerente General) asked on 2026-04-22 (lines 80-98 of the feedback
 -- transcript) for cubicaje visibility: "cuántos furgones representa mi compra
 -- versus mi espacio de almacenamiento."
 --
@@ -12,7 +12,7 @@
 --
 -- Zacapa, Peten, Zona 11 capacities are approximate per Jorge's 2026-04-22
 -- screenshot but not Mario-validated. Leave NULL until field measurements
--- land (post-Alexis approval, per plan §5 P2).
+-- land (post-Luis approval, per plan §5 P2).
 -- ============================================================================
 
 ALTER TABLE warehouses

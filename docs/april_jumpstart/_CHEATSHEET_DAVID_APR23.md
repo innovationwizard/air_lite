@@ -1,6 +1,6 @@
 # CHEAT SHEET — Gerencia Validación — 2026-04-23 9:30 demo
 
-**Audience:** David (PM, Suplicentro) — preview before Alexis.
+**Audience:** David (PM, Suplicentro) — preview before Luis.
 **Scope:** Carvajal + Reyma only. Runs 58/59/60/61 = Feb/Mar/Abr/May 2025.
 **Generated:** 2026-04-22 evening from live prod Supabase.
 **Nomenclature:** "App" = la herramienta (AI Refill Lite). "Humanos" = los compradores (Wilmer/Alexis).
@@ -22,7 +22,7 @@ The page is at `/gerencia/validacion`. Jorge opens it logged in as `gerencia` (o
 
 ## The 5 SKUs Jorge must remember per cycle
 
-Sorted by |margin_uplift| desc (biggest monetary spread first). These are what Alexis is most likely to point at.
+Sorted by |margin_uplift| desc (biggest monetary spread first). These are what Luis is most likely to point at.
 
 ### Febrero 2025 — run 58
 *Training cutoff: 2025-01-31*
@@ -86,7 +86,7 @@ Admitir honestamente. No esconder.
 
 ### Top-5 undershoots (se vendió más de lo que la App pronosticó)
 
-Estos son los casos donde la App DEJÓ DE vender. Útil si Alexis pregunta: "¿y las ventas que se perdieron?"
+Estos son los casos donde la App DEJÓ DE vender. Útil si Luis pregunta: "¿y las ventas que se perdieron?"
 
 | Mes | SKU | Producto | Predijo | Vendió | Faltante |
 |---|---|---|---:|---:|---:|

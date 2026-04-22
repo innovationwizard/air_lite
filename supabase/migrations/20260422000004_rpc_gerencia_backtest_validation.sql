@@ -1,7 +1,7 @@
 -- ============================================================================
 -- rpc_gerencia_validation — Per-SKU holdout backtest comparison for Gerencia
 -- ============================================================================
--- Answers Alexis (Gerente General)'s three questions from the 2026-04-22
+-- Answers Luis (Gerente General)'s three questions from the 2026-04-22
 -- meeting with David (see docs/april_jumpstart/_GERENTE_GENERAL_PLAN_APR22.md):
 --
 --   1. Per-SKU backtest: system-predicted demand vs comprador-purchased qty
@@ -84,7 +84,7 @@ AS $$
     SELECT product_id FROM reyma_sku_ids
   ),
   -- Comprador purchases aggregated per product over the prediction month.
-  -- "quantity" = units ordered (what Alexis meant by "qué compraron").
+  -- "quantity" = units ordered (what Luis meant by "qué compraron").
   -- states 'purchase' and 'done' = confirmed POs; drafts and cancellations are excluded.
   comprador_po AS (
     SELECT

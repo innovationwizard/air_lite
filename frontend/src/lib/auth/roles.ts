@@ -54,7 +54,7 @@ export const CAN_VIEW_COMPRAS: Role[] = [
   'superuser', 'admin', 'gerencia', 'compras',
 ];
 
-/** Roles that can access the Gerencia silo (Alexis-facing validation) */
+/** Roles that can access the Gerencia silo (Luis-facing validation) */
 export const CAN_VIEW_GERENCIA: Role[] = [
   'superuser', 'admin', 'gerencia',
 ];
