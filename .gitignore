@@ -54,6 +54,10 @@ credentials.json
 .aws/
 *.env
 !example.env
+.env.local
+.env.*.local
+**/.env.local
+**/.env.*.local
 
 # Node.js (for CDK)
 node_modules/
