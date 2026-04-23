@@ -1,0 +1,3 @@
+ODOO_API_KEY not set. Add to .env.local:
+  ODOO_API_KEY=<api-key-from-2026-03-26>
+Then re-run: python3 docs/reconciliation/recon_C_odoo_live.py

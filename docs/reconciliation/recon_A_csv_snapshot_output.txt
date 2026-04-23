@@ -1,0 +1,30 @@
+Recon A — CSV snapshot — SKU 77201046
+Lines: 6157, UoMs: {'CAJA40': 6035, 'Unidad CJ': 3, 'PAQ CJ': 119}
+
+SSOT declared: Nov=6466.25, Dec=6496.5
+
+Month-by-month:
+
+  2024-11:
+    sale.order.line raw:        A=   6851.00  A'=   6706.00  B=   6361.00  B'=   6360.00
+    sale.order.line UoM-norm:   A=   6819.80  A'=   6674.80  B=   6361.00  B'=   6360.00
+    stock.move customer:        to=   6568.25  from=    157.00  net=   6411.25
+
+  2024-12:
+    sale.order.line raw:        A=   6653.00  A'=   6296.00  B=   6301.00  B'=   6384.00
+    sale.order.line UoM-norm:   A=   6545.75  A'=   6188.75  B=   6301.00  B'=   6384.00
+    stock.move customer:        to=   6882.57  from=    377.10  net=   6505.48
+
+  2025-01:
+    sale.order.line raw:        A=   7644.00  A'=   7479.00  B=   7160.00  B'=   7179.00
+    sale.order.line UoM-norm:   A=   7512.38  A'=   7347.38  B=   7160.00  B'=   7179.00
+
+  2025-02:
+    sale.order.line raw:        A=   6047.00  A'=   5607.00  B=   5434.00  B'=   5493.00
+    sale.order.line UoM-norm:   A=   5992.40  A'=   5552.40  B=   5434.00  B'=   5493.00
+
+Deltas vs SSOT declared:
+  2024-11: SSOT=6466.25  |  B_raw=6361.0 (Δ=+105.25)  |  B_norm=6361.0 (Δ=+105.25)  |  sm_net=6411.25 (Δ=+55.00)
+  2024-12: SSOT=6496.5  |  B_raw=6301.0 (Δ=+195.50)  |  B_norm=6301.0 (Δ=+195.50)  |  sm_net=6505.475 (Δ=-8.97)
+
+Saved: /Users/jorgeluiscontrerasherrera/Documents/_git/air_lite/docs/reconciliation/recon_A_csv_snapshot_results.json

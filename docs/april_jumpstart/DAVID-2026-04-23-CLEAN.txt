@@ -1,0 +1,306 @@
+================================================================================
+CLEANED TRANSCRIPTION — DAVID — 2026-04-23
+================================================================================
+Context: Debugging an AI app that produces incorrect purchasing and sales totals.
+System: Odoo ERP data being consumed by an AI application.
+Product under review: Vaso Duro Número 10, REIMAC — Product ID 1046
+(Confused at one point with Product ID 1045, which is Cuchara Rey Más Sopera)
+
+Your app has two distinct problems surfaced in this call:
+Purchasing is close (~1% off) — 8,124 vs 8,203 actual. Tolerable but worth 
+investigating the residual gap (likely archived record inclusion).
+Sales is broken (~30% off). The conversation points to three root causes: 
+wrong Odoo field mappings (effective date vs ordered date, 
+delivered qty vs ordered qty), missing filters 
+(not excluding draft/cancelled invoices, not filtering by income account type), 
+and a product ID collision (1045 and 1046 treated as the same product).
+The proposed fix from David is in the Key Findings section at the bottom. 
+The 20 extracted numbers are tabulated with source attribution.
+
+--------------------------------------------------------------------------------
+CONVERSATION
+--------------------------------------------------------------------------------
+
+DAVID: El que más se apegó a la venta versus lo comprado es el que compara la compra
+de humanos.
+
+INTERLOCUTOR: Ajá, porque necesito como que él solito me diga… cantamos 24 por ciento.
+
+DAVID: Va. Ahora, esto me dice que no sé… no es el dato de ventas.
+
+INTERLOCUTOR: Ajá, no es lo vendido. Por lo que a mí me parece, vamos a verlo por
+equipos. Ahí podemos ver la venta de ese producto por equipos. Aunque yo, para poder
+identificar dónde está fallando… pero no, no es esa cantidad de 5,434. Estás muy
+alejado de lo que sí se vendió.
+
+DAVID: Dale, yo te tengo toda una hora completa para estar contigo.
+
+INTERLOCUTOR: Eso está bueno, me va a servir esa hora. Estás desfasado más o menos un
+30 por ciento.
+
+DAVID: Porque ya le saqué la… ya le saqué la mate a humanos. Compraron… ahí no
+debería estar muy lejos, ¿o sí? 8,124 cajas de 40 unidades.
+
+INTERLOCUTOR: No. [pausa] Te la voy a mandar por el WhatsApp.
+
+DAVID: Gracias.
+
+INTERLOCUTOR: Perdona, tenía el micrófono apagado. Te comento, fíjate que estás bien,
+casi acertando, porque vos decís que fueron 8,124 y yo tengo en compra 8,203.
+
+DAVID: Ok, está dentro del 5%.
+
+INTERLOCUTOR: Pero lo vendido, sí, está muy desfasado.
+
+DAVID: Ahorita le saco la mate a lo vendido.
+
+[pausa larga]
+
+INTERLOCUTOR: Sí, ventas tiene sus cositas. Te lo mando también por WhatsApp para que
+nos quede de registro. ¿Lo ves ahí?
+
+DAVID: Yo sabía… claro.
+
+INTERLOCUTOR: Qué raro, tampoco pega. Es más, dice en análisis de ventas usa:
+effective date, not ordered date. Odoo usa delivered quantity, not ordered quantity.
+Y el subtotal es price subtotal, not delivering subtotal. ¿Algo de ahí te suena raro?
+
+DAVID: No, no. Todo me suena bastante normal ahí. Pero sí, los números estás un
+poquito alejado de eso. Pero lo que podríamos ver desde ese producto, meses anteriores
+— por ejemplo septiembre — de cantidad vendida, debería de pegarte sí o sí porque
+tienes el dato ahí.
+
+INTERLOCUTOR: Entiendo. Yo estoy viendo que esta es una proyección. Como no tienen los
+datos de febrero, vamos a pedirle una tabla que le dé la sesión.
+
+[incomprensible — audio repetitivo: "que le dé la sesión" varias veces]
+
+INTERLOCUTOR: No, no es muy entretenido, pero por lo menos ves algún movimiento.
+
+DAVID: Sí, ahí voy aprendiendo algo. Acá le estoy pidiendo los cuatro escenarios que
+me dio, de sus distintas cuatro definiciones, para noviembre, diciembre y enero.
+Lo primero que hago es… voy a mandarte esto por WhatsApp.
+
+[pausa]
+
+INTERLOCUTOR: En la primera que te mandé, la que dice… va a su grupo número 10.
+¿Qué ves?
+
+DAVID: Ok, primero estoy comparando noviembre de 2024. Entiendo que es la demanda de
+6,361, el número correcto. Y si me voy a ver, yo en noviembre de 2024 yo tengo
+registrado 6,466.25.
+
+INTERLOCUTOR: Si me voy a noviembre de 2024, o sea, algo ahí no me acuerdo. Si yo me
+voy a ver… decime, ¿cuánto me dijiste que era tu número para noviembre de 2024?
+
+DAVID: En cantidad de producto vendido, 6,466.25, en noviembre de 2024.
+
+INTERLOCUTOR: Ok, las columnas tituladas A están bastante lejos. Yo me quedaría con
+las que están cerca, que son las B: efectivas entregadas y efectivas ordenadas.
+
+INTERLOCUTOR: ¿Qué número tenés para diciembre 24?
+
+DAVID: En diciembre yo tengo 6,496.50.
+
+INTERLOCUTOR: Exacto. 6,496.50. Exacto.
+
+[pausa]
+
+INTERLOCUTOR: Cualquiera que esté en orden de venta, o en estado hecho. ¿No hay un
+campo o algo que se pueda llamar cuenta de ingresos de abono al gasto?
+
+DAVID: Podemos buscarlo. Con eso creo que ahorraríamos todo esto y le pegaríamos más
+al número. Y que sea mayor que 0.
+
+INTERLOCUTOR: Te voy a decir lo que yo vi raro en la tablita que te mandé. Mira el año.
+
+DAVID: ¿El año 2024?
+
+INTERLOCUTOR: Ajá. ¿Qué tiene raro?
+
+DAVID: Que eso fue hace dos años.
+
+INTERLOCUTOR: Sí, pero tenés el acceso que va para poder ver del 2024. Y yo estoy
+viendo que va el dato del 2024.
+
+DAVID: Ah, ok. Entonces en sí deberíamos de pegar con el mismo dato.
+
+INTERLOCUTOR: Yo siento que con ese campo que te digo de cuenta de ingresos / gastos,
+y luego encontramos el tipo y buscamos todo lo que sea ingreso — que sea igual a
+ingreso — y que el estado de la factura no esté en estado borrador o cancelado, con eso
+creo que ya le pegamos al número.
+
+[incomprensible — audio distorsionado]
+
+DAVID: Ingresos. ¿Me pediste excluir cancelados? ¿Cuál otro?
+
+INTERLOCUTOR: Sería cancelados y los que estén en estado borrador, porque al final eso
+todavía…
+
+[pausa larga]
+
+DAVID: Ok, ahora sí tenemos números de unidades. Ok, vamos a ver. Ahí tenés la
+primera, noviembre de 2024. ¿Dónde tenés el total? Vamos a ver. Órdenes de compra:
+ordenado 6,300, recibido 7,126. Estos son órdenes de compra, ¿verdad?
+
+INTERLOCUTOR: Abajo están las órdenes de compra. Donde dice noviembre 2024, no sé si
+es el total o cómo, que dice 7,483 recibidos.
+
+DAVID: Sí, esa es la sumatoria de las órdenes de compra recibidas del 2024, de ese
+producto, noviembre de 2024.
+
+INTERLOCUTOR: Ajá, esto ya está solo para el vaso de aeroporto número 10, REIMAC 4025.
+
+DAVID: 4025… era el 1046. Pero si quieres ponemos el 1045.
+
+INTERLOCUTOR: Ah, mira, qué interesante. También le puedo cambiar el scope. Tú me
+dices cuál miramos, si el 1046 o el otro que me dijiste.
+
+DAVID: Le voy a pedir el otro.
+
+[pausa]
+
+INTERLOCUTOR: Dice que es el mismo producto.
+
+DAVID: No puede ser, vamos a ver. A menos de que estés viendo archivados.
+
+INTERLOCUTOR: No creo tampoco. Es el 1046 que tengo yo. Dice 1046.
+
+DAVID: Es muy posible que no esté filtrando para afuera de los archivados.
+
+INTERLOCUTOR: Ajá, están incluidos. ¿Los excluimos?
+
+DAVID: Bueno, yo no estoy seguro, porque como en noviembre de 2024 pudo haber sido
+que el número que estoy viendo no tenga el archivado. Vamos a ver. ¿Cuánto te da con
+el archivado? ¿El número? ¿La cantidad?
+
+INTERLOCUTOR: Con el archivado son los que te mandé. Vamos a ver… como que 6,000 o
+algo así creo. Pero dice que archivadas hay una sola fila.
+
+DAVID: No, es que así en compra yo tengo en noviembre de 2024 en cantidad recibida
+5,500, y en cantidad ordenada 5,917.
+
+INTERLOCUTOR: Ok. Miremos qué hizo el reconciliador antes de dar otro paso.
+
+[pausa larga]
+
+INTERLOCUTOR: Me llama la atención esto de que reconozca el 45 y el 46 como iguales.
+¿Eso definitivamente no es buena matemática?
+
+DAVID: No, es correcto.
+
+INTERLOCUTOR: ¿Por qué?
+
+DAVID: El 10.45, vamos a ver… yo tengo acá que el 10.45 es una Cuchara Rey Más Sopera,
+y el 10.46 es el Vaso Duro Número 10.
+
+[pausa]
+
+INTERLOCUTOR: Ahí está. 45 es cuchara. 46 es el vaso.
+
+DAVID: Exacto.
+
+INTERLOCUTOR: ¿Qué fue lo que sucedió? ¿Por qué los estaba vinculando? ¿Por qué la
+inteligencia artificial no es tan inteligente como la venden?
+
+DAVID: Ya te entendí. Pero eso es lo importante de que uno siempre tenga que estar
+haciendo preguntas aclaratorias y en confirmación de los datos. Incluso una de las
+buenas prácticas, si la usas en tu día a día, es cuando te da una respuesta que parece
+buena solo le preguntas "¿estás seguro?" Y a veces te da una respuesta completamente
+distinta.
+
+[pausa]
+
+INTERLOCUTOR: Pero podemos evaluar desde acá como estás viendo en tu pantalla. Por
+ejemplo, de ese producto, la cantidad de noviembre, ¿cuánto te da recibida?
+
+DAVID: Effective delivered: 6,361. Noviembre de 2024.
+
+INTERLOCUTOR: En compra yo tengo cantidad recibida 5,500, y en cantidad ordenada 5,917.
+
+DAVID: No, perdón, te estoy leyendo ventas.
+
+INTERLOCUTOR: Compras está aquí abajo.
+
+DAVID: Compras… no, pero dice 7,000. Se va más alto todavía, 7,500.
+
+INTERLOCUTOR: Exacto. Sí, está bastante arriba.
+
+DAVID: Dale, adelante. Ahorita vengo.
+
+[pausa larga]
+
+INTERLOCUTOR: ¿Lograste?
+
+DAVID: Ah, no, todavía estás viendo eso.
+
+INTERLOCUTOR: No.
+
+[fin de transcripción]
+
+
+================================================================================
+EXTRACTED NUMBERS
+================================================================================
+
+SALES DATA — Product: Vaso Duro #10 (REIMAC), Product ID 1046
+--------------------------------------------------------------------------------
+ #   | Value      | Description                                        | Source
+-----|------------|----------------------------------------------------|--------
+ 1   | 5,434      | Sales quantity (app output, incorrect)              | App
+ 2   | ~30%       | Desfase (gap) between app sales output and actual   | Calc
+ 3   | 6,361      | Nov 2024 — demand / effective delivered (sales)     | App
+ 4   | 6,466.25   | Nov 2024 — qty product sold (David's records)       | David
+ 5   | 6,496.50   | Dec 2024 — qty product sold (David's records)       | David
+
+PURCHASING DATA — Product: Vaso Duro #10 (REIMAC), Product ID 1046
+--------------------------------------------------------------------------------
+ #   | Value      | Description                                        | Source
+-----|------------|----------------------------------------------------|--------
+ 6   | 8,124      | Purchasing total (app output) — cajas de 40 uds    | App
+ 7   | 8,203      | Purchasing total (David's Odoo records)             | David
+ 8   | <5%        | Gap between app purchasing and actual (acceptable)  | Calc
+ 9   | 5,500      | Nov 2024 — qty received (David's records)           | David
+10   | 5,917      | Nov 2024 — qty ordered (David's records)            | David
+11   | 6,300      | Nov 2024 — purchase orders: ordered (app output)    | App
+12   | 7,126      | Nov 2024 — purchase orders: received (app output)   | App
+13   | 7,483      | Nov 2024 — sum purchase orders received (app)       | App
+14   | ~6,000     | Nov 2024 — with archived records included (approx)  | Interl.
+15   | 7,000      | Nov 2024 — purchases (app, another reading)         | App
+16   | 7,500      | Nov 2024 — purchases (app, higher reading)          | App
+
+PRODUCT IDS
+--------------------------------------------------------------------------------
+ #   | Value      | Description
+-----|------------|-------------------------------------------------------------
+17   | 1045       | Cuchara Rey Más Sopera (different product, confused by AI)
+18   | 1046       | Vaso Duro Número 10 (correct target product)
+19   | 4025       | REIMAC code referenced for the product
+20   | 24%        | Percentage mentioned early (unclear context)
+
+
+================================================================================
+KEY FINDINGS (from conversation)
+================================================================================
+
+1. PURCHASING totals: App output (8,124) vs Odoo actual (8,203) = ~1% gap. Acceptable.
+
+2. SALES totals: App output is ~30% off from actual. Root cause under investigation.
+
+3. FIELD MAPPING ISSUES IDENTIFIED:
+   - App uses "effective date" — should possibly use "ordered date"
+   - App uses "delivered quantity" — should possibly use "ordered quantity"
+   - App uses "price subtotal" — should possibly use "delivering subtotal"
+
+4. FILTER ISSUES IDENTIFIED:
+   - App may not be excluding invoices in "draft" or "cancelled" status
+   - App may not be filtering by income account type (cuenta de ingresos)
+   - App may be including archived records inconsistently
+   - App confused Product 1045 (cuchara) with 1046 (vaso) — merged as same product
+
+5. PROPOSED FIX (from David):
+   - Filter by income account type (cuenta de ingresos/gastos)
+   - Filter where type = "ingreso"
+   - Exclude invoices where status = "borrador" OR "cancelado"
+   - Ensure archived products are handled consistently
+   - Ensure product IDs 1045 and 1046 are treated as distinct products

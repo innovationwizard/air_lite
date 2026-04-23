@@ -1,0 +1,228 @@
+{
+  "source": "Supabase prod DB (https://plirrpkasyytpgzwwztl.supabase.co)",
+  "run_at": "2026-04-23T12:08:50.609247",
+  "sku": "77201046",
+  "product": {
+    "id": 33,
+    "odoo_id": "9764",
+    "sku": "77201046",
+    "name": "VASO DUROPORT No. 10 REYMA 40-25",
+    "stock_uom": "CAJA40"
+  },
+  "total_sale_order_lines": 6157,
+  "uoms_used": [
+    "CAJA40",
+    "PAQ CJ",
+    "Unidad CJ"
+  ],
+  "by_month": {
+    "2024-11": {
+      "sale_order_lines_raw": {
+        "A_order_quantity": 6851.0,
+        "A_prime_order_delivered": 6706.0,
+        "B_effective_delivered": 6361.0,
+        "B_prime_effective_quantity": 6360.0
+      },
+      "sale_order_lines_uom_normalized_to_CAJA40": {
+        "A_normalized": 6819.8,
+        "A_prime_normalized": 6674.8,
+        "B_normalized": 6361.0,
+        "B_prime_normalized": 6360.0
+      }
+    },
+    "2024-12": {
+      "sale_order_lines_raw": {
+        "A_order_quantity": 6653.0,
+        "A_prime_order_delivered": 6296.0,
+        "B_effective_delivered": 6301.0,
+        "B_prime_effective_quantity": 6384.0
+      },
+      "sale_order_lines_uom_normalized_to_CAJA40": {
+        "A_normalized": 6545.75,
+        "A_prime_normalized": 6188.75,
+        "B_normalized": 6301.0,
+        "B_prime_normalized": 6384.0
+      }
+    },
+    "2025-01": {
+      "sale_order_lines_raw": {
+        "A_order_quantity": 7644.0,
+        "A_prime_order_delivered": 7479.0,
+        "B_effective_delivered": 7160.0,
+        "B_prime_effective_quantity": 7179.0
+      },
+      "sale_order_lines_uom_normalized_to_CAJA40": {
+        "A_normalized": 7512.375,
+        "A_prime_normalized": 7347.375,
+        "B_normalized": 7160.0,
+        "B_prime_normalized": 7179.0
+      }
+    },
+    "2025-02": {
+      "sale_order_lines_raw": {
+        "A_order_quantity": 6047.0,
+        "A_prime_order_delivered": 5607.0,
+        "B_effective_delivered": 5434.0,
+        "B_prime_effective_quantity": 5493.0
+      },
+      "sale_order_lines_uom_normalized_to_CAJA40": {
+        "A_normalized": 5992.4,
+        "A_prime_normalized": 5552.4,
+        "B_normalized": 5434.0,
+        "B_prime_normalized": 5493.0
+      }
+    }
+  },
+  "demand_daily_aggregated": {
+    "2024-10": {
+      "qty": 3418.0,
+      "revenue": 660507.65,
+      "days": 26,
+      "censored_days": 0
+    },
+    "2024-11": {
+      "qty": 6361.0,
+      "revenue": 1229592.4100000001,
+      "days": 24,
+      "censored_days": 0
+    },
+    "2024-12": {
+      "qty": 6301.0,
+      "revenue": 1234923.79,
+      "days": 24,
+      "censored_days": 0
+    },
+    "2025-01": {
+      "qty": 7160.0,
+      "revenue": 1369088.09,
+      "days": 25,
+      "censored_days": 0
+    },
+    "2025-02": {
+      "qty": 5434.0,
+      "revenue": 1048387.51,
+      "days": 25,
+      "censored_days": 0
+    },
+    "2025-03": {
+      "qty": 4510.0,
+      "revenue": 852051.9799999999,
+      "days": 25,
+      "censored_days": 0
+    },
+    "2025-04": {
+      "qty": 4806.0,
+      "revenue": 894042.94,
+      "days": 22,
+      "censored_days": 0
+    },
+    "2025-05": {
+      "qty": 5562.0,
+      "revenue": 1056640.9,
+      "days": 25,
+      "censored_days": 0
+    },
+    "2025-06": {
+      "qty": 5680.125,
+      "revenue": 1051944.02,
+      "days": 24,
+      "censored_days": 0
+    },
+    "2025-07": {
+      "qty": 6818.0,
+      "revenue": 1263672.4499999997,
+      "days": 27,
+      "censored_days": 0
+    },
+    "2025-08": {
+      "qty": 6378.95,
+      "revenue": 1222124.4100000001,
+      "days": 26,
+      "censored_days": 0
+    },
+    "2025-09": {
+      "qty": 7888.12,
+      "revenue": 1466635.0,
+      "days": 25,
+      "censored_days": 0
+    },
+    "2025-10": {
+      "qty": 9052.805,
+      "revenue": 1682370.3200000003,
+      "days": 26,
+      "censored_days": 0
+    },
+    "2025-11": {
+      "qty": 6224.0,
+      "revenue": 1225359.75,
+      "days": 25,
+      "censored_days": 0
+    },
+    "2025-12": {
+      "qty": 8159.0,
+      "revenue": 1640187.36,
+      "days": 22,
+      "censored_days": 0
+    },
+    "2026-01": {
+      "qty": 9906.075,
+      "revenue": 1939751.08,
+      "days": 26,
+      "censored_days": 0
+    },
+    "2026-02": {
+      "qty": 7176.0,
+      "revenue": 1463142.47,
+      "days": 24,
+      "censored_days": 0
+    },
+    "2026-03": {
+      "qty": 61.0,
+      "revenue": 15928.57,
+      "days": 2,
+      "censored_days": 0
+    }
+  },
+  "stock_moves_customer_flow": {
+    "2024-11": {
+      "moves": 518,
+      "to_customer": 6568.25,
+      "from_customer": 157.0,
+      "net": 6411.25
+    },
+    "2024-12": {
+      "moves": 756,
+      "to_customer": 6882.575,
+      "from_customer": 377.1,
+      "net": 6505.475
+    }
+  },
+  "user_declared_ssot": {
+    "2024-11": 6466.25,
+    "2024-12": 6496.5
+  },
+  "deltas_vs_declared_ssot": {
+    "2024-11": {
+      "ssot": 6466.25,
+      "B_raw": 6361.0,
+      "delta_B_raw": 105.25,
+      "B_norm": 6361.0,
+      "delta_B_norm": 105.25,
+      "demand_daily": 6361.0,
+      "delta_dd": 105.25,
+      "stock_move_net": 6411.25,
+      "delta_sm": 55.0
+    },
+    "2024-12": {
+      "ssot": 6496.5,
+      "B_raw": 6301.0,
+      "delta_B_raw": 195.5,
+      "B_norm": 6301.0,
+      "delta_B_norm": 195.5,
+      "demand_daily": 6301.0,
+      "delta_dd": 195.5,
+      "stock_move_net": 6505.475,
+      "delta_sm": -8.975
+    }
+  }
+}

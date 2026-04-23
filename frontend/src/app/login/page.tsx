@@ -1,9 +1,18 @@
 'use client';
 
-import { useState, FormEvent } from 'react';
+import { useState, useEffect, FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import Image from 'next/image';
 import { createClient } from '@/lib/supabase/client';
+
+// Maps `?error=<code>` query params coming back from /auth/callback failures
+// into user-facing Spanish messages. Unknown codes fall through to a generic
+// line rather than echoing the code raw (avoids leaking internals).
+const CALLBACK_ERROR_MESSAGES: Record<string, string> = {
+  missing_code: 'El enlace está incompleto. Solicitá uno nuevo.',
+  invalid_code: 'El enlace ya se usó o expiró. Solicitá uno nuevo.',
+};
 
 export default function LoginPage() {
   const router = useRouter();
@@ -12,6 +21,42 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  // Hydrate callback-failure messages from the URL on mount. Using
+  // `window.location` directly (not useSearchParams) keeps this page out of
+  // the Suspense-boundary requirement that useSearchParams imposes in Next 14.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const code = new URLSearchParams(window.location.search).get('error');
+    if (code && CALLBACK_ERROR_MESSAGES[code]) {
+      setError(CALLBACK_ERROR_MESSAGES[code]);
+    }
+  }, []);
+
+  // Listen for Supabase auth events — specifically the hash-fragment / implicit
+  // flow where `detectSessionInUrl: true` in the browser client parses tokens
+  // embedded in the URL hash after an email-link verify redirect.
+  //
+  // The middleware redirects unauthenticated traffic on `/` to `/login`, and
+  // browsers preserve the URL hash across those 307 redirects, so the tokens
+  // typically land on this page. When the hash represents a recovery link,
+  // Supabase fires a `PASSWORD_RECOVERY` event here; we route the user to
+  // `/update-password` to complete the flow. A regular `SIGNED_IN` event
+  // (e.g. implicit magic link) routes to the default landing.
+  //
+  // The PKCE flow (code-in-query-string) is handled server-side by
+  // `/auth/callback`, not here — so this listener is strictly the fallback
+  // for projects or email types still using the legacy implicit flow.
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'PASSWORD_RECOVERY') {
+        router.replace('/update-password');
+      } else if (event === 'SIGNED_IN') {
+        router.replace('/backtest');
+      }
+    });
+    return () => subscription.unsubscribe();
+  }, [supabase, router]);
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -98,6 +143,13 @@ export default function LoginPage() {
           >
             {loading ? 'Iniciando sesión...' : 'Iniciar sesión'}
           </button>
+
+          <Link
+            href="/forgot-password"
+            className="block text-center text-sm text-gray-500 hover:text-emerald-700"
+          >
+            ¿Olvidaste tu contraseña?
+          </Link>
         </form>
 
         <div className="text-center text-sm text-gray-400">
