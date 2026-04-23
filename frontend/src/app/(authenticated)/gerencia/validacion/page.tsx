@@ -85,7 +85,25 @@ export default function GerenciaValidacionPage() {
   const [rows, setRows] = useState<ValidationRow[]>([]);
   const [loadingRuns, setLoadingRuns] = useState(true);
   const [loadingRows, setLoadingRows] = useState(false);
-  const [scope, setScope] = useState<'carvajal_reyma' | 'all'>('carvajal_reyma');
+  // Three scopes. Two of them (`carvajal_reyma`, `all`) correspond one-to-one
+  // with the API's `p_carvajal_reyma_only` flag. The third, `same_as_humans`,
+  // is a CLIENT-SIDE filter layered on top of the `carvajal_reyma` dataset —
+  // it hides rows where the compradores did not place a confirmed OC in the
+  // prediction month. The RPC has no same-as-humans mode on purpose: the
+  // filter is purely presentational, so the base dataset stays intact and
+  // can be re-filtered without another round-trip.
+  //
+  // Why this scope exists at all (meeting narrative, 2026-04-23):
+  // the default "Carvajal + Reyma" view averages App acierto over all 36
+  // SKUs but Humanos acierto over only the 8 SKUs compradores actually
+  // touched. That is a selection-bias artifact (humans choose the easy
+  // SKUs and skip the hard ones), not evidence that humans are sharper.
+  // Flipping this scope to `same_as_humans` restricts both metrics to the
+  // same apples-to-apples subset so the KPI cards read as a fair head-to-
+  // head. Verified 2026-04-22: on the head-to-head subset, App averages
+  // 74.7–78.6% acierto across runs 58–61 (humans 75.5–82.5%) — i.e. a
+  // 3–7 pt human edge where they choose to play, not a 10 pt one.
+  const [scope, setScope] = useState<'carvajal_reyma' | 'same_as_humans' | 'all'>('carvajal_reyma');
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -105,6 +123,9 @@ export default function GerenciaValidacionPage() {
     if (selectedRunId === null) return;
     setLoadingRows(true);
     setError(null);
+    // Translate UI scope -> API scope. `same_as_humans` reuses the same API
+    // request as `carvajal_reyma` (the default); the subset filtering happens
+    // in `visibleRows` below. Only `all` changes the API query.
     const scopeParam = scope === 'all' ? '&scope=all' : '';
     fetch(`/api/gerencia/validacion?run_id=${selectedRunId}${scopeParam}`)
       .then((res) => { if (!res.ok) throw new Error('HTTP ' + res.status); return res.json(); })
@@ -114,16 +135,36 @@ export default function GerenciaValidacionPage() {
 
   const selectedRun = runs.find((r) => r.run_id === selectedRunId) ?? null;
 
+  // `visibleRows` is the single source of truth for what the UI renders —
+  // both the KPI cards and the table read from here. For the two API-backed
+  // scopes it is identical to the raw `rows`; for `same_as_humans` it is
+  // filtered down to rows where the compradores placed a confirmed OC in
+  // the prediction month (i.e. `comprador_purchase_qty` is not null).
+  //
+  // Doing this filter here (and NOT when setting state) means:
+  //   (a) toggling the scope button is instant — no network round-trip.
+  //   (b) the KPI card subtitles (`SKUs en comparación`, `SKUs con OC en
+  //       el mes`) update in lockstep with the table, so the decision
+  //       maker never sees "36 SKUs" at the top and 8 rows at the bottom.
+  //   (c) the summary aggregation logic below never has to branch on scope
+  //       — it just averages whatever it is given.
+  const visibleRows = useMemo(() => {
+    if (scope === 'same_as_humans') {
+      return rows.filter((r) => r.comprador_purchase_qty !== null);
+    }
+    return rows;
+  }, [rows, scope]);
+
   const summary = useMemo(() => {
-    if (rows.length === 0) return null;
-    const systemAciertos = rows.map((r) => r.acierto_system_pct).filter((v): v is number => v !== null);
-    const comprAciertos = rows.map((r) => r.acierto_comprador_pct).filter((v): v is number => v !== null);
-    const marginUplift = rows.reduce((acc, r) => acc + (r.margin_uplift_gtq ?? 0), 0);
-    const predRev = rows.reduce((acc, r) => acc + (r.predicted_revenue_gtq ?? 0), 0);
-    const actualRev = rows.reduce((acc, r) => acc + (r.actual_revenue_gtq ?? 0), 0);
+    if (visibleRows.length === 0) return null;
+    const systemAciertos = visibleRows.map((r) => r.acierto_system_pct).filter((v): v is number => v !== null);
+    const comprAciertos = visibleRows.map((r) => r.acierto_comprador_pct).filter((v): v is number => v !== null);
+    const marginUplift = visibleRows.reduce((acc, r) => acc + (r.margin_uplift_gtq ?? 0), 0);
+    const predRev = visibleRows.reduce((acc, r) => acc + (r.predicted_revenue_gtq ?? 0), 0);
+    const actualRev = visibleRows.reduce((acc, r) => acc + (r.actual_revenue_gtq ?? 0), 0);
     const avg = (arr: number[]) => arr.length === 0 ? null : arr.reduce((a, b) => a + b, 0) / arr.length;
     return {
-      skuCount: rows.length,
+      skuCount: visibleRows.length,
       systemAcierto: avg(systemAciertos),
       comprAcierto: avg(comprAciertos),
       comprAciertoN: comprAciertos.length,
@@ -131,7 +172,7 @@ export default function GerenciaValidacionPage() {
       predRev,
       actualRev,
     };
-  }, [rows]);
+  }, [visibleRows]);
 
   return (
     <div className="space-y-6">
@@ -175,6 +216,17 @@ export default function GerenciaValidacionPage() {
           ))}
         </select>
 
+        {/*
+          Scope toggle. Three options, mutually exclusive:
+            1. `carvajal_reyma` — the default; all 36-38 Carvajal + Reyma SKUs
+               in the cycle (App rated on 36, Humanos rated on the ~8 they
+               chose to buy — asymmetric by construction).
+            2. `same_as_humans` — restricts both App and Humanos metrics to
+               only the SKUs where a confirmed OC exists in the prediction
+               month. This is the apples-to-apples head-to-head the decision
+               maker will ask for. Client-side filter; see `visibleRows`.
+            3. `all` — widens to every SKU the cycle modeled (100).
+        */}
         <div className="ml-auto flex items-center gap-2 text-sm">
           <button
             onClick={() => setScope('carvajal_reyma')}
@@ -185,6 +237,16 @@ export default function GerenciaValidacionPage() {
             }`}
           >
             Carvajal + Reyma
+          </button>
+          <button
+            onClick={() => setScope('same_as_humans')}
+            className={`px-3 py-1.5 rounded-lg transition-colors ${
+              scope === 'same_as_humans'
+                ? 'bg-emerald-600 text-white'
+                : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-50'
+            }`}
+          >
+            Mismos SKUs que Humanos
           </button>
           <button
             onClick={() => setScope('all')}
@@ -201,10 +263,25 @@ export default function GerenciaValidacionPage() {
 
       {summary && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {/*
+            The SKU-count subtitle tells the reader which population the
+            acierto percentages were averaged over. This matters because
+            the three scopes produce qualitatively different comparisons:
+              - `carvajal_reyma`: App on all 36, Humanos on the 8 they
+                chose. Asymmetric by construction — mention this live.
+              - `same_as_humans`: both on the same 8. Head-to-head.
+              - `all`: App on 100, Humanos on the subset with OC.
+          */}
           <KpiCard
             label="SKUs en comparación"
             value={fmtNum(summary.skuCount)}
-            subtitle={scope === 'carvajal_reyma' ? 'Carvajal + Reyma' : `de ${selectedRun?.products_modeled ?? '—'} modelados`}
+            subtitle={
+              scope === 'carvajal_reyma'
+                ? 'Carvajal + Reyma'
+                : scope === 'same_as_humans'
+                ? 'Cara a cara — solo SKUs con OC'
+                : `de ${selectedRun?.products_modeled ?? '—'} modelados`
+            }
           />
           <KpiCard
             label="Acierto App (promedio)"
@@ -249,10 +326,13 @@ export default function GerenciaValidacionPage() {
                 <tr><td colSpan={10} className="px-4 py-8 text-center text-gray-400">Cargando datos…</td></tr>
               ) : error ? (
                 <tr><td colSpan={10} className="px-4 py-8 text-center text-red-500">No se pudieron cargar los datos.</td></tr>
-              ) : rows.length === 0 ? (
+              ) : visibleRows.length === 0 ? (
                 <tr><td colSpan={10} className="px-4 py-8 text-center text-gray-400">Este ciclo no tiene SKUs en el alcance seleccionado.</td></tr>
               ) : (
-                rows.map((r) => {
+                // Render `visibleRows`, not `rows`, so the `same_as_humans`
+                // filter hides rows without an OC in lockstep with the KPI
+                // card counts above. Both read from the same derived array.
+                visibleRows.map((r) => {
                   const upliftIcon = r.margin_uplift_gtq === null
                     ? Minus
                     : r.margin_uplift_gtq > 0 ? TrendingUp : r.margin_uplift_gtq < 0 ? TrendingDown : Minus;
