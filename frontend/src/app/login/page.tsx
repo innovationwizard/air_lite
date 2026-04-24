@@ -5,6 +5,18 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
 import { createClient } from '@/lib/supabase/client';
+import { getDefaultPage } from '@/lib/auth/roles';
+
+async function resolveLandingPage(supabase: ReturnType<typeof createClient>): Promise<string> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return '/backtest';
+  const { data } = await supabase
+    .from('user_profiles')
+    .select('role')
+    .eq('id', user.id)
+    .single();
+  return getDefaultPage(data?.role ?? '');
+}
 
 // Maps `?error=<code>` query params coming back from /auth/callback failures
 // into user-facing Spanish messages. Unknown codes fall through to a generic
@@ -54,11 +66,12 @@ export default function LoginPage() {
   // `/auth/callback`, not here — so this listener is strictly the fallback
   // for projects or email types still using the legacy implicit flow.
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event) => {
       if (event === 'PASSWORD_RECOVERY') {
         router.replace('/update-password');
       } else if (event === 'SIGNED_IN') {
-        router.replace('/backtest');
+        const landing = await resolveLandingPage(supabase);
+        router.replace(landing);
       }
     });
     return () => subscription.unsubscribe();
@@ -84,7 +97,8 @@ export default function LoginPage() {
       return;
     }
 
-    router.push('/backtest');
+    const landing = await resolveLandingPage(supabase);
+    router.push(landing);
   };
 
   return (

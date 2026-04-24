@@ -100,7 +100,7 @@ export function getDefaultPage(role: Role | string): string {
     case ROLES.OPERACIONES:
       return '/operaciones';
     case ROLES.GERENCIA:
-      return '/gerencia/validacion';
+      return '/gerencia/forecast';
     case ROLES.ADMIN:
       return '/backtest';
     default:
