@@ -13,6 +13,7 @@ from supabase import create_client
 
 from backtest_engine import run_backtest_cycle
 from purchase_scheduler import run_purchase_schedule_cycle
+from forecast_revenue import forecast_product as forecast_product_revenue
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
 logger = logging.getLogger(__name__)
@@ -250,6 +251,72 @@ def backtest_status(run_id: int):
         response['error_message'] = run.get('error_message')
 
     return jsonify(response)
+
+
+@app.route('/forecast/revenue-daily', methods=['POST'])
+def forecast_revenue_daily():
+    """
+    Train Prophet on revenue_daily history and predict a custom window.
+
+    Distinct from /backtest/run which trains on demand_daily (old SSOT).
+    This endpoint trains on revenue_daily (new SSOT, CEO-dashboard match).
+
+    Body:
+      {
+        "product_id": int,          # Supabase products.id
+        "ssot_label": str,          # e.g. "aml_income_posted_invoice_refund_neg_invoice_date_c40"
+        "metric": str,              # "sales" | "purchases_ordered" | "purchases_received"
+        "training_start": "YYYY-MM-DD",  # defaults to 2024-10-01
+        "training_end":   "YYYY-MM-DD",  # e.g. "2026-01-31" for Feb+Mar prediction
+        "prediction_end": "YYYY-MM-DD"   # e.g. "2026-03-31"
+      }
+
+    Synchronous (a single product trains in a few seconds). Returns daily +
+    monthly predictions with yhat / yhat_lower / yhat_upper.
+    """
+    from datetime import date as date_cls
+    data = request.get_json() or {}
+
+    required = ('product_id', 'ssot_label', 'metric', 'training_end', 'prediction_end')
+    missing = [k for k in required if k not in data]
+    if missing:
+        return jsonify({'error': f'missing required fields: {missing}'}), 400
+
+    try:
+        product_id = int(data['product_id'])
+        ssot_label = str(data['ssot_label'])
+        metric = str(data['metric'])
+        training_start = date_cls.fromisoformat(data.get('training_start', '2024-10-01'))
+        training_end = date_cls.fromisoformat(data['training_end'])
+        prediction_end = date_cls.fromisoformat(data['prediction_end'])
+    except (ValueError, TypeError) as e:
+        return jsonify({'error': f'invalid input: {e}'}), 400
+
+    if training_end < training_start:
+        return jsonify({'error': 'training_end must be >= training_start'}), 400
+    if prediction_end <= training_end:
+        return jsonify({'error': 'prediction_end must be after training_end'}), 400
+
+    supabase = get_supabase()
+    result = forecast_product_revenue(
+        supabase=supabase,
+        product_id=product_id,
+        ssot_label=ssot_label,
+        metric=metric,
+        training_start=training_start,
+        training_end=training_end,
+        prediction_end=prediction_end,
+    )
+    # Echo request for audit
+    result['request'] = {
+        'product_id': product_id,
+        'ssot_label': ssot_label,
+        'metric': metric,
+        'training_start': training_start.isoformat(),
+        'training_end': training_end.isoformat(),
+        'prediction_end': prediction_end.isoformat(),
+    }
+    return jsonify(result)
 
 
 if __name__ == '__main__':
