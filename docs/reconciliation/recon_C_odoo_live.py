@@ -69,13 +69,15 @@ if not uid:
 print(f"Authenticated, uid={uid}")
 models = xmlrpc.client.ServerProxy(f'{URL}/xmlrpc/2/object', allow_none=True)
 
-def call(model, method, *args, **kwargs):
+def call(method, model, *args, **kwargs):
+    """Mirror of ml/odoo_explorer.py:call — args are positional args to the Odoo method,
+    kwargs are kwargs to the Odoo method (e.g. fields=[...], limit=N)."""
     return models.execute_kw(DB, uid, KEY, model, method, list(args), kwargs)
 
 # Resolve product
-prods = call('product.product', 'search_read',
+prods = call('search_read', 'product.product',
              [['default_code', '=', SKU]],
-             {'fields': ['id', 'name', 'default_code', 'uom_id', 'uom_po_id']})
+             fields=['id', 'name', 'default_code', 'uom_id', 'uom_po_id'])
 assert len(prods) == 1, f"Expected 1 product for SKU {SKU}, got {len(prods)}"
 prod = prods[0]
 product_id = prod['id']
@@ -84,7 +86,7 @@ stock_uom_name = prod['uom_id'][1]
 print(f"Product: id={product_id}, name={prod['name']}, stock_uom={stock_uom_name}")
 
 # Load all UoMs in the same category for normalization
-uom_recs = call('uom.uom', 'search_read', [], {'fields': ['id', 'name', 'factor', 'category_id']})
+uom_recs = call('search_read', 'uom.uom', [], fields=['id', 'name', 'factor', 'category_id'])
 uom_factor = {u['id']: float(u['factor']) for u in uom_recs}
 uom_name = {u['id']: u['name'] for u in uom_recs}
 stock_factor = uom_factor[stock_uom_id]
@@ -101,14 +103,14 @@ def to_stock_uom(qty, uom_id):
 print(f"Fetching sale.order.line for product_id={product_id}...")
 fields_line = ['id', 'order_id', 'product_id', 'product_uom_qty', 'qty_delivered',
                'qty_invoiced', 'product_uom']
-line_ids = call('sale.order.line', 'search', [['product_id', '=', product_id]])
+line_ids = call('search', 'sale.order.line', [['product_id', '=', product_id]])
 print(f"Line IDs found: {len(line_ids)}")
 
 # Read in chunks
 all_lines = []
 chunk = 1000
 for i in range(0, len(line_ids), chunk):
-    sub = call('sale.order.line', 'read', line_ids[i:i+chunk], {'fields': fields_line})
+    sub = call('read', 'sale.order.line', line_ids[i:i+chunk], fields=fields_line)
     all_lines.extend(sub)
 print(f"Lines read: {len(all_lines)}")
 
@@ -118,7 +120,7 @@ print(f"Unique sale.order ids: {len(order_ids)}")
 fields_order = ['id', 'name', 'date_order', 'commitment_date', 'effective_date', 'state']
 orders = {}
 for i in range(0, len(order_ids), chunk):
-    sub = call('sale.order', 'read', order_ids[i:i+chunk], {'fields': fields_order})
+    sub = call('read', 'sale.order', order_ids[i:i+chunk], fields=fields_order)
     for o in sub:
         orders[o['id']] = o
 print(f"Orders read: {len(orders)}")

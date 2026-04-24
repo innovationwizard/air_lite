@@ -1,3 +1,33 @@
-ODOO_API_KEY not set. Add to .env.local:
-  ODOO_API_KEY=<api-key-from-2026-03-26>
-Then re-run: python3 docs/reconciliation/recon_C_odoo_live.py
+Auth → https://suplicentro-2801-27990914.dev.odoo.com db=suplicentro-2801-27990914 user=integracion@piensom.com
+Authenticated, uid=182
+Product: id=7090, name=Vaso Blanco 10oz Duroport ¨40/25 Reyma, stock_uom=CAJA40
+Fetching sale.order.line for product_id=7090...
+Line IDs found: 5741
+Lines read: 5741
+Unique sale.order ids: 5712
+Orders read: 5712
+
+=== Recon C — Odoo live ===
+Lines: 5741  Orders: 5712  States: ['cancel', 'draft', 'sale', 'waiting_for_approval']
+
+  2024-11 (all stock_uom-normalized):
+    A=   6815.80  A'=   6670.80  B(combined)=   6366.80  B'=   6365.80
+    B(commitment_date)=   5595.80   B(effective_date)=   6311.00
+
+  2024-12 (all stock_uom-normalized):
+    A=   6549.75  A'=   6192.75  B(combined)=   6496.75  B'=   6579.75
+    B(commitment_date)=   7367.75   B(effective_date)=   6351.00
+
+  2025-01 (all stock_uom-normalized):
+    A=   7512.38  A'=   7347.38  B(combined)=   7196.38  B'=   7211.38
+    B(commitment_date)=   7230.38   B(effective_date)=   7112.00
+
+  2025-02 (all stock_uom-normalized):
+    A=   5992.40  A'=   5552.40  B(combined)=   5510.40  B'=   5573.40
+    B(commitment_date)=   5236.40   B(effective_date)=   5464.00
+
+Deltas vs SSOT:
+  2024-11: SSOT=6466.25  B_combo=6366.8 (Δ=+99.45)  B_commit=5595.8 (Δ=+870.45)  B_eff=6311.0 (Δ=+155.25)
+  2024-12: SSOT=6496.5  B_combo=6496.75 (Δ=-0.25)  B_commit=7367.75 (Δ=-871.25)  B_eff=6351.0 (Δ=+145.50)
+
+Saved: /Users/jorgeluiscontrerasherrera/Documents/_git/air_lite/docs/reconciliation/recon_C_odoo_live_results.json

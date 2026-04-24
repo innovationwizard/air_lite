@@ -83,6 +83,33 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL('/backtest', request.url));
   }
 
+  // Per-route permission check for /api/* via the route_permissions matrix.
+  // The user's policy is the single source of truth:
+  //   - Data:  route_permissions table (role × route_pattern × methods)
+  //   - Code:  check_route_access(user_id, route, method) RPC — superuser
+  //            bypass + glob pattern matching + methods[] check
+  // See docs/security/PLAN_API_AUTH_DEFENSE_IN_DEPTH.md Phase 1.
+  if (pathname.startsWith('/api/')) {
+    const { data: allowed, error } = await supabase.rpc('check_route_access', {
+      p_user_id: user.id,
+      p_route: pathname,
+      p_method: request.method,
+    });
+    if (error) {
+      console.error('[middleware] check_route_access failed:', error);
+      return NextResponse.json(
+        { error: 'Error verificando permisos' },
+        { status: 500, headers: { 'Content-Type': 'application/json' } },
+      );
+    }
+    if (!allowed) {
+      return NextResponse.json(
+        { error: 'No autorizado', route: pathname, method: request.method },
+        { status: 403, headers: { 'Content-Type': 'application/json' } },
+      );
+    }
+  }
+
   return response;
 }
 
