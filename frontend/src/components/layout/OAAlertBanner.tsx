@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { X, AlertTriangle } from 'lucide-react';
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { useUserRole } from '@/lib/auth/useUserRole';
 import { isAuthorized, CAN_VIEW_OA } from '@/lib/auth/roles';
 
@@ -16,15 +17,17 @@ interface AlertData {
 }
 
 export default function OAAlertBanner() {
+  const pathname = usePathname();
   const { profile, loading: roleLoading } = useUserRole();
   const [alerts, setAlerts] = useState<AlertData | null>(null);
   const [dismissed, setDismissed] = useState(false);
   const [loaded, setLoaded] = useState(false);
 
   const hasAccess = profile && isAuthorized(profile.role, CAN_VIEW_OA);
+  const isDemoSurface = pathname?.startsWith('/gerencia');
 
   useEffect(() => {
-    if (roleLoading || !hasAccess) return;
+    if (roleLoading || !hasAccess || isDemoSurface) return;
 
     fetch('/api/oa/alerts')
       .then((res) => res.json())
@@ -33,8 +36,9 @@ export default function OAAlertBanner() {
         setLoaded(true);
       })
       .catch(() => setLoaded(true));
-  }, [roleLoading, hasAccess]);
+  }, [roleLoading, hasAccess, isDemoSurface]);
 
+  if (isDemoSurface) return null;
   if (roleLoading || !hasAccess || !loaded || dismissed) return null;
   if (!alerts) return null;
 
