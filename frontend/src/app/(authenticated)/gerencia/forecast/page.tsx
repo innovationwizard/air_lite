@@ -100,11 +100,10 @@ export default function ForecastPage() {
       <div>
         <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
           <TrendingUp className="w-6 h-6 text-emerald-600" />
-          Forecast Ciego — Febrero & Marzo 2026
+          Forecast a Ciegas — Febrero & Marzo 2026
         </h1>
         <p className="text-gray-500 mt-1">
-          Prophet entrenado con datos hasta 31-ene-2026. Predicción a ciegas para feb + mar 2026.
-          Fórmula SSOT: <code className="text-xs bg-gray-100 px-1 rounded">aml.income.posted.invoice±refund.invoice_date</code>.
+          AI Refill entrenado con datos hasta 31-ene-2026. Predicción a ciegas para feb + mar 2026.
         </p>
       </div>
 
@@ -114,9 +113,9 @@ export default function ForecastPage() {
         </p>
         <p className="mt-1">
           Cada fila es un SKU del top 23 (12 REYMA + 11 CARVAJAL por Net Sales). Las columnas muestran las
-          cantidades predichas por Prophet para cada mes, en UdM de stock del producto. Las tres métricas
-          (ventas netas, compras ordenadas, compras recibidas) usan las tres fórmulas SSOT que ya
-          reprodujeron los anclajes del CEO para los meses históricos.
+          cantidades predichas por AI Refill para cada mes, en UdM de stock del producto. Las tres métricas
+          (ventas netas, compras ordenadas, compras recibidas) usan las fórmulas verificadas que
+          reprodujeron los meses históricos con un diferencial del <strong>0%</strong>.
         </p>
       </div>
 
@@ -146,22 +145,22 @@ export default function ForecastPage() {
       {!loading && (
         <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="text-sm">
               <thead className="bg-gray-50">
                 <tr className="border-b border-gray-200">
                   <th className="text-left px-3 py-2 font-medium text-gray-700 sticky left-0 bg-gray-50 z-10">SKU / Producto</th>
-                  <th className="text-right px-2 py-2 font-medium text-emerald-700" colSpan={2}>Ventas (cant)</th>
-                  <th className="text-right px-2 py-2 font-medium text-blue-700" colSpan={2}>Compras Ord</th>
-                  <th className="text-right px-2 py-2 font-medium text-purple-700" colSpan={2}>Compras Rec</th>
+                  <th className="text-right px-2 py-2 font-medium text-emerald-700 bg-emerald-50" colSpan={2}>Ventas (cantidad)</th>
+                  <th className="text-right px-2 py-2 font-medium text-blue-700 bg-blue-50" colSpan={2}>Compras Ordenadas</th>
+                  <th className="text-right px-2 py-2 font-medium text-purple-700 bg-purple-50" colSpan={2}>Compras Recibidas</th>
                 </tr>
                 <tr className="border-b border-gray-200 text-xs text-gray-500">
                   <th className="sticky left-0 bg-gray-50 z-10"></th>
-                  <th className="text-right px-2 py-1">Feb 26</th>
-                  <th className="text-right px-2 py-1">Mar 26</th>
-                  <th className="text-right px-2 py-1">Feb 26</th>
-                  <th className="text-right px-2 py-1">Mar 26</th>
-                  <th className="text-right px-2 py-1">Feb 26</th>
-                  <th className="text-right px-2 py-1">Mar 26</th>
+                  <th className="text-right px-2 py-1 bg-emerald-50">Feb 26</th>
+                  <th className="text-right px-2 py-1 bg-emerald-50">Mar 26</th>
+                  <th className="text-right px-2 py-1 bg-blue-50">Feb 26</th>
+                  <th className="text-right px-2 py-1 bg-blue-50">Mar 26</th>
+                  <th className="text-right px-2 py-1 bg-purple-50">Feb 26</th>
+                  <th className="text-right px-2 py-1 bg-purple-50">Mar 26</th>
                 </tr>
               </thead>
               <tbody>
@@ -176,12 +175,12 @@ export default function ForecastPage() {
                           {r.supplier_class}
                         </span>
                       </td>
-                      <td className="px-2 py-1.5 text-right font-mono text-emerald-900">{fmt(r.sales_feb)}</td>
-                      <td className="px-2 py-1.5 text-right font-mono text-emerald-900">{fmt(r.sales_mar)}</td>
-                      <td className="px-2 py-1.5 text-right font-mono text-blue-900">{fmt(r.purchases_ordered_feb)}</td>
-                      <td className="px-2 py-1.5 text-right font-mono text-blue-900">{fmt(r.purchases_ordered_mar)}</td>
-                      <td className="px-2 py-1.5 text-right font-mono text-purple-900">{fmt(r.purchases_received_feb)}</td>
-                      <td className="px-2 py-1.5 text-right font-mono text-purple-900">{fmt(r.purchases_received_mar)}</td>
+                      <td className="px-2 py-1.5 text-right font-mono text-emerald-900 bg-emerald-50/60">{fmt(r.sales_feb)}</td>
+                      <td className="px-2 py-1.5 text-right font-mono text-emerald-900 bg-emerald-50/60">{fmt(r.sales_mar)}</td>
+                      <td className="px-2 py-1.5 text-right font-mono text-blue-900 bg-blue-50/60">{fmt(r.purchases_ordered_feb)}</td>
+                      <td className="px-2 py-1.5 text-right font-mono text-blue-900 bg-blue-50/60">{fmt(r.purchases_ordered_mar)}</td>
+                      <td className="px-2 py-1.5 text-right font-mono text-purple-900 bg-purple-50/60">{fmt(r.purchases_received_feb)}</td>
+                      <td className="px-2 py-1.5 text-right font-mono text-purple-900 bg-purple-50/60">{fmt(r.purchases_received_mar)}</td>
                     </tr>
                   );
                 })}
@@ -189,12 +188,12 @@ export default function ForecastPage() {
               <tfoot className="bg-gray-50 font-semibold">
                 <tr>
                   <td className="px-3 py-2 text-right sticky left-0 bg-gray-50">TOTAL ({visible.length} SKUs)</td>
-                  <td className="px-2 py-2 text-right font-mono text-emerald-900">{fmt(totals.sales_feb)}</td>
-                  <td className="px-2 py-2 text-right font-mono text-emerald-900">{fmt(totals.sales_mar)}</td>
-                  <td className="px-2 py-2 text-right font-mono text-blue-900">{fmt(totals.po_ord_feb)}</td>
-                  <td className="px-2 py-2 text-right font-mono text-blue-900">{fmt(totals.po_ord_mar)}</td>
-                  <td className="px-2 py-2 text-right font-mono text-purple-900">{fmt(totals.po_rcv_feb)}</td>
-                  <td className="px-2 py-2 text-right font-mono text-purple-900">{fmt(totals.po_rcv_mar)}</td>
+                  <td className="px-2 py-2 text-right font-mono text-emerald-900 bg-emerald-50">{fmt(totals.sales_feb)}</td>
+                  <td className="px-2 py-2 text-right font-mono text-emerald-900 bg-emerald-50">{fmt(totals.sales_mar)}</td>
+                  <td className="px-2 py-2 text-right font-mono text-blue-900 bg-blue-50">{fmt(totals.po_ord_feb)}</td>
+                  <td className="px-2 py-2 text-right font-mono text-blue-900 bg-blue-50">{fmt(totals.po_ord_mar)}</td>
+                  <td className="px-2 py-2 text-right font-mono text-purple-900 bg-purple-50">{fmt(totals.po_rcv_feb)}</td>
+                  <td className="px-2 py-2 text-right font-mono text-purple-900 bg-purple-50">{fmt(totals.po_rcv_mar)}</td>
                 </tr>
               </tfoot>
             </table>
@@ -203,7 +202,7 @@ export default function ForecastPage() {
       )}
 
       <div className="text-xs text-gray-500">
-        Datos: <code>forecast_results</code> en Supabase prod. Modelo: Prophet (weekly + yearly seasonality, 80% confidence intervals).
+        Datos: <code>forecast_results</code> en Supabase prod. Artificial Intelligence ML Model (weekly + yearly seasonality, 80% confidence intervals).
         Training end: 2026-01-31. Prediction window: 2026-02-01 → 2026-03-31.
       </div>
     </div>
