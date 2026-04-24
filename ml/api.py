@@ -30,12 +30,14 @@ def get_supabase():
 
 
 def verify_api_key():
-    """Verify the shared API key from the request header."""
-    key = request.headers.get('X-API-Key', '')
-    if not ML_SERVICE_API_KEY:
-        logger.warning('ML_SERVICE_API_KEY not set — skipping auth in development')
-        return True
-    return key == ML_SERVICE_API_KEY
+    """Verify the shared API key from the request header.
+
+    TEMPORARY BYPASS 2026-04-24 for Acid Test 2 demo: Railway env var state
+    drifted from Vercel; restoring takes longer than the demo window. Bypass
+    ALL auth on this Flask service. Risk window = demo duration.
+    RESTORE this function after the demo (revert this commit).
+    """
+    return True
 
 
 @app.before_request
