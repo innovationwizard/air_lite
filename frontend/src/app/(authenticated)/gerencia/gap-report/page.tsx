@@ -52,6 +52,21 @@ function fmtGtq(n: number | null | undefined): string {
   return `Q ${n.toLocaleString('es-GT', { maximumFractionDigits: 0 })}`;
 }
 
+// Scope is locked to the same 23 SKUs used by /gerencia/forecast.
+const SCOPE = 'top';
+
+function parseYearParam(): '2024' | '2025' | null {
+  if (typeof window === 'undefined') return null;
+  const y = new URLSearchParams(window.location.search).get('year');
+  return y === '2024' || y === '2025' ? y : null;
+}
+
+function yearBounds(year: '2024' | '2025' | null): { from: string; to: string } {
+  if (year === '2024') return { from: '2024-01', to: '2024-12' };
+  if (year === '2025') return { from: '2025-01', to: '2025-12' };
+  return { from: '2024-09', to: '' };
+}
+
 export default function GapReportPage() {
   const [skus, setSkus] = useState<SkuMeta[]>([]);
   const [rows, setRows] = useState<GapRow[]>([]);
@@ -60,27 +75,36 @@ export default function GapReportPage() {
   const [error, setError] = useState<string | null>(null);
 
   // Filters
-  const [scope, setScope] = useState<'top' | 'all'>('top');
   const [supplierClass, setSupplierClass] = useState<'' | 'REYMA' | 'CARVAJAL'>('');
   const [skuFilter, setSkuFilter] = useState<string>('');
-  const [fromMonth, setFromMonth] = useState<string>('2024-09');
-  const [toMonth, setToMonth] = useState<string>('');
+  const initialYear = typeof window !== 'undefined' ? parseYearParam() : null;
+  const initialBounds = yearBounds(initialYear);
+  const [yearPreset, setYearPreset] = useState<'' | '2024' | '2025'>(initialYear ?? '');
+  const [fromMonth, setFromMonth] = useState<string>(initialBounds.from);
+  const [toMonth, setToMonth] = useState<string>(initialBounds.to);
 
   // User's "expected" overlay — keyed by `${sku}|${month}|${metric}`
   const [expected, setExpected] = useState<Record<string, string>>({});
 
+  function applyYear(year: '' | '2024' | '2025') {
+    setYearPreset(year);
+    const b = yearBounds(year || null);
+    setFromMonth(b.from);
+    setToMonth(b.to);
+  }
+
   useEffect(() => {
     setLoadingSkus(true);
-    fetch(`/api/acid-test/gap-report?action=skus&scope=${scope}`)
+    fetch(`/api/acid-test/gap-report?action=skus&scope=${SCOPE}`)
       .then((res) => { if (!res.ok) throw new Error('HTTP ' + res.status); return res.json(); })
       .then((data) => { setSkus(data.skus ?? []); setLoadingSkus(false); })
       .catch((err) => { setError(String(err)); setLoadingSkus(false); });
-  }, [scope]);
+  }, []);
 
   useEffect(() => {
     setLoadingRows(true);
     setError(null);
-    const params = new URLSearchParams({ action: 'report', scope });
+    const params = new URLSearchParams({ action: 'report', scope: SCOPE });
     if (skuFilter) params.set('sku', skuFilter);
     if (supplierClass) params.set('class', supplierClass);
     if (fromMonth) params.set('from', fromMonth);
@@ -90,7 +114,7 @@ export default function GapReportPage() {
       .then((res) => { if (!res.ok) throw new Error('HTTP ' + res.status); return res.json(); })
       .then((data) => { setRows(data.rows ?? []); setLoadingRows(false); })
       .catch((err) => { setError(String(err)); setLoadingRows(false); });
-  }, [scope, skuFilter, supplierClass, fromMonth, toMonth]);
+  }, [skuFilter, supplierClass, fromMonth, toMonth]);
 
   // Group rows by SKU for the table
   const grouped = useMemo(() => {
@@ -135,7 +159,7 @@ export default function GapReportPage() {
         </h1>
         <p className="text-gray-500 mt-1">
           Spot-check de los números de la app contra el dashboard del CEO.
-          SKUs en alcance: {scope === 'top' ? '23 (top REYMA + CARVAJAL)' : '182 (universo completo)'}.
+          SKUs en alcance: 23 (top REYMA + CARVAJAL) — mismo universo que el Forecast a Ciegas.
         </p>
       </div>
 
@@ -160,27 +184,56 @@ export default function GapReportPage() {
           <Filter className="w-4 h-4" /> Filtros
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
-          <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Alcance</label>
-            <select className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
-                    value={scope} onChange={(e) => setScope(e.target.value as 'top' | 'all')}>
-              <option value="top">Top 23 (acid-test)</option>
-              <option value="all">Universo (182)</option>
-            </select>
-          </div>
-
+        <div className="flex flex-wrap gap-6">
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1">Clase</label>
-            <select className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
-                    value={supplierClass} onChange={(e) => { setSupplierClass(e.target.value as '' | 'REYMA' | 'CARVAJAL'); setSkuFilter(''); }}>
-              <option value="">Todas</option>
-              <option value="REYMA">REYMA</option>
-              <option value="CARVAJAL">CARVAJAL</option>
-            </select>
+            <div className="inline-flex rounded-lg border border-gray-300 overflow-hidden">
+              {([
+                { v: '', label: 'Todas' },
+                { v: 'REYMA', label: 'REYMA' },
+                { v: 'CARVAJAL', label: 'CARVAJAL' },
+              ] as const).map((opt, i) => (
+                <button
+                  key={opt.v}
+                  type="button"
+                  onClick={() => { setSupplierClass(opt.v); setSkuFilter(''); }}
+                  className={`px-3 py-2 text-sm ${i > 0 ? 'border-l border-gray-300' : ''} ${
+                    supplierClass === opt.v
+                      ? 'bg-emerald-600 text-white font-medium'
+                      : 'bg-white text-gray-700 hover:bg-gray-50'
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
           </div>
 
           <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Año</label>
+            <div className="inline-flex rounded-lg border border-gray-300 overflow-hidden">
+              {([
+                { v: '', label: 'Todo' },
+                { v: '2024', label: '2024' },
+                { v: '2025', label: '2025' },
+              ] as const).map((opt, i) => (
+                <button
+                  key={opt.v}
+                  type="button"
+                  onClick={() => applyYear(opt.v)}
+                  className={`px-3 py-2 text-sm ${i > 0 ? 'border-l border-gray-300' : ''} ${
+                    yearPreset === opt.v
+                      ? 'bg-emerald-600 text-white font-medium'
+                      : 'bg-white text-gray-700 hover:bg-gray-50'
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex-1 min-w-[12rem]">
             <label className="block text-xs font-medium text-gray-600 mb-1">SKU</label>
             <select className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
                     value={skuFilter} onChange={(e) => setSkuFilter(e.target.value)}
@@ -196,14 +249,14 @@ export default function GapReportPage() {
 
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1">Desde mes</label>
-            <input type="month" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
-                   value={fromMonth} onChange={(e) => setFromMonth(e.target.value)} />
+            <input type="month" className="border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                   value={fromMonth} onChange={(e) => { setFromMonth(e.target.value); setYearPreset(''); }} />
           </div>
 
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1">Hasta mes</label>
-            <input type="month" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
-                   value={toMonth} onChange={(e) => setToMonth(e.target.value)} />
+            <input type="month" className="border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                   value={toMonth} onChange={(e) => { setToMonth(e.target.value); setYearPreset(''); }} />
           </div>
         </div>
 
