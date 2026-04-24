@@ -1,9 +1,9 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 
-// Routes reachable without a valid auth session. Everything else requires
-// an authenticated Supabase user cookie; callers without one get bounced to
-// /login. The password-recovery flow deliberately includes three paths here:
+// Page routes reachable without a valid auth session. Everything else
+// requires an authenticated Supabase user cookie; callers without one get
+// bounced to /login. The password-recovery flow includes three paths here:
 //   - /forgot-password         : user requests the reset email (no session)
 //   - /auth/callback           : Supabase email link lands here; the route
 //                                 handler itself creates the session from the
@@ -11,13 +11,28 @@ import { NextResponse, type NextRequest } from 'next/server';
 //   - /update-password is NOT here — once the callback has seated the session,
 //                                 the user is authenticated and the standard
 //                                 auth gate applies.
-const PUBLIC_ROUTES = ['/login', '/health', '/forgot-password', '/auth/callback'];
+const PUBLIC_PAGE_ROUTES = ['/login', '/health', '/forgot-password', '/auth/callback'];
+
+// API routes reachable without a valid auth session. Intentionally narrow —
+// per the 2026-04-23 auth-hardening plan, every other /api/* requires a
+// Supabase session cookie. See docs/security/PLAN_API_AUTH_DEFENSE_IN_DEPTH.md
+// Phase 0.
+//   - /api/health        : Vercel / monitoring health checks
+//   - /api/auth/callback : Supabase email confirmation callback
+const PUBLIC_API_ROUTES = ['/api/health', '/api/auth/callback'];
+
+function isPublic(pathname: string): boolean {
+  if (pathname.startsWith('/api/')) {
+    return PUBLIC_API_ROUTES.some((r) => pathname === r || pathname.startsWith(r + '/'));
+  }
+  return PUBLIC_PAGE_ROUTES.some((r) => pathname.startsWith(r));
+}
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // Allow public routes and API routes
-  if (PUBLIC_ROUTES.some((route) => pathname.startsWith(route)) || pathname.startsWith('/api/')) {
+  // Allowlist exact public routes — narrow, no wildcard /api/* bypass
+  if (isPublic(pathname)) {
     return NextResponse.next();
   }
 
@@ -52,8 +67,14 @@ export async function middleware(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  // Redirect unauthenticated users to login
+  // No session. API callers get 401 JSON; page callers get redirected to /login.
   if (!user) {
+    if (pathname.startsWith('/api/')) {
+      return NextResponse.json(
+        { error: 'No autenticado' },
+        { status: 401, headers: { 'Content-Type': 'application/json' } },
+      );
+    }
     return NextResponse.redirect(new URL('/login', request.url));
   }
 
