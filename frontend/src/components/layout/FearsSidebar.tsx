@@ -77,6 +77,18 @@ const allNavGroups: NavGroup[] = [
         icon: ScanEye,
         subtitle: 'Sistema vs compradores vs realidad',
       },
+      {
+        name: 'Gap Report',
+        href: '/gerencia/gap-report',
+        icon: FileCheck,
+        subtitle: 'App vs Odoo lado a lado',
+      },
+      {
+        name: 'Forecast a Ciegas',
+        href: '/gerencia/forecast',
+        icon: BarChart3,
+        subtitle: 'Feb + Mar 2026 — 23 SKUs',
+      },
     ],
   },
   {
@@ -267,14 +279,19 @@ const allNavGroups: NavGroup[] = [
   },
 ];
 
+const GERENCIA_DEMO_SECTIONS = new Set<string | null>([null, 'Gerencia']);
+
 export function FearsSidebar() {
   const pathname = usePathname();
   const { profile } = useUserRole();
   const userRole = profile?.role;
+  const isGerenciaDemo = userRole === 'gerencia';
 
-  const visibleGroups = allNavGroups.filter(
-    (group) => !group.requiredRoles || isAuthorized(userRole, group.requiredRoles),
-  );
+  const visibleGroups = allNavGroups.filter((group) => {
+    if (group.requiredRoles && !isAuthorized(userRole, group.requiredRoles)) return false;
+    if (isGerenciaDemo && !GERENCIA_DEMO_SECTIONS.has(group.section)) return false;
+    return true;
+  });
 
   return (
     <aside className="flex flex-col w-72 bg-white border-r border-gray-200">
