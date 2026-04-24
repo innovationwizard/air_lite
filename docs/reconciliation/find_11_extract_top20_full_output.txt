@@ -1,0 +1,144 @@
+Auth → https://suplicentro-2801-27990914.dev.odoo.com
+uid=182
+
+=== 1. Loading top 20 from products_acid_test_active ===
+  Loaded 20 top SKUs
+  Total product.product IDs across all 20 SKUs: 20
+  Template IDs: [8668, 8671, 8681, 8697, 8747, 8824, 8832, 8855, 8867, 8893, 8896, 9117, 9172, 9222, 9247, 9282, 9727, 9764, 9776, 9790]
+  cls=CARVAJAL rank= 1 sku=77205001   variants=[7116] 'Bandeja Bio 2P Foam "10/50 Termo Fom'
+  cls=CARVAJAL rank= 2 sku=77205003   variants=[6608] 'Bandeja Bio N1 Duroport ¨5/50 Termo Fom'
+  cls=CARVAJAL rank= 3 sku=77205034   variants=[6023] 'Portacomida Bio 7x7 C/D Duroport ¨4/50 Termo Fom'
+  cls=CARVAJAL rank= 4 sku=77205287   variants=[6573] 'Bandeja Bio N2 Duroport ¨10/50 Viva'
+  cls=CARVAJAL rank= 5 sku=77205207   variants=[6150] 'Vaso Bio 8oz Duroport ¨40/25 Viva'
+  cls=CARVAJAL rank= 6 sku=77205187   variants=[5994] 'Plato Bio N6 Duroport ¨20/25 Viva'
+  cls=CARVAJAL rank= 7 sku=77205208   variants=[6219] 'Vaso Bio 10oz Duroport ¨40/25 Viva'
+  cls=CARVAJAL rank= 8 sku=77205005   variants=[7053] 'Portacomida Bio 8x8 C/D Duroport ¨4/50 Termo Fom'
+  cls=CARVAJAL rank= 9 sku=77205002   variants=[6007] 'Plato Bio N6 Duroport ¨20/25 Termo Fom'
+  cls=CARVAJAL rank=10 sku=77205190   variants=[6548] 'Bandeja Bio N2 Duroport ¨20/25 Viva'
+  cls=REYMA    rank= 1 sku=77201046   variants=[7090] 'Vaso Blanco 10oz Duroport ¨40/25 Reyma'
+  cls=REYMA    rank= 2 sku=77201000   variants=[6193] 'Vaso Blanco 8oz Duroport ¨40/25 Reyma'
+  cls=REYMA    rank= 3 sku=77201055   variants=[6222] 'Vaso Plástico 12oz Plástico ¨20/50 Reyma'
+  cls=REYMA    rank= 4 sku=77201056   variants=[7102] 'Vaso Plástico 8oz Plástico ¨20/50 REYMA'
+  cls=REYMA    rank= 5 sku=77201023   variants=[5997] 'Plato Foam N8 Hondo Duroport ¨20/25 Reyma'
+  cls=REYMA    rank= 6 sku=77201047   variants=[6181] 'Vaso Blanco 12oz Duroport ¨40/25 Reyma'
+  cls=REYMA    rank= 7 sku=77201053   variants=[6158] 'Vaso Plástico 16oz Plástico ¨40/25 Reyma'
+  cls=REYMA    rank= 8 sku=77201041   variants=[6443] 'Envase Blanco 16oz Duroport ¨20/25 Reyma'
+  cls=REYMA    rank= 9 sku=77201069   variants=[6498] 'Film 0 12"x2000´ Plástico 0 Reyma'
+  cls=REYMA    rank=10 sku=77201014   variants=[6073] 'Tapa P/Envase 16 y 32oz Plástico ¨20/25 Reyma'
+
+=== 2. Probing Odoo data ranges per source ===
+  sale.order (parent of lines for these products): querying...
+    date_order: first='2024-10-01 02:28:47', last='2026-04-23 15:11:07'
+    commitment_date: first='2024-09-30 16:00:00', last=False
+    effective_date: first='2024-10-01 19:19:19', last=False
+  purchase.order (parent): querying...
+    date_order: first='2024-10-02 22:49:25', last='2026-03-05 20:12:36'
+    date_planned: first='2024-10-02 22:49:25', last='2026-03-05 20:12:36'
+    date_approve: first='2024-10-01 19:21:59', last=False
+    effective_date: first='2024-10-01 20:47:43', last=False
+  account.move (posted invoices/bills): querying...
+    invoice_date: first='2024-09-26', last='2026-04-23'
+    date: first='2024-10-01', last='2026-04-23'
+
+=== 3. Pulling raw data ===
+  uom.uom (all)...
+    203 uoms
+  product.product (top 20 variants)...
+    20
+  sale.order.line (all-time, for these variants)...
+    line ids: 102313
+      ...500/102313
+      ...2500/102313
+      ...4500/102313
+      ...6500/102313
+      ...8500/102313
+      ...10500/102313
+      ...12500/102313
+      ...14500/102313
+      ...16500/102313
+      ...18500/102313
+      ...20500/102313
+      ...22500/102313
+      ...24500/102313
+      ...26500/102313
+      ...28500/102313
+      ...30500/102313
+      ...32500/102313
+      ...34500/102313
+      ...36500/102313
+      ...38500/102313
+      ...40500/102313
+      ...42500/102313
+      ...44500/102313
+      ...46500/102313
+      ...48500/102313
+      ...50500/102313
+      ...52500/102313
+      ...54500/102313
+      ...56500/102313
+      ...58500/102313
+      ...60500/102313
+      ...62500/102313
+      ...64500/102313
+      ...66500/102313
+      ...68500/102313
+      ...70500/102313
+      ...72500/102313
+      ...74500/102313
+      ...76500/102313
+      ...78500/102313
+      ...80500/102313
+      ...82500/102313
+      ...84500/102313
+      ...86500/102313
+      ...88500/102313
+      ...90500/102313
+      ...92500/102313
+      ...94500/102313
+      ...96500/102313
+      ...98500/102313
+      ...100500/102313
+      ...102313/102313
+    total: 102313
+  sale.order parents...
+    45920
+  purchase.order.line (all-time)...
+    line ids: 1226
+    1226
+  purchase.order parents...
+    241
+  account.move.line (SALES side: out_invoice/out_refund + posted)...
+    ...20/20 products, 20000 sales-aml so far
+    sales aml: 20000, distinct moves: 3741
+  account.move.line (PURCHASES side: in_invoice/in_refund + posted)...
+    purchase aml: 5336, distinct moves: 1603
+  account.move parents (both sides)...
+    5344
+  account.account chart...
+    4
+  res.partner (customers + suppliers referenced)...
+    distinct partner ids: 4036
+    4017
+  stock.warehouse (referenced)...
+    9
+
+=== 4. Persisting to JSON ===
+  Saved: /Users/jorgeluiscontrerasherrera/Documents/_git/air_lite/docs/reconciliation/odoo_extract_top20_20260423_172237.json
+  Latest pointer: /Users/jorgeluiscontrerasherrera/Documents/_git/air_lite/docs/reconciliation/odoo_extract_top20_latest.json
+  Size: 74.9 MB
+
+=== Summary ===
+  product_product_ids: 20
+  product_template_ids: 20
+  uom_uom: 203
+  product_product: 20
+  sale_order_line: 102313
+  sale_order: 45920
+  purchase_order_line: 1226
+  purchase_order: 241
+  account_move_line_sales: 20000
+  account_move_line_purchases: 5336
+  account_move: 5344
+  account_account: 4
+  res_partner: 4017
+  stock_warehouse: 9

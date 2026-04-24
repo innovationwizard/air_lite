@@ -1,0 +1,71 @@
+Auth → https://suplicentro-2801-27990914.dev.odoo.com
+uid=182
+Tables exist. Proceeding.
+
+Pulling run-58 36-SKU Carvajal+Reyma list for cross-reference...
+  run-58 SKUs: 36
+
+=== Identifying REYMA candidates (name only per user) ===
+  REYMA name match: 146 products (active=78, archived=68)
+
+=== Identifying CARVAJAL candidates (name + supplier link) ===
+  CARVAJAL name match: 35
+  Probing product.supplierinfo for partners [24255, 24388, 24254, 42114]...
+  Carvajal supplierinfo rows: 309
+    direct product links: 48, template links: 103
+  CARVAJAL supplier link expansion (including via template): 103 products
+
+=== Building template universe ===
+  Distinct templates in universe: 267
+  Class distribution: {'REYMA': 146, 'CARVAJAL': 121}
+  Source-indicator distribution: {'NAME': 164, 'BOTH': 17, 'SUPPLIER_LINK': 86}
+
+  Total product.product IDs across all templates: 267
+
+  Fetching account.move.line for all 267 products...
+    Pull 1: out_invoice + posted + income account
+      ...25/267 products, 0 lines so far
+      ...125/267 products, 60000 lines so far
+      ...225/267 products, 140000 lines so far
+    Total amls fetched: 160877, distinct moves: 27263
+    Fetching parent moves for move_type...
+    Moves cached: 27263
+    Fetching income account IDs (account.account.account_type='income')...
+      Income accounts: 20
+  Filtered (income-account) lines: 53915
+
+  Active rows: 182
+  Archived rows: 85
+
+  Wiping existing rows...
+  Inserting 182 active rows...
+  Inserting 85 archived rows...
+
+=== TOP 10 REYMA (active) by Net Sales (CAJA40 units) ===
+  # 1 ✓ src=NAME          sku=77201046     qty=   31,775.78  rev=  5,999,320.82  'Vaso Blanco 10oz Duroport ¨40/25 Reyma'
+  # 2 ✓ src=NAME          sku=77201000     qty=   19,541.12  rev=  3,070,722.06  'Vaso Blanco 8oz Duroport ¨40/25 Reyma'
+  # 3 ✓ src=NAME          sku=77201055     qty=    7,387.70  rev=  1,539,875.93  'Vaso Plástico 12oz Plástico ¨20/50 Reyma'
+  # 4 ✓ src=NAME          sku=77201056     qty=    5,185.22  rev=    765,615.58  'Vaso Plástico 8oz Plástico ¨20/50 REYMA'
+  # 5 ✓ src=NAME          sku=77201023     qty=    4,919.25  rev=    706,717.31  'Plato Foam N8 Hondo Duroport ¨20/25 Reyma'
+  # 6 ✓ src=NAME          sku=77201047     qty=    4,179.30  rev=    828,526.09  'Vaso Blanco 12oz Duroport ¨40/25 Reyma'
+  # 7 ✓ src=NAME          sku=77201053     qty=    3,800.20  rev=  1,198,515.02  'Vaso Plástico 16oz Plástico ¨40/25 Reyma'
+  # 8 ✓ src=NAME          sku=77201041     qty=    3,735.25  rev=    623,942.62  'Envase Blanco 16oz Duroport ¨20/25 Reyma'
+  # 9 ✓ src=NAME          sku=77201069     qty=    3,724.00  rev=    289,487.22  'Film 0 12"x2000´ Plástico 0 Reyma'
+  #10 ✓ src=NAME          sku=77201014     qty=    3,062.20  rev=    351,452.10  'Tapa P/Envase 16 y 32oz Plástico ¨20/25 Reyma'
+
+=== TOP 10 CARVAJAL (active) by Net Sales ===
+  # 1 ✓ src=SUPPLIER_LINK 🚩 sku=77205001     qty=  116,368.60  rev=  6,427,980.45  'Bandeja Bio 2P Foam "10/50 Termo Fom'
+  # 2 ✓ src=SUPPLIER_LINK 🚩 sku=77205003     qty=   53,529.08  rev=  1,238,458.18  'Bandeja Bio N1 Duroport ¨5/50 Termo Fom'
+  # 3 ✓ src=SUPPLIER_LINK 🚩 sku=77205034     qty=   29,856.75  rev=  3,054,762.32  'Portacomida Bio 7x7 C/D Duroport ¨4/50 Termo Fom'
+  # 4 ✓ src=SUPPLIER_LINK 🚩 sku=77205287     qty=   19,311.90  rev=  1,067,498.34  'Bandeja Bio N2 Duroport ¨10/50 Viva'
+  # 5 ✓ src=SUPPLIER_LINK 🚩 sku=77205207     qty=   18,101.28  rev=  2,860,635.68  'Vaso Bio 8oz Duroport ¨40/25 Viva'
+  # 6   src=SUPPLIER_LINK 🚩 sku=77205187     qty=   16,202.00  rev=    676,931.15  'Plato Bio N6 Duroport ¨20/25 Viva'
+  # 7 ✓ src=SUPPLIER_LINK 🚩 sku=77205208     qty=   11,261.15  rev=  2,386,624.47  'Vaso Bio 10oz Duroport ¨40/25 Viva'
+  # 8   src=SUPPLIER_LINK 🚩 sku=77205005     qty=    9,535.00  rev=  1,218,840.00  'Portacomida Bio 8x8 C/D Duroport ¨4/50 Termo Fom'
+  # 9   src=SUPPLIER_LINK 🚩 sku=77205002     qty=    8,293.20  rev=    282,716.83  'Plato Bio N6 Duroport ¨20/25 Termo Fom'
+  #10 ✓ src=SUPPLIER_LINK 🚩 sku=77205190     qty=    6,515.70  rev=    521,788.79  'Bandeja Bio N2 Duroport ¨20/25 Viva'
+
+=== Archived with recent (12mo) activity ===
+  Total archived rows: 85; with recent activity: 0
+
+Saved summary: /Users/jorgeluiscontrerasherrera/Documents/_git/air_lite/docs/reconciliation/find_10_populate_products_acid_test_output.json

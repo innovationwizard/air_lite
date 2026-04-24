@@ -1,0 +1,124 @@
+Auth → https://suplicentro-2801-27990914.dev.odoo.com
+uid=182
+
+=== 1. res.partner candidates (name OR ref contains the term, any case) ===
+   'reyma' partners: 2
+     id= 17694  active=True  s_rank= 0  c_rank=29  name='DEPOSITO REYMAPLAST'  ref='5513'
+     id= 22733  active=True  s_rank=15  c_rank= 0  name='REYMA DEL SURESTE,S.A. DE C.V.'  ref=False
+
+   'carvajal' partners: 9
+     id= 24255  active=True  s_rank=2104  c_rank= 6  name='CARVAJAL EMPAQUES CENTROAMERICA, S.A. DE C.V.'  ref='129'
+     id=   909  active=False  s_rank= 1  c_rank= 0  name='CARVAJAL EMPAQUES CENTROAMERICA, S.A. DE C.V.'  ref='129'
+     id= 24388  active=True  s_rank=152  c_rank= 0  name='CARVAJAL EMPAQUES, S. A. DE C. V.'  ref='83'
+     id=   873  active=False  s_rank= 1  c_rank= 0  name='CARVAJAL EMPAQUES, S. A. DE C. V.'  ref='83'
+     id= 40228  active=True  s_rank= 0  c_rank= 2  name='CARVAJAL,PULUC,,LUIS,FERNANDO,JOSUE'  ref=False
+     id= 24254  active=True  s_rank= 1  c_rank= 0  name='Carvajal Empaques, CALI, COLOMBIA'  ref='128'
+     id=   903  active=False  s_rank= 1  c_rank= 0  name='Carvajal Empaques, CALI, COLOMBIA'  ref='128'
+     id= 42114  active=True  s_rank= 6  c_rank= 0  name='DISTRIBUIDORA CARVAJAL EMPAQUES S.A. DE CV'  ref='130'
+     id= 20092  active=True  s_rank=13  c_rank= 1  name='NO USAR CARVAJAL EMPAQUES, S.A. DE C.V.'  ref='9014'
+
+=== 1b. Spelling variants probe ===
+   'carbajal': 4 partners
+     id= 39345 active=True s=0 c=2 name='CARBAJAL,ARENAS,,MARIA,ANDREA'
+     id= 33750 active=True s=15 c=0 name='LÓPEZ CARBAJAL CAFÉ BAR, SOCIEDAD ANÓNIMA'
+     id= 17488 active=True s=0 c=191 name='SAIRA CARBAJAL'
+     id= 32936 active=True s=3 c=0 name='VIRGINIO DE JESÚS, LÓPEZ CARBAJAL'
+   'plasticentro': 24 partners
+     id= 23519 active=False s=0 c=2 name='**** PLASTICENTRO'
+     id= 26794 active=False s=1 c=6 name='PLASTICENTRO'
+     id= 37690 active=False s=7 c=3 name='PLASTICENTRO S.A'
+     id= 26822 active=True s=119 c=88 name='PLASTICENTRO S.A.'
+     id= 31054 active=False s=0 c=1 name='PLASTICENTRO SAN JOSE'
+   'fox': 1 partners
+     id= 31073 active=True s=0 c=15 name='CREACIONES NEWFOX, SOCIEDAD ANONIMA'
+
+=== 2. product.supplierinfo links ===
+   Probing supplierinfo for 11 partner IDs...
+   product.supplierinfo rows: 411
+     CARVAJAL EMPAQUES CENTROAMERICA, S.A. DE C.V.: 128 products linked
+     CARVAJAL EMPAQUES, S. A. DE C. V.: 91 products linked
+     NO USAR CARVAJAL EMPAQUES, S.A. DE C.V.: 88 products linked
+     Carvajal Empaques, CALI, COLOMBIA: 87 products linked
+     REYMA DEL SURESTE,S.A. DE C.V.: 14 products linked
+     DISTRIBUIDORA CARVAJAL EMPAQUES S.A. DE CV: 3 products linked
+
+=== 3. product.product by name pattern ===
+   Products with 'REYMA' in name (any case, active+archived): 146
+     active: 78, archived: 68
+   Products with 'CARVAJAL' in name (any case, active+archived): 35
+     active: 24, archived: 11
+
+=== 4. Cross-reference matrix ===
+   product.supplierinfo direct product links: reyma=0, carvajal=48
+   product.supplierinfo template-level links: 115 templates
+   After template-resolution: reyma=14, carvajal=106
+
+   REYMA — name AND supplier link: 7
+   REYMA — name match BUT NO supplier link: 139  ← visible to name-rule, missed by supplier-rule
+   REYMA — supplier link BUT NO 'REYMA' in name: 7  ← visible to supplier-rule, missed by name-rule
+
+   CARVAJAL — name AND supplier link: 17
+   CARVAJAL — name match BUT NO supplier link: 18
+   CARVAJAL — supplier link BUT NO 'CARVAJAL' in name: 89
+
+   Sample REYMA name-only (no supplier link):
+     id= 6151 active=True sku='77201019' name='Vaso Plástico 10oz Plástico ¨20/50 Reyma'
+     id= 1536 active=False sku='77201039' name='ENVSE DE DUROPORT 8oz REYMA 40/25'
+     id= 1537 active=False sku='77201040' name='ENVASE TRANSPA 4A OZ REYMA 20/50'
+     id= 1538 active=False sku='77201041' name='ENVASE DUROPORT 16OZ REYMA 20/25'
+     id= 1540 active=False sku='77201045' name='CUCHARA SOPERA REYMA 40/25'
+     id= 1542 active=False sku='77201047' name='VASO DUROPORT No.12 REYMA 40/25'
+     id= 1543 active=False sku='77201049' name='CUCHARA BLANCA No.5 REYMA 60/50'
+     id= 1544 active=False sku='77201052' name='BANDEJA 8H BLANCA REYMA 1/400'
+     id= 6158 active=True sku='77201053' name='Vaso Plástico 16oz Plástico ¨40/25 Reyma'
+     id= 1548 active=False sku='77201056' name='VASO TRANSPA 8 ONZ. REYMA'
+     id= 1549 active=False sku='77201057' name='VASO TRANSPA 5.5ONZ REYMA'
+     id= 1551 active=False sku='77201059' name='VASO TRANSPA 14 ONZ REYMA 20/50'
+     id= 1552 active=False sku='77201060' name='VASO TRANSPA 6 ONZ. REYMA 20/50'
+     id= 1553 active=False sku='77201061' name='ENVASE TRANSP. 16 ONZ REYMA 20/25'
+     id= 1554 active=False sku='77201062' name='ENVASE TRANS 32 OZ. REYMA 20/25'
+
+   Sample REYMA supplier-only (no 'REYMA' in name):
+     id= 1236 active=False sku='10010003' name='Bolsa rollo 12 X 18 Bio OREPLAST'
+     id= 1238 active=False sku='10010005' name='Bolsa rollo 6 * 10 biodegradable'
+     id= 1239 active=False sku='10010008' name='CAJA KRAFT C/VENTANA 9.9 *9.5 * 5 CMS UNIDAD'
+     id= 1264 active=False sku='10011219' name='CAJA PASTEL No. 16/ 42 CMS 16 X 16'
+     id= 1265 active=False sku='10011220' name='CAJA PASTEL No. 8"/ 21 CMS 1/50'
+     id= 1518 active=False sku='77201018' name='BANDEJA 855 BLANCA MARIEL 10/50'
+     id= 2382 active=False sku=False name='772010146'
+
+   Sample CARVAJAL name-only (no supplier link):
+     id= 6935 active=True sku='77201502' name='Portacomida Bio 8x8 C/D Bagazo de caña y trigo ¨2/100 Carvajal'
+     id= 1798 active=False sku='77201969' name='VASO 16oz B Fria Diseño frutas Carvajal 20/50'
+     id= 6880 active=True sku='77205015' name='Vaso Termo Cup No. 10 Duroport ¨40/25 Carvajal'
+     id= 7026 active=True sku='77205026' name='Vaso Pet 20oz Plástico ¨16/40 Carvajal'
+     id= 1987 active=False sku='77205043' name='ENVASE SUNDAE PET 8oz CARVAJAL 16/50'
+     id= 6768 active=True sku='77205078' name='Vaso Diseño Frutas 12oz Cartón ¨20/50 Carvajal'
+     id= 6938 active=True sku='77205143' name='Tapa Domo C/Agujero P/Vaso 12oz Plástico 20/100 Carvajal'
+     id= 2031 active=False sku='77205148' name='TAPA PLASTICA PS CARVAJAL 12oz 20/50'
+     id= 6251 active=True sku='77205148' name='Tapa P/Domo Blanca 12oz Plástico ¨20/50 Carvajal'
+     id= 6841 active=True sku='77205212' name='Vaso Frutas 22oz Cartón ¨12/50 Carvajal'
+     id= 2051 active=False sku='77205226' name='VASO 16oz DISEO FRUTAS CARVAJAL 20/50'
+     id= 2054 active=False sku='77205238' name='ENVASE 12oz PET 50 uni 16/50 CARVAJAL'
+     id= 6925 active=True sku='77205256' name='Plato "Felices Fiestas" N9 Cartón ¨20/20 Carvajal'
+     id= 6245 active=True sku='77205288' name='Vaso Transparente Bosco 80oz Plástico ¨20/50 Carvajal'
+     id= 6226 active=False sku='89010082' name='Caja Corrug P/Ten-Cu Blanco 0 Cartón 0 Carvajal'
+
+   Sample CARVAJAL supplier-only (no 'CARVAJAL' in name):
+     id= 6150 active=True sku='77205207' name='Vaso Bio 8oz Duroport ¨40/25 Viva'
+     id= 6219 active=True sku='77205208' name='Vaso Bio 10oz Duroport ¨40/25 Viva'
+     id= 6220 active=True sku='77201105' name='Vaso Blanco 8oz Duroport ¨40/25 Convermex'
+     id= 6188 active=True sku='77205010' name='Vaso Bio 10oz Duroport ¨40/25 Viva'
+     id= 9277 active=True sku='77205186' name='BANDEJA 1P VIVA BIO FOM 5X50'
+     id= 9280 active=True sku='77205196' name='VASO PET ZOO 12 OZ 20/50'
+     id= 9281 active=True sku='77205197' name='TAPA DOMO PET ZOO C/AGUJ 16X50 VASOS 12Y16  '
+     id= 6250 active=True sku='77205214' name='Vaso Bio/Picnic 12oz Duroport 0 Biopicnic'
+     id= 6145 active=True sku='77205215' name='Tenedor Bio 0 Plástico ¨40/25 Converpro'
+     id= 9253 active=True sku='77205231' name='VASO NEON  PET SURTIDO 16 ONZAS 40/25 '
+     id= 9275 active=True sku='77205234' name='TAPA TRANS. PET P/VASO 12-16 STRAWLESS 20X50 '
+     id= 6169 active=True sku='77205239' name='Vaso PET 16onz Plástico ¨16/50 Converpro'
+     id= 8779 active=True sku='77205400' name='VASO 8OZ BC BLANCO BIOFORM 20X50 (copia)'
+     id= 8781 active=True sku='77205402' name='VASO 12OZ BC BLANCO BIOFORM 20X50'
+     id= 8782 active=True sku='77205403' name='VASO 12OZ BC IMPRESO CAFE BIOFORM 20X50 (copia)'
+
+Saved: /Users/jorgeluiscontrerasherrera/Documents/_git/air_lite/docs/reconciliation/find_09_supplier_probe_results.json

@@ -1,0 +1,41 @@
+Auth → https://suplicentro-2801-27990914.dev.odoo.com
+uid=182
+
+=== 1. product.product candidates ===
+By default_code='77201046': 1
+  id=7090  active=True  uom=[71, 'CAJA40']  tmpl=[9764, '[77201046] Vaso Blanco 10oz Duroport ¨40/25 Reyma']  name='Vaso Blanco 10oz Duroport ¨40/25 Reyma'
+
+Including inactive (default_code='77201046'): 2
+  id=7090  active=True  name='Vaso Blanco 10oz Duroport ¨40/25 Reyma'  tmpl=[9764, '[77201046] Vaso Blanco 10oz Duroport ¨40/25 Reyma']
+  id=1541  active=False  name='VASO DUROPORT No. 10 REYMA 40/25'  tmpl=[1568, '[77201046] VASO DUROPORT No. 10 REYMA 40/25']
+
+=== 2. By name patterns ===
+  Pattern 'Vaso Blanco 10oz Duroport': 2 products
+    id=7090  active=True  default_code='77201046'  name='Vaso Blanco 10oz Duroport ¨40/25 Reyma'
+    id=6221  active=True  default_code='77201107'  name='Vaso Blanco 10oz Duroport ¨40/25 Convermex'
+  Pattern 'VASO DUROPORT No. 10 REYMA': 1 products
+    id=1541  active=False  default_code='77201046'  name='VASO DUROPORT No. 10 REYMA 40/25'
+  Pattern 'VASO DUROPORT NO. 10': 1 products
+    id=1541  active=False  default_code='77201046'  name='VASO DUROPORT No. 10 REYMA 40/25'
+  Pattern 'Reyma 40': 8 products
+    id=2371  active=False  default_code='077201046'  name='VASO DUROPORT No.10 REYMA 40/25\n'
+    id=1503  active=False  default_code='77201000'  name='VASO DUROPORT No 8 REYMA 40/25'
+    id=1512  active=False  default_code='77201011'  name='VASO TRANSPARENTE No.16 LARGO REYMA 40/25'
+    id=1536  active=False  default_code='77201039'  name='ENVSE DE DUROPORT 8oz REYMA 40/25'
+    id=1540  active=False  default_code='77201045'  name='CUCHARA SOPERA REYMA 40/25'
+    id=1541  active=False  default_code='77201046'  name='VASO DUROPORT No. 10 REYMA 40/25'
+    id=1542  active=False  default_code='77201047'  name='VASO DUROPORT No.12 REYMA 40/25'
+    id=1545  active=False  default_code='77201053'  name='VASO TRANSPA 16 ONZ REYMA 40/25'
+
+=== 3. Direct lookup id=9764 (snapshot odoo_id) ===
+  Found: []
+
+=== 4. Nov/Dec 2024 line counts per candidate product ===
+
+  product_id=1541: 0 total sale.order.line records
+
+  product_id=7090: 5741 total sale.order.line records
+    2024-11: B(eff_date)=6311.00  B(commitment_date)=5627.00  B(combined)=6398.00
+    2024-12: B(eff_date)=6351.00  B(commitment_date)=7475.00  B(combined)=6604.00
+
+Saved: /Users/jorgeluiscontrerasherrera/Documents/_git/air_lite/docs/reconciliation/recon_C2_odoo_live_diagnose_results.json

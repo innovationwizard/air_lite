@@ -1,0 +1,65 @@
+Auth → https://suplicentro-2801-27990914.dev.odoo.com
+uid=182
+
+1. Fetching product.product records...
+   Products: 3
+     id=7090 active=True name='Vaso Blanco 10oz Duroport ¨40/25 Reyma' tmpl=[9764, '[77201046] Vaso Blanco 10oz Duroport ¨40/25 Reyma']
+     id=2371 active=False name='VASO DUROPORT No.10 REYMA 40/25\n' tmpl=[2398, '[077201046] VASO DUROPORT No.10 REYMA 40/25\n']
+     id=1541 active=False name='VASO DUROPORT No. 10 REYMA 40/25' tmpl=[1568, '[77201046] VASO DUROPORT No. 10 REYMA 40/25']
+
+2. Fetching uom.uom (all)...
+   UoMs: 203
+
+3. Fetching sale.order.line WHERE product_id in variants...
+   Lines: 5741
+
+4. Fetching sale.order (parents)...
+   Unique order IDs: 5712
+   Orders: 5712
+
+5. Fetching res.partner for those orders...
+   Unique partner IDs: 1348
+   Partners: 1346
+
+6. Fetching stock.warehouse referenced...
+   Unique warehouse IDs: 8
+   Warehouses: 8
+
+7. Fetching purchase.order.line WHERE product_id in variants...
+   PO lines: 91
+
+8. Fetching purchase.order (parents)...
+   Unique PO IDs: 88
+   Purchase orders: 88
+
+9. Fetching res.partner suppliers...
+   Unique supplier IDs: 1
+   Suppliers: 1
+
+10. Fetching stock.move WHERE product_id in variants...
+   Stock moves: 8888
+
+11. Fetching stock.quant WHERE product_id in variants...
+   Stock quants: 11
+
+12. Fetching stock.location (referenced by moves + quants)...
+   Unique location IDs: 32
+   Locations: 31
+
+=== Extraction summary ===
+   product_product: 3
+   uom_uom: 203
+   sale_order_line: 5741
+   sale_order: 5712
+   res_partner_customers: 1346
+   stock_warehouse: 8
+   purchase_order_line: 91
+   purchase_order: 88
+   res_partner_suppliers: 1
+   stock_move: 8888
+   stock_quant: 11
+   stock_location: 31
+
+Saved: /Users/jorgeluiscontrerasherrera/Documents/_git/air_lite/docs/reconciliation/odoo_extract_77201046_20260423_151501.json
+Latest pointer: /Users/jorgeluiscontrerasherrera/Documents/_git/air_lite/docs/reconciliation/odoo_extract_77201046_latest.json
+Size: 14.7 MB

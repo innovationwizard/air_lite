@@ -1,0 +1,20 @@
+Loaded extract: odoo_extract_77201046_latest.json
+Locations: 209
+
+Clearing any partial stock_moves/quants for product_id=33...
+  Deleted 500 stock_moves (should be 0 if Phase D failed cleanly on batch 1)
+  Deleted 0 stock_quants
+
+=== Phase D: INSERT stock_moves (with truncation fix) ===
+  Inserting 8888 stock_moves (skipped 0 no-location)...
+    Upserted: 8888
+
+=== Phase E: INSERT stock_quants ===
+  Inserting 11 stock_quants...
+    Upserted: 11
+
+=== Phase F: UPDATE products row ===
+  PATCH products[id=33]: {'name': 'Vaso Blanco 10oz Duroport ¨40/25 Reyma', 'cost': 157.62891299999998, 'list_price': 215.0, 'stock_uom': 'CAJA40', 'is_active': True}
+  OK
+
+DONE.

@@ -1,0 +1,193 @@
+{
+  "run_at": "2026-04-23T15:10:57.828382",
+  "customers": {
+    "supabase_total": 19902,
+    "resolved_to_odoo_partner": 19330,
+    "unresolved": 572,
+    "unresolved_samples": [
+      {
+        "supabase_id": 866,
+        "odoo_id": "44307",
+        "name": "ABANTIARE, SOCIEDAD ANONIMA"
+      },
+      {
+        "supabase_id": 868,
+        "odoo_id": "44415",
+        "name": "ABARCA,SAMAYOA,,LENIN,ALEXANDER"
+      },
+      {
+        "supabase_id": 988,
+        "odoo_id": "44145",
+        "name": "ACAJABON,FERNANDEZ,,JAIME,ALBERTO"
+      },
+      {
+        "supabase_id": 1054,
+        "odoo_id": "44357",
+        "name": "ADMINISTRADORA DEPORTIVA SOCIEDAD ANONIMA"
+      },
+      {
+        "supabase_id": 1137,
+        "odoo_id": "44175",
+        "name": "AGUILAR,GOMEZ,,MANUEL,EFRAIN"
+      },
+      {
+        "supabase_id": 1144,
+        "odoo_id": "44340",
+        "name": "AGUILAR,LOPEZ,,BRENDA,LISETTE"
+      },
+      {
+        "supabase_id": 1200,
+        "odoo_id": "44202",
+        "name": "AJCOJÓN,ROSALES,,RUDY,WYLLMER"
+      },
+      {
+        "supabase_id": 1208,
+        "odoo_id": "43761",
+        "name": "AJU,,,JUAN,JOSE"
+      },
+      {
+        "supabase_id": 1213,
+        "odoo_id": "43856",
+        "name": "AJXUP,TAVICO,,HECTOR,MANUEL"
+      },
+      {
+        "supabase_id": 1224,
+        "odoo_id": "43839",
+        "name": "ALANZA CORPORATIVA, SOCIEDAD ANONIMA"
+      }
+    ]
+  },
+  "warehouses": {
+    "supabase_total": 25,
+    "resolved_to_odoo_warehouse": 25,
+    "unresolved": 0,
+    "unresolved_samples": [],
+    "odoo_warehouses": [
+      {
+        "id": 1,
+        "name": "1 Bodega Central",
+        "code": "1CET"
+      },
+      {
+        "id": 2,
+        "name": "2 Bodega Zona 11",
+        "code": "2Z11"
+      },
+      {
+        "id": 3,
+        "name": "3 Peten",
+        "code": "3PET"
+      },
+      {
+        "id": 4,
+        "name": "4 Bodega Zacapa",
+        "code": "4ZAC"
+      },
+      {
+        "id": 5,
+        "name": "5 Dpto. de Produccion y Reempaque Zona 11",
+        "code": "5DEP"
+      },
+      {
+        "id": 26,
+        "name": "6 Tienda Mixco",
+        "code": "T6MIX"
+      },
+      {
+        "id": 6,
+        "name": "7 Tienda Zona 11",
+        "code": "T7Z11"
+      },
+      {
+        "id": 7,
+        "name": "8 Tienda Terminal",
+        "code": "T8TER"
+      },
+      {
+        "id": 8,
+        "name": "9 Tienda La Torre",
+        "code": "T9LT"
+      },
+      {
+        "id": 9,
+        "name": "10 Tienda Zona 17 Centra Norte",
+        "code": "T10CN"
+      },
+      {
+        "id": 10,
+        "name": "11 Wal*Mart y Entregas Directas (Furgón cerrado)",
+        "code": "11"
+      },
+      {
+        "id": 23,
+        "name": "13 Pedidos Tiendas p/anular",
+        "code": "Tds"
+      },
+      {
+        "id": 22,
+        "name": "Inconsistencias",
+        "code": "Inco."
+      },
+      {
+        "id": 21,
+        "name": "MERMA",
+        "code": "MERM"
+      },
+      {
+        "id": 11,
+        "name": "Devoluciones",
+        "code": "DEV"
+      },
+      {
+        "id": 13,
+        "name": "Subcontracción Plasticos San Jose",
+        "code": "SUBSJ"
+      },
+      {
+        "id": 14,
+        "name": "Subcontracción Plastipack",
+        "code": "SUBPP"
+      },
+      {
+        "id": 15,
+        "name": "Subcontracción Plasticos Americanos",
+        "code": "SUBPA"
+      },
+      {
+        "id": 12,
+        "name": "16 Subcontracción Envaica",
+        "code": "SUB"
+      },
+      {
+        "id": 25,
+        "name": "Subcontracción Centro Papelero",
+        "code": "SUBCP"
+      },
+      {
+        "id": 16,
+        "name": "Subcontracción Servilog",
+        "code": "SUBSL"
+      },
+      {
+        "id": 17,
+        "name": "Subcontracción Tamosa",
+        "code": "SUBTM"
+      },
+      {
+        "id": 18,
+        "name": "Subcontracción Reempaque- Suplicentro",
+        "code": "SUBRS"
+      },
+      {
+        "id": 19,
+        "name": "Materia Prima",
+        "code": "MP"
+      },
+      {
+        "id": 20,
+        "name": "Material de Empaque",
+        "code": "MDE"
+      }
+    ]
+  }
+}

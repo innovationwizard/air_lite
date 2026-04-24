@@ -1,0 +1,41 @@
+revenue_daily table found (HTTP 200). Proceeding.
+Loaded extracts. ops aml-related: sale.order=5712, sol=5741, pol=91.
+inv: aml=35744, move=13840, account=8.
+
+Computing SALES per day...
+  Days: 411
+
+Computing PURCHASES_ORDERED per day...
+  Days: 68
+
+Computing PURCHASES_RECEIVED per day...
+  Days: 53
+
+Total rows to insert: 528
+
+Clearing existing rows for product 33 + winning ssot labels...
+  Deleted 0 rows for ssot_label=aml_income_posted_invoice_refund_neg_invoice_date_c40
+  Deleted 0 rows for ssot_label=pol_all_states_date_planned_product_qty_c40
+  Deleted 0 rows for ssot_label=pol_purchase_done_date_planned_qty_received_c40
+
+Inserting new rows...
+  Inserted 528 rows.
+
+=== Verification: monthly aggregation ===
+
+Month               Sales     PO_ordered    PO_received
+2024-11           6466.25        5917.00        5500.00
+2024-12           6496.50       10693.00        9127.00
+2025-01           7302.40       11268.00        7126.00
+2025-02           5531.08        8124.00        8124.00
+
+Targets (David transcript):
+  2024-11 sales=6466.25, po_ordered=5917, po_received=5500
+  2024-12 sales=6496.50
+
+  ✓ Nov sales: prod=6466.25  target=6466.25  Δ=-0.0000
+  ✓ Dec sales: prod=6496.50  target=6496.5  Δ=+0.0000
+  ✓ Nov po_ordered: prod=5917.00  target=5917  Δ=+0.0000
+  ✓ Nov po_received: prod=5500.00  target=5500  Δ=+0.0000
+
+ALL ANCHOR DATAPOINTS HIT EXACTLY.

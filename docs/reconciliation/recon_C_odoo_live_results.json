@@ -1,0 +1,97 @@
+{
+  "source": "Odoo live (https://suplicentro-2801-27990914.dev.odoo.com)",
+  "odoo_db": "suplicentro-2801-27990914",
+  "odoo_user": "integracion@piensom.com",
+  "odoo_user_uid": 182,
+  "run_at": "2026-04-23T14:39:23.441215",
+  "sku": "77201046",
+  "product": {
+    "id": 7090,
+    "name": "Vaso Blanco 10oz Duroport ¨40/25 Reyma",
+    "default_code": "77201046",
+    "uom_id": [
+      71,
+      "CAJA40"
+    ],
+    "uom_po_id": [
+      71,
+      "CAJA40"
+    ]
+  },
+  "stock_uom": "CAJA40",
+  "stock_uom_id": 71,
+  "lines_count": 5741,
+  "orders_count": 5712,
+  "distinct_states": [
+    "cancel",
+    "draft",
+    "sale",
+    "waiting_for_approval"
+  ],
+  "by_month": {
+    "2024-11": {
+      "all_normalized_to_stock_uom": {
+        "A_order_quantity": 6815.8,
+        "A_prime_order_delivered": 6670.8,
+        "B_effective_or_commitment_delivered": 6366.8,
+        "B_prime_effective_or_commitment_quantity": 6365.8,
+        "B_using_commitment_date_only": 5595.8,
+        "B_using_effective_date_only": 6311.0
+      }
+    },
+    "2024-12": {
+      "all_normalized_to_stock_uom": {
+        "A_order_quantity": 6549.75,
+        "A_prime_order_delivered": 6192.75,
+        "B_effective_or_commitment_delivered": 6496.75,
+        "B_prime_effective_or_commitment_quantity": 6579.75,
+        "B_using_commitment_date_only": 7367.75,
+        "B_using_effective_date_only": 6351.0
+      }
+    },
+    "2025-01": {
+      "all_normalized_to_stock_uom": {
+        "A_order_quantity": 7512.375,
+        "A_prime_order_delivered": 7347.375,
+        "B_effective_or_commitment_delivered": 7196.375,
+        "B_prime_effective_or_commitment_quantity": 7211.375,
+        "B_using_commitment_date_only": 7230.375,
+        "B_using_effective_date_only": 7112.0
+      }
+    },
+    "2025-02": {
+      "all_normalized_to_stock_uom": {
+        "A_order_quantity": 5992.4,
+        "A_prime_order_delivered": 5552.4,
+        "B_effective_or_commitment_delivered": 5510.4,
+        "B_prime_effective_or_commitment_quantity": 5573.4,
+        "B_using_commitment_date_only": 5236.4,
+        "B_using_effective_date_only": 5464.0
+      }
+    }
+  },
+  "user_declared_ssot": {
+    "2024-11": 6466.25,
+    "2024-12": 6496.5
+  },
+  "deltas_vs_declared_ssot": {
+    "2024-11": {
+      "ssot": 6466.25,
+      "B_combined_eff_or_commit": 6366.8,
+      "delta_B_combined": 99.45,
+      "B_commitment_only": 5595.8,
+      "delta_B_commitment": 870.45,
+      "B_effective_only": 6311.0,
+      "delta_B_effective": 155.25
+    },
+    "2024-12": {
+      "ssot": 6496.5,
+      "B_combined_eff_or_commit": 6496.75,
+      "delta_B_combined": -0.25,
+      "B_commitment_only": 7367.75,
+      "delta_B_commitment": -871.25,
+      "B_effective_only": 6351.0,
+      "delta_B_effective": 145.5
+    }
+  }
+}

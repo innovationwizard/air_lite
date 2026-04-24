@@ -1,0 +1,21 @@
+Loaded extract from /Users/jorgeluiscontrerasherrera/Documents/_git/air_lite/docs/reconciliation/odoo_extract_77201046_latest.json
+
+1. Customers...
+   Odoo partners in extract: 1346
+   Supabase existing customers: 19902
+   Upserted: 1346
+
+2. Suppliers...
+   Supabase existing: 2070, upserted: 1
+
+3. Warehouses...
+   Odoo warehouses in extract: 8
+   Supabase existing: 25
+   Upserted: 8
+
+4. Stock locations...
+   Odoo locations in extract: 31
+   Supabase existing: 209
+   Upserted: 31
+
+Saved: /Users/jorgeluiscontrerasherrera/Documents/_git/air_lite/docs/reconciliation/replace_05_load_fk_targets_output.json

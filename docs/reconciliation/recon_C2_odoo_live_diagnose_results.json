@@ -1,0 +1,48 @@
+{
+  "run_at": "2026-04-23T14:40:33.443858",
+  "sku_search": "77201046",
+  "snapshot_odoo_id_was": 9764,
+  "live_product_id_for_default_code_77201046": 7090,
+  "candidates_by_default_code_active_only": [
+    {
+      "id": 7090,
+      "name": "Vaso Blanco 10oz Duroport ¨40/25 Reyma",
+      "default_code": "77201046",
+      "active": true,
+      "uom_id": [
+        71,
+        "CAJA40"
+      ],
+      "uom_po_id": [
+        71,
+        "CAJA40"
+      ],
+      "product_tmpl_id": [
+        9764,
+        "[77201046] Vaso Blanco 10oz Duroport ¨40/25 Reyma"
+      ]
+    }
+  ],
+  "candidates_by_default_code_including_inactive": [
+    {
+      "id": 7090,
+      "name": "Vaso Blanco 10oz Duroport ¨40/25 Reyma",
+      "default_code": "77201046",
+      "active": true,
+      "product_tmpl_id": [
+        9764,
+        "[77201046] Vaso Blanco 10oz Duroport ¨40/25 Reyma"
+      ]
+    },
+    {
+      "id": 1541,
+      "name": "VASO DUROPORT No. 10 REYMA 40/25",
+      "default_code": "77201046",
+      "active": false,
+      "product_tmpl_id": [
+        1568,
+        "[77201046] VASO DUROPORT No. 10 REYMA 40/25"
+      ]
+    }
+  ]
+}

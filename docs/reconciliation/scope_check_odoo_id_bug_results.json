@@ -1,0 +1,439 @@
+{
+  "run_at": "2026-04-23T14:52:23.463610",
+  "odoo_url": "https://suplicentro-2801-27990914.dev.odoo.com",
+  "supabase_url": "https://plirrpkasyytpgzwwztl.supabase.co",
+  "counts": {
+    "supabase_products_total": 1653,
+    "supabase_distinct_skus": 1574,
+    "supabase_skus_with_dupes": 2,
+    "supabase_products_no_sku": 48,
+    "odoo_product_product_total_active_and_archived": 3307,
+    "odoo_distinct_skus": 1795,
+    "odoo_template_total": 3304
+  },
+  "Q1_supabase_odoo_id_resolution": {
+    "matches_active_pp": 366,
+    "matches_archived_pp": 110,
+    "does_not_match_any_pp": 1177
+  },
+  "Q5_of_unmatched_what_do_they_match": {
+    "match_product_template": 1148,
+    "match_template_with_1_variant_safe": 1148,
+    "match_template_with_multi_variants_broken": 0,
+    "match_nothing_orphan": 29
+  },
+  "Q2_skus_with_multiple_pp_in_odoo": 1101,
+  "Q3_skus_with_multiple_active_pp_in_odoo": 2,
+  "Q4_supabase_skus_not_in_odoo_live": 18,
+  "samples": {
+    "multi_sku_active_in_odoo": {
+      "IMP": [
+        {
+          "id": 133,
+          "default_code": "IMP",
+          "name": "ATC",
+          "active": true,
+          "product_tmpl_id": [
+            160,
+            "[IMP] ATC"
+          ]
+        },
+        {
+          "id": 113,
+          "default_code": "IMP",
+          "name": "Agente aduanero",
+          "active": true,
+          "product_tmpl_id": [
+            140,
+            "[IMP] Agente aduanero"
+          ]
+        },
+        {
+          "id": 114,
+          "default_code": "IMP",
+          "name": "Agente de seguridad (custodio)",
+          "active": true,
+          "product_tmpl_id": [
+            141,
+            "[IMP] Agente de seguridad (custodio)"
+          ]
+        },
+        {
+          "id": 115,
+          "default_code": "IMP",
+          "name": "Almacenaje",
+          "active": true,
+          "product_tmpl_id": [
+            142,
+            "[IMP] Almacenaje"
+          ]
+        },
+        {
+          "id": 135,
+          "default_code": "IMP",
+          "name": "BL",
+          "active": true,
+          "product_tmpl_id": [
+            162,
+            "[IMP] BL"
+          ]
+        },
+        {
+          "id": 136,
+          "default_code": "IMP",
+          "name": "Bascula",
+          "active": true,
+          "product_tmpl_id": [
+            163,
+            "[IMP] Bascula"
+          ]
+        },
+        {
+          "id": 141,
+          "default_code": "IMP",
+          "name": "Bolsas (Empaque)",
+          "active": true,
+          "product_tmpl_id": [
+            168,
+            "[IMP] Bolsas (Empaque)"
+          ]
+        },
+        {
+          "id": 116,
+          "default_code": "IMP",
+          "name": "Cuadrilla",
+          "active": true,
+          "product_tmpl_id": [
+            143,
+            "[IMP] Cuadrilla"
+          ]
+        },
+        {
+          "id": 2358,
+          "default_code": "IMP",
+          "name": "Custodio",
+          "active": true,
+          "product_tmpl_id": [
+            2385,
+            "[IMP] Custodio"
+          ]
+        },
+        {
+          "id": 117,
+          "default_code": "IMP",
+          "name": "DAI",
+          "active": true,
+          "product_tmpl_id": [
+            144,
+            "[IMP] DAI"
+          ]
+        },
+        {
+          "id": 118,
+          "default_code": "IMP",
+          "name": "Flete Maritimo",
+          "active": true,
+          "product_tmpl_id": [
+            145,
+            "[IMP] Flete Maritimo"
+          ]
+        },
+        {
+          "id": 119,
+          "default_code": "IMP",
+          "name": "Flete terrestre",
+          "active": true,
+          "product_tmpl_id": [
+            146,
+            "[IMP] Flete terrestre"
+          ]
+        },
+        {
+          "id": 120,
+          "default_code": "IMP",
+          "name": "Fumigacion",
+          "active": true,
+          "product_tmpl_id": [
+            147,
+            "[IMP] Fumigacion"
+          ]
+        },
+        {
+          "id": 121,
+          "default_code": "IMP",
+          "name": "Gastos de almacenaje",
+          "active": true,
+          "product_tmpl_id": [
+            148,
+            "[IMP] Gastos de almacenaje"
+          ]
+        },
+        {
+          "id": 122,
+          "default_code": "IMP",
+          "name": "Gastos de fletes",
+          "active": true,
+          "product_tmpl_id": [
+            149,
+            "[IMP] Gastos de fletes"
+          ]
+        },
+        {
+          "id": 123,
+          "default_code": "IMP",
+          "name": "Gastos de importacion",
+          "active": true,
+          "product_tmpl_id": [
+            150,
+            "[IMP] Gastos de importacion"
+          ]
+        },
+        {
+          "id": 124,
+          "default_code": "IMP",
+          "name": "Inspección",
+          "active": true,
+          "product_tmpl_id": [
+            151,
+            "[IMP] Inspección"
+          ]
+        },
+        {
+          "id": 134,
+          "default_code": "IMP",
+          "name": "Lavado",
+          "active": true,
+          "product_tmpl_id": [
+            161,
+            "[IMP] Lavado"
+          ]
+        },
+        {
+          "id": 131,
+          "default_code": "IMP",
+          "name": "Lavado de contenedor",
+          "active": true,
+          "product_tmpl_id": [
+            158,
+            "[IMP] Lavado de contenedor"
+          ]
+        },
+        {
+          "id": 140,
+          "default_code": "IMP",
+          "name": "Login Cargo",
+          "active": true,
+          "product_tmpl_id": [
+            167,
+            "[IMP] Login Cargo"
+          ]
+        },
+        {
+          "id": 2359,
+          "default_code": "IMP",
+          "name": "Manejo de Documentos",
+          "active": true,
+          "product_tmpl_id": [
+            2386,
+            "[IMP] Manejo de Documentos"
+          ]
+        },
+        {
+          "id": 139,
+          "default_code": "IMP",
+          "name": "Manejo de documentos",
+          "active": true,
+          "product_tmpl_id": [
+            166,
+            "[IMP] Manejo de documentos"
+          ]
+        },
+        {
+          "id": 137,
+          "default_code": "IMP",
+          "name": "Marchamo",
+          "active": true,
+          "product_tmpl_id": [
+            164,
+            "[IMP] Marchamo"
+          ]
+        },
+        {
+          "id": 130,
+          "default_code": "IMP",
+          "name": "Montacarga",
+          "active": true,
+          "product_tmpl_id": [
+            157,
+            "[IMP] Montacarga"
+          ]
+        },
+        {
+          "id": 129,
+          "default_code": "IMP",
+          "name": "Muellaje",
+          "active": true,
+          "product_tmpl_id": [
+            156,
+            "[IMP] Muellaje"
+          ]
+        },
+        {
+          "id": 126,
+          "default_code": "IMP",
+          "name": "Multas SAT",
+          "active": true,
+          "product_tmpl_id": [
+            153,
+            "[IMP] Multas SAT"
+          ]
+        },
+        {
+          "id": 138,
+          "default_code": "IMP",
+          "name": "OIRSA",
+          "active": true,
+          "product_tmpl_id": [
+            165,
+            "[IMP] OIRSA"
+          ]
+        },
+        {
+          "id": 127,
+          "default_code": "IMP",
+          "name": "Otros gastos de importacion",
+          "active": true,
+          "product_tmpl_id": [
+            154,
+            "[IMP] Otros gastos de importacion"
+          ]
+        },
+        {
+          "id": 125,
+          "default_code": "IMP",
+          "name": "Revisión (Rojo)",
+          "active": true,
+          "product_tmpl_id": [
+            152,
+            "[IMP] Revisión (Rojo)"
+          ]
+        },
+        {
+          "id": 128,
+          "default_code": "IMP",
+          "name": "Seguro",
+          "active": true,
+          "product_tmpl_id": [
+            155,
+            "[IMP] Seguro"
+          ]
+        },
+        {
+          "id": 132,
+          "default_code": "IMP",
+          "name": "THC",
+          "active": true,
+          "product_tmpl_id": [
+            159,
+            "[IMP] THC"
+          ]
+        }
+      ],
+      "RCT": [
+        {
+          "id": 2320,
+          "default_code": "RCT",
+          "name": "RECARGO POR COMPRA CON TARJETA",
+          "active": true,
+          "product_tmpl_id": [
+            2347,
+            "[RCT] RECARGO POR COMPRA CON TARJETA"
+          ]
+        },
+        {
+          "id": 8367,
+          "default_code": "RCT",
+          "name": "RECARGO POR COMPRA CON TARJETA",
+          "active": true,
+          "product_tmpl_id": [
+            11063,
+            "[RCT] RECARGO POR COMPRA CON TARJETA"
+          ]
+        }
+      ]
+    },
+    "orphan_supabase_products": [
+      {
+        "id": 15,
+        "sku": "35002023",
+        "odoo_id": "12051",
+        "name": "CLING FILM 12¨X1000´ SUPL CAJA6 DOBLE CORTE",
+        "is_active": true
+      },
+      {
+        "id": 16,
+        "sku": "35002021",
+        "odoo_id": "12044",
+        "name": "CLING FILM 12¨X2000´ SUPL UNI DOBLE CORTE",
+        "is_active": true
+      },
+      {
+        "id": 17,
+        "sku": "35002022",
+        "odoo_id": "12045",
+        "name": "CLING FILM 18¨X2000´ SUPL UNI DOBLE CORTE",
+        "is_active": true
+      },
+      {
+        "id": 22,
+        "sku": "35002024",
+        "odoo_id": "12047",
+        "name": "FILM INDUSTRIAL  15¨X4000´ SUPL ROLLO",
+        "is_active": true
+      },
+      {
+        "id": 45,
+        "sku": null,
+        "odoo_id": "12050",
+        "name": "15% en tu orden",
+        "is_active": true
+      },
+      {
+        "id": 57,
+        "sku": null,
+        "odoo_id": "12049",
+        "name": "772056287",
+        "is_active": true
+      },
+      {
+        "id": 99,
+        "sku": "77201409",
+        "odoo_id": "12031",
+        "name": "BANDEJA ABISAGRA/TRANS. 100-PF 1/450",
+        "is_active": true
+      },
+      {
+        "id": 100,
+        "sku": "77201410",
+        "odoo_id": "12032",
+        "name": "BANDEJA ABISAGRA/TRANS. 101- PF 1/300",
+        "is_active": true
+      },
+      {
+        "id": 101,
+        "sku": "77201413",
+        "odoo_id": "12035",
+        "name": "BANDEJA ABISAGRA/TRANS. 118-PF 1/500",
+        "is_active": true
+      },
+      {
+        "id": 102,
+        "sku": "77201415",
+        "odoo_id": "12037",
+        "name": "BANDEJA ABISAGRA/TRANS. 119 PF 1/400",
+        "is_active": true
+      }
+    ],
+    "broken_multivariant_template_matches": []
+  }
+}

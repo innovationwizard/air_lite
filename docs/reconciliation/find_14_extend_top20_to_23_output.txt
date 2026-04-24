@@ -1,0 +1,85 @@
+Auth Odoo...
+
+=== A) Updating products_acid_test_active rankings ===
+  182 templates to update.
+  PATCH updates: 182/182
+
+=== B) Setting is_top_10_in_class=TRUE for 3 newly-promoted SKUs ===
+  77201019: flagged. Affected rows: 1
+  77201038: flagged. Affected rows: 1
+  77205035: flagged. Affected rows: 1
+
+  Acid-test scope after additive update: 23 SKUs
+    cls=CARVAJAL rank=  1 sku=77205001   'Bandeja Bio 2P Foam "10/50 Termo Fom'
+    cls=CARVAJAL rank=  2 sku=77205003   'Bandeja Bio N1 Duroport ¨5/50 Termo Fom'
+    cls=CARVAJAL rank=  3 sku=77205207   'Vaso Bio 8oz Duroport ¨40/25 Viva'
+    cls=CARVAJAL rank=  4 sku=77205034   'Portacomida Bio 7x7 C/D Duroport ¨4/50 Termo Fom'
+    cls=CARVAJAL rank=  5 sku=77205287   'Bandeja Bio N2 Duroport ¨10/50 Viva'
+    cls=CARVAJAL rank=  6 sku=77205208   'Vaso Bio 10oz Duroport ¨40/25 Viva'
+    cls=CARVAJAL rank=  7 sku=77205190   'Bandeja Bio N2 Duroport ¨20/25 Viva'
+    cls=CARVAJAL rank=  8 sku=77205005   'Portacomida Bio 8x8 C/D Duroport ¨4/50 Termo Fom'
+    cls=CARVAJAL rank=  9 sku=77205002   'Plato Bio N6 Duroport ¨20/25 Termo Fom'
+    cls=CARVAJAL rank= 10 sku=77205035   'Portacomida Bio 7x7 Liso Negro Duroport ¨4/50 Termo Fom'
+    cls=CARVAJAL rank= 11 sku=77205187   'Plato Bio N6 Duroport ¨20/25 Viva'
+    cls=REYMA    rank=  1 sku=77201046   'Vaso Blanco 10oz Duroport ¨40/25 Reyma'
+    cls=REYMA    rank=  2 sku=77201000   'Vaso Blanco 8oz Duroport ¨40/25 Reyma'
+    cls=REYMA    rank=  3 sku=77201055   'Vaso Plástico 12oz Plástico ¨20/50 Reyma'
+    cls=REYMA    rank=  4 sku=77201053   'Vaso Plástico 16oz Plástico ¨40/25 Reyma'
+    cls=REYMA    rank=  5 sku=77201069   'Film 0 12"x2000´ Plástico 0 Reyma'
+    cls=REYMA    rank=  6 sku=77201041   'Envase Blanco 16oz Duroport ¨20/25 Reyma'
+    cls=REYMA    rank=  7 sku=77201014   'Tapa P/Envase 16 y 32oz Plástico ¨20/25 Reyma'
+    cls=REYMA    rank=  8 sku=77201056   'Vaso Plástico 8oz Plástico ¨20/50 REYMA'
+    cls=REYMA    rank=  9 sku=77201019   'Vaso Plástico 10oz Plástico ¨20/50 Reyma'
+    cls=REYMA    rank= 10 sku=77201038   'Contenedor Termoformado 6x6 Duroport ¨1/500 Reyma'
+    cls=REYMA    rank= 11 sku=77201047   'Vaso Blanco 12oz Duroport ¨40/25 Reyma'
+    cls=REYMA    rank= 18 sku=77201023   'Plato Foam N8 Hondo Duroport ¨20/25 Reyma'
+
+=== C) Pulling Odoo data for new SKUs: ['77201019', '77201038', '77205035'] ===
+  product.product matches: 6
+    pid= 1519  active=False  sku='77201019'  name='VASO TRANSPA 10 ONZ. REYMA 20/50'
+    pid= 6151  active=True  sku='77201019'  name='Vaso Plástico 10oz Plástico ¨20/50 Reyma'
+    pid= 6381  active=True  sku='77201038'  name='Contenedor Termoformado 6x6 Duroport ¨1/500 Reyma'
+    pid= 1535  active=False  sku='77201038'  name='HAMBURGUESERA REYMA 10/50 UN.'
+    pid= 1980  active=False  sku='77205035'  name='P/COMIDAS 7*7 LISO 4/50'
+    pid= 6054  active=True  sku='77205035'  name='Portacomida Bio 7x7 Liso Negro Duroport ¨4/50 Term'
+
+  Pulling sale.order.line for new SKUs...
+    sol ids: 12120
+    fetched: 12120
+    parent orders: 10424
+
+  Pulling purchase.order.line for new SKUs...
+    pol ids: 165
+    fetched: 165
+    parent POs: 120
+
+  Pulling account.move.line per product...
+    pid=1519: cum sales aml = 0
+    pid=1535: cum sales aml = 0
+    pid=1980: cum sales aml = 0
+    pid=6054: cum sales aml = 12645
+    pid=6151: cum sales aml = 27480
+    pid=6381: cum sales aml = 43083
+
+  Pulling 13347 account.move parents...
+    13347
+  income account IDs: 1
+  Saved extract: /Users/jorgeluiscontrerasherrera/Documents/_git/air_lite/docs/reconciliation/odoo_extract_3newSKUs_20260423_173701.json
+
+=== D) Resolving / creating Supabase product rows for new SKUs ===
+  Existing in prod: {'77201019': 1587, '77201038': 539, '77205035': 1113}
+  Final mapping: {'77201019': 1587, '77201038': 539, '77205035': 1113}
+
+=== E) Populating revenue_daily for new SKUs ===
+  Rows to insert: 1546
+  Deleted 0 for ssot_label=aml_income_posted_invoice_refund_neg_invoice_date_c40
+  Deleted 0 for ssot_label=pol_all_states_date_planned_product_qty_c40
+  Deleted 0 for ssot_label=pol_purchase_done_date_planned_qty_received_c40
+  Inserted 1546
+
+  Per-SKU monthly sales summary:
+    sku=77201019  total_sales= 17,806.70  months=17
+    sku=77201038  total_sales= 17,141.00  months=16
+    sku=77205035  total_sales= 28,295.75  months=17
+
+DONE.

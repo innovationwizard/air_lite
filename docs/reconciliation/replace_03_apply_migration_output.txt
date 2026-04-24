@@ -1,0 +1,13 @@
+exec_sql RPC not available.
+Response: HTTP Error 404: Not Found
+
+======================================================================
+Manual application required. Two options:
+
+Option 1 — Supabase Studio SQL Editor:
+  https://supabase.com/dashboard/project/plirrpkasyytpgzwwztl/sql/new
+  Paste the contents of: /Users/jorgeluiscontrerasherrera/Documents/_git/air_lite/supabase/migrations/20260423000001_aggregate_demand_daily_for_product.sql
+
+Option 2 — psql directly (if you have the connection string):
+  psql <connection-string> -f /Users/jorgeluiscontrerasherrera/Documents/_git/air_lite/supabase/migrations/20260423000001_aggregate_demand_daily_for_product.sql
+======================================================================

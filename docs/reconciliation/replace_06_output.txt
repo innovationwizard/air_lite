@@ -1,0 +1,65 @@
+Loaded extract: odoo_extract_77201046_latest.json
+
+Building Supabase lookup maps...
+  customers: 19906
+  suppliers: 2070
+  warehouses: 25
+  stock_locations: 209
+
+=== Phase A: DELETE existing rows for product_id=33 ===
+  DELETE demand_daily WHERE product_id=33...
+    Deleted 0 rows
+  DELETE inventory_daily WHERE product_id=33...
+    Deleted 0 rows
+  DELETE stock_quants WHERE product_id=33...
+    Deleted 0 rows
+  DELETE stock_moves WHERE product_id=33...
+    Deleted 0 rows
+  DELETE purchase_order_lines WHERE product_id=33...
+    Deleted 0 rows
+  DELETE sale_order_lines WHERE product_id=33...
+    Deleted 0 rows
+
+=== Phase B: UPSERT parent orders ===
+  Building sale_orders rows...
+  Upserting 5712 sale_orders...
+    Upserted: 5712
+  Building purchase_orders rows...
+  Upserting 88 purchase_orders...
+    Upserted: 88
+
+=== Phase C: INSERT child lines ===
+  sale_orders lookup size: 85985
+  purchase_orders lookup size: 3253
+  Building sale_order_lines rows...
+  Inserting 5741 sale_order_lines...
+    Inserted: 5741
+  Building purchase_order_lines rows...
+  Inserting 91 purchase_order_lines...
+    Inserted: 91
+
+=== Phase D: INSERT stock_moves ===
+  Inserting 8888 stock_moves (skipped 0 with no resolvable location)...
+   ERROR upsert batch 1: 400 — {"code":"22001","details":null,"hint":null,"message":"value too long for type character varying(100)"}
+Traceback (most recent call last):
+  File "/Users/jorgeluiscontrerasherrera/Documents/_git/air_lite/docs/reconciliation/replace_06_replace_prod_data.py", line 363, in <module>
+    n_sm = upsert_batched('stock_moves', sm_rows, 'odoo_id')
+  File "/Users/jorgeluiscontrerasherrera/Documents/_git/air_lite/docs/reconciliation/replace_06_replace_prod_data.py", line 120, in upsert_batched
+    with urllib.request.urlopen(req) as r:
+         ~~~~~~~~~~~~~~~~~~~~~~^^^^^
+  File "/opt/homebrew/Cellar/python@3.14/3.14.3_1/Frameworks/Python.framework/Versions/3.14/lib/python3.14/urllib/request.py", line 187, in urlopen
+    return opener.open(url, data, timeout)
+           ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^
+  File "/opt/homebrew/Cellar/python@3.14/3.14.3_1/Frameworks/Python.framework/Versions/3.14/lib/python3.14/urllib/request.py", line 493, in open
+    response = meth(req, response)
+  File "/opt/homebrew/Cellar/python@3.14/3.14.3_1/Frameworks/Python.framework/Versions/3.14/lib/python3.14/urllib/request.py", line 602, in http_response
+    response = self.parent.error(
+        'http', request, response, code, msg, hdrs)
+  File "/opt/homebrew/Cellar/python@3.14/3.14.3_1/Frameworks/Python.framework/Versions/3.14/lib/python3.14/urllib/request.py", line 531, in error
+    return self._call_chain(*args)
+           ~~~~~~~~~~~~~~~~^^^^^^^
+  File "/opt/homebrew/Cellar/python@3.14/3.14.3_1/Frameworks/Python.framework/Versions/3.14/lib/python3.14/urllib/request.py", line 464, in _call_chain
+    result = func(*args)
+  File "/opt/homebrew/Cellar/python@3.14/3.14.3_1/Frameworks/Python.framework/Versions/3.14/lib/python3.14/urllib/request.py", line 611, in http_error_default
+    raise HTTPError(req.full_url, code, msg, hdrs, fp)
+urllib.error.HTTPError: HTTP Error 400: Bad Request

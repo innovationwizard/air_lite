@@ -1,0 +1,34 @@
+Fetching Supabase products...
+Supabase products: 1653
+Distinct SKUs in Supabase: 1574
+SKUs with >1 row in Supabase: 2
+
+Auth → Odoo live
+uid=182
+Fetching ALL product.product from Odoo (active + archived)...
+Odoo product.product: 3307
+Fetching ALL product.template from Odoo (active + archived)...
+Odoo product.template: 3304
+
+=== Q1: Supabase odoo_id vs Odoo product.product.id ===
+  Total Supabase products with odoo_id: 1653
+  odoo_id matches active product.product.id:    366
+  odoo_id matches archived product.product.id:  110
+  odoo_id does NOT match any product.product.id: 1177  ← LIKELY TEMPLATE IDs
+
+=== Q5: Of those that don't match product.product.id, what do they match? ===
+  Match product.template.id: 1148
+    of which template has 1 variant (safe):     1148
+    of which template has >1 variants (broken): 0
+  Match nothing in Odoo live (orphan):           29
+
+=== Q2 & Q3: SKU multiplicity in Odoo live product.product ===
+  Distinct SKUs in Odoo live: 1795
+  SKUs with >1 product.product (any state): 1101
+  SKUs with >1 ACTIVE product.product:      2  ← truly dangerous
+
+=== Q4: Supabase products unresolvable by SKU in Odoo live ===
+  No SKU in Supabase: 48
+  SKU not in Odoo live product.product: 18
+
+Saved: /Users/jorgeluiscontrerasherrera/Documents/_git/air_lite/docs/reconciliation/scope_check_odoo_id_bug_results.json

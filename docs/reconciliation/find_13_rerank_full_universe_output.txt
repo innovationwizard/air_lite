@@ -1,0 +1,74 @@
+Auth Odoo...
+Loading universe from products_acid_test_active...
+  182 templates in universe
+  182 variants total
+
+run read_group for OUT_INVOICE...
+    ...50/182
+  out_invoice: 165 products with sales
+
+run read_group for OUT_REFUND...
+    ...50/182
+  out_refund: 147 products with refunds
+
+Probing per-product UoM uniformity...
+    ...50/182
+
+run per-uom read_group for OUT_INVOICE...
+
+run per-uom read_group for OUT_REFUND...
+
+Computing net qty per product, normalized...
+
+=== Re-ranking within each class with COMPLETE data ===
+
+
+--- REYMA top 15 (NEW vs OLD ranking) ---
+   NEW  sku            OLD         old_qty         new_qty  Δ%   name
+  # 1   77201046      # 1       31,775.78      103,126.82   +225%  'Vaso Blanco 10oz Duroport ¨40/25 Reyma'
+  # 2   77201000      # 2       19,541.12       90,051.81   +361%  'Vaso Blanco 8oz Duroport ¨40/25 Reyma'
+  # 3   77201055      # 3        7,387.70       32,416.78   +339%  'Vaso Plástico 12oz Plástico ¨20/50 Reyma'
+  # 4★  77201053      # 7        3,800.20       30,413.24   +700%  'Vaso Plástico 16oz Plástico ¨40/25 Reyma'
+  # 5★  77201069      # 9        3,724.00       28,638.00   +669%  'Film 0 12"x2000´ Plástico 0 Reyma'
+  # 6★  77201041      # 8        3,735.25       21,935.25   +487%  'Envase Blanco 16oz Duroport ¨20/25 Reyma'
+  # 7★  77201014      #10        3,062.20       20,783.85   +579%  'Tapa P/Envase 16 y 32oz Plástico ¨20/25 Reyma'
+  # 8★  77201056      # 4        5,185.22       20,531.55   +296%  'Vaso Plástico 8oz Plástico ¨20/50 REYMA'
+  # 9★  77201019      #14        1,492.65       17,806.70  +1093%  'Vaso Plástico 10oz Plástico ¨20/50 Reyma'
+  #10★  77201038      #11        2,884.50       17,141.00   +494%  'Contenedor Termoformado 6x6 Duroport ¨1/500 Reyma'
+  #11★  77201047      # 6        4,179.30       16,102.59   +285%  'Vaso Blanco 12oz Duroport ¨40/25 Reyma'
+  #12   77201006      #12        2,178.00       15,091.00   +593%  'Film 0 18"x2000´ Plástico 0 Reyma'
+  #13★  77201316      #24          777.60       10,293.65  +1224%  'Tapa Bio Vaso 16 y 22oz Cartón ¨10/100 Reyma'
+  #14★  77201059      #22          990.55        8,913.23   +800%  'Vaso Transparente 14oz Plástico ¨20/50 Reyma'
+  #15★  77206012      #23          851.62        8,209.29   +864%  'Tapa Termoformado 16 y 24oz Duroport ¨1/200 Reyma'
+
+--- CARVAJAL top 15 (NEW vs OLD ranking) ---
+   NEW  sku            OLD         old_qty         new_qty  Δ%   name
+  # 1   77205001      # 1      116,368.60      580,143.62   +399%  'Bandeja Bio 2P Foam "10/50 Termo Fom'
+  # 2   77205003      # 2       53,529.08      218,363.40   +308%  'Bandeja Bio N1 Duroport ¨5/50 Termo Fom'
+  # 3★  77205207      # 5       18,101.28      159,956.29   +784%  'Vaso Bio 8oz Duroport ¨40/25 Viva'
+  # 4★  77205034      # 3       29,856.75      112,799.21   +278%  'Portacomida Bio 7x7 C/D Duroport ¨4/50 Termo Fom'
+  # 5★  77205287      # 4       19,311.90       87,578.70   +353%  'Bandeja Bio N2 Duroport ¨10/50 Viva'
+  # 6★  77205208      # 7       11,261.15       42,409.59   +277%  'Vaso Bio 10oz Duroport ¨40/25 Viva'
+  # 7★  77205190      #10        6,515.70       39,000.00   +499%  'Bandeja Bio N2 Duroport ¨20/25 Viva'
+  # 8   77205005      # 8        9,535.00       34,602.09   +263%  'Portacomida Bio 8x8 C/D Duroport ¨4/50 Termo Fom'
+  # 9   77205002      # 9        8,293.20       33,722.95   +307%  'Plato Bio N6 Duroport ¨20/25 Termo Fom'
+  #10★  77205035      #16        3,327.00       28,295.75   +750%  'Portacomida Bio 7x7 Liso Negro Duroport ¨4/50 Term'
+  #11★  77205187      # 6       16,202.00       21,536.90    +33%  'Plato Bio N6 Duroport ¨20/25 Viva'
+  #12   77205017      #12        5,471.75       21,110.57   +286%  'Portacomida Bio 8x8 Liso Duroport ¨4/50 Termo Fom'
+  #13   77201054      #13        4,101.50       20,888.40   +409%  'Bandeja Bio N9 C/D Duroport 20/25 Viva'
+  #14   77205166      #14        3,933.70       15,189.90   +286%  'Plato Bio N8 Hondo Duroport ¨20/25 Termo Fom'
+  #15★  77205040      #17        3,037.77       13,693.97   +351%  'Bandeja Bio 4x8 Duroport ¨10/50 Termo Fom'
+
+--- BOTH top 15 (NEW vs OLD ranking) ---
+   NEW  sku            OLD         old_qty         new_qty  Δ%   name
+
+=== TOP-10 SKU SET changes ===
+  REYMA: SET CHANGED
+    Dropped from top 10: {'77201023', '77201047'}
+    Newly in top 10:     {'77201038', '77201019'}
+  CARVAJAL: SET CHANGED
+    Dropped from top 10: {'77205187'}
+    Newly in top 10:     {'77205035'}
+  BOTH: SAME 10 SKUs (only internal order may have shifted)
+
+Saved: /Users/jorgeluiscontrerasherrera/Documents/_git/air_lite/docs/reconciliation/find_13_rerank_results.json

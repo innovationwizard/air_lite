@@ -1,0 +1,62 @@
+Loaded ops extract: sale_order_line=5741, purchase_order_line=91, stock_move=8888
+Loaded inv extract: account_move_line=35744, account_move=13840, account_account=8
+CAJA40 factor: 0.025
+
+Sales candidates: 738
+Purchase candidates: ordered=54, received=126, total=180
+
+Scoring SALES candidates...
+Scoring PURCHASES (ordered) candidates...
+Scoring PURCHASES (received) candidates...
+Scoring PURCHASES (total) candidates...
+
+Saved JSON: /Users/jorgeluiscontrerasherrera/Documents/_git/air_lite/docs/reconciliation/find_07_ssot_finder_results.json
+Saved MD: /Users/jorgeluiscontrerasherrera/Documents/_git/air_lite/docs/reconciliation/find_07_ssot_finder_results.md
+
+=== TOP 10 — SALES ===
+   1. score=0.0  nov=6466.25  dec=6496.5  diff_nov=0.0  diff_dec=0.0  label=AML | all_3_variants | acct=income | state=posted | type=invoice_refund_neg | date=invoice_date | norm_C40
+   2. score=0.0  nov=6466.25  dec=6496.5  diff_nov=0.0  diff_dec=0.0  label=AML | all_3_variants | acct=income | state=posted | type=invoice_refund_neg | date=move.date | norm_C40
+   3. score=0.0  nov=6466.25  dec=6496.5  diff_nov=0.0  diff_dec=0.0  label=AML | all_3_variants | acct=income | state=posted | type=invoice_refund_neg | date=aml.date | norm_C40
+   4. score=0.0  nov=6466.25  dec=6496.5  diff_nov=0.0  diff_dec=0.0  label=AML | all_3_variants | acct=income | state=posted+draft | type=invoice_refund_neg | date=invoice_date | norm_C40
+   5. score=0.0  nov=6466.25  dec=6496.5  diff_nov=0.0  diff_dec=0.0  label=AML | all_3_variants | acct=income | state=posted+draft | type=invoice_refund_neg | date=move.date | norm_C40
+   6. score=0.0  nov=6466.25  dec=6496.5  diff_nov=0.0  diff_dec=0.0  label=AML | all_3_variants | acct=income | state=posted+draft | type=invoice_refund_neg | date=aml.date | norm_C40
+   7. score=0.0  nov=6466.25  dec=6496.5  diff_nov=0.0  diff_dec=0.0  label=AML | all_3_variants | acct=income+income_other | state=posted | type=invoice_refund_neg | date=invoice_date | norm_C40
+   8. score=0.0  nov=6466.25  dec=6496.5  diff_nov=0.0  diff_dec=0.0  label=AML | all_3_variants | acct=income+income_other | state=posted | type=invoice_refund_neg | date=move.date | norm_C40
+   9. score=0.0  nov=6466.25  dec=6496.5  diff_nov=0.0  diff_dec=0.0  label=AML | all_3_variants | acct=income+income_other | state=posted | type=invoice_refund_neg | date=aml.date | norm_C40
+  10. score=0.0  nov=6466.25  dec=6496.5  diff_nov=0.0  diff_dec=0.0  label=AML | all_3_variants | acct=income+income_other | state=posted+draft | type=invoice_refund_neg | date=invoice_date | norm_C40
+
+=== TOP 10 — PURCHASES ORDERED Nov 2024 ===
+   1. diff=0.0  value_nov=5917.0  label=POL | all_3_variants | state=all_states | date=date_planned | qty=product_qty | norm_C40
+   2. diff=0.0  value_nov=5917.0  label=POL | all_3_variants | state=all_states | date=date_planned | qty=product_qty | raw
+   3. diff=0.0  value_nov=5917.0  label=POL | active_only_7090 | state=all_states | date=date_planned | qty=product_qty | norm_C40
+   4. diff=0.0  value_nov=5917.0  label=POL | active_only_7090 | state=all_states | date=date_planned | qty=product_qty | raw
+   5. diff=0.0  value_nov=5917.0  label=POL | all_except_archived_2371 | state=all_states | date=date_planned | qty=product_qty | norm_C40
+   6. diff=0.0  value_nov=5917.0  label=POL | all_except_archived_2371 | state=all_states | date=date_planned | qty=product_qty | raw
+   7. diff=62.0  value_nov=5855.0  label=POL | all_3_variants | state=purchase_done | date=date_planned | qty=product_qty | norm_C40
+   8. diff=62.0  value_nov=5855.0  label=POL | all_3_variants | state=purchase_done | date=date_planned | qty=product_qty | raw
+   9. diff=62.0  value_nov=5855.0  label=POL | active_only_7090 | state=purchase_done | date=date_planned | qty=product_qty | norm_C40
+  10. diff=62.0  value_nov=5855.0  label=POL | active_only_7090 | state=purchase_done | date=date_planned | qty=product_qty | raw
+
+=== TOP 10 — PURCHASES RECEIVED Nov 2024 ===
+   1. diff=0.0  value_nov=5500.0  label=POL | all_3_variants | state=purchase_done | date=date_planned | qty=qty_received | norm_C40
+   2. diff=0.0  value_nov=5500.0  label=POL | all_3_variants | state=purchase_done | date=date_planned | qty=qty_received | raw
+   3. diff=0.0  value_nov=5500.0  label=POL | all_3_variants | state=all_states | date=date_planned | qty=qty_received | norm_C40
+   4. diff=0.0  value_nov=5500.0  label=POL | all_3_variants | state=all_states | date=date_planned | qty=qty_received | raw
+   5. diff=0.0  value_nov=5500.0  label=POL | active_only_7090 | state=purchase_done | date=date_planned | qty=qty_received | norm_C40
+   6. diff=0.0  value_nov=5500.0  label=POL | active_only_7090 | state=purchase_done | date=date_planned | qty=qty_received | raw
+   7. diff=0.0  value_nov=5500.0  label=POL | active_only_7090 | state=all_states | date=date_planned | qty=qty_received | norm_C40
+   8. diff=0.0  value_nov=5500.0  label=POL | active_only_7090 | state=all_states | date=date_planned | qty=qty_received | raw
+   9. diff=0.0  value_nov=5500.0  label=POL | all_except_archived_2371 | state=purchase_done | date=date_planned | qty=qty_received | norm_C40
+  10. diff=0.0  value_nov=5500.0  label=POL | all_except_archived_2371 | state=purchase_done | date=date_planned | qty=qty_received | raw
+
+=== TOP 10 — PURCHASES TOTAL all-time ===
+   1. diff=8203.0  value=0.0  label=AML | all_3_variants | acct=expense_direct_cost | type=inv_only | date=invoice_date | norm_C40 | total
+   2. diff=8203.0  value=0.0  label=AML | all_3_variants | acct=expense_direct_cost | type=inv_only | date=invoice_date | raw | total
+   3. diff=8203.0  value=0.0  label=AML | all_3_variants | acct=expense_direct_cost | type=inv_only | date=move.date | norm_C40 | total
+   4. diff=8203.0  value=0.0  label=AML | all_3_variants | acct=expense_direct_cost | type=inv_only | date=move.date | raw | total
+   5. diff=8203.0  value=0.0  label=AML | all_3_variants | acct=expense_direct_cost | type=inv_refund_neg | date=invoice_date | norm_C40 | total
+   6. diff=8203.0  value=0.0  label=AML | all_3_variants | acct=expense_direct_cost | type=inv_refund_neg | date=invoice_date | raw | total
+   7. diff=8203.0  value=0.0  label=AML | all_3_variants | acct=expense_direct_cost | type=inv_refund_neg | date=move.date | norm_C40 | total
+   8. diff=8203.0  value=0.0  label=AML | all_3_variants | acct=expense_direct_cost | type=inv_refund_neg | date=move.date | raw | total
+   9. diff=8203.0  value=0.0  label=AML | active_only_7090 | acct=expense_direct_cost | type=inv_only | date=invoice_date | norm_C40 | total
+  10. diff=8203.0  value=0.0  label=AML | active_only_7090 | acct=expense_direct_cost | type=inv_only | date=invoice_date | raw | total

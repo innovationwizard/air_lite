@@ -1,0 +1,40 @@
+DELETE demand_daily WHERE product_id=33...
+  Deleted: 0
+
+Fetching all sale_order_lines for product_id=33 with parent orders...
+  Lines fetched: 5741
+  Filtered in: 4517, filtered out: 1224
+  Distinct days: 404
+
+Inserting 404 demand_daily rows...
+  Inserted: 404
+
+Checking inventory_daily coverage for product_id=33...
+  inventory_daily sample rows: []
+
+  inventory_daily for product_id=33 is empty — censored-day detection skipped this run.
+  To rebuild it, run reconstruct_inventory_daily() for product_id=33 after this script.
+
+Verifying per-month totals from new demand_daily...
+
+Month              qty    days  censored
+2024-10        3418.00      27         0
+2024-11        6311.00      24         0
+2024-12        6351.00      26         0
+2025-01        7112.00      25         0
+2025-02        5464.00      25         0
+2025-03        4484.00      26         0
+2025-04        4504.00      22         0
+2025-05        5908.00      27         0
+2025-06        5680.12      24         0
+2025-07        6673.00      27         0
+2025-08        6523.95      26         0
+2025-09        7332.12      25         0
+2025-10        9197.81      26         0
+2025-11        6634.00      25         0
+2025-12        8159.00      25         0
+2026-01        8406.08      24         0
+
+Vs SSOT (Odoo live B_combo):
+  2024-11: prod=6311.00  SSOT=6466.25  Δ=-155.2500
+  2024-12: prod=6351.00  SSOT=6496.5  Δ=-145.5000

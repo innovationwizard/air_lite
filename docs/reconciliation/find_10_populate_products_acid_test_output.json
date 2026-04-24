@@ -1,0 +1,318 @@
+{
+  "run_at": "2026-04-23T17:07:38.846498",
+  "totals": {
+    "active": 182,
+    "archived": 85,
+    "archived_with_recent_activity": 0
+  },
+  "class_counts_active": {
+    "REYMA": 146,
+    "CARVAJAL": 121
+  },
+  "top_10_reyma_active": [
+    {
+      "default_code": "77201046",
+      "representative_name": "Vaso Blanco 10oz Duroport ¨40/25 Reyma",
+      "product_template_id": 9764,
+      "product_product_ids": [
+        7090
+      ],
+      "supplier_class": "REYMA",
+      "source_indicator": "NAME",
+      "in_run58_36_list": true,
+      "net_sales_quantity": 31775.78,
+      "net_sales_revenue_gtq": 5999320.82,
+      "movement_rank_within_class": 1,
+      "is_top_10_in_class": true
+    },
+    {
+      "default_code": "77201000",
+      "representative_name": "Vaso Blanco 8oz Duroport ¨40/25 Reyma",
+      "product_template_id": 8867,
+      "product_product_ids": [
+        6193
+      ],
+      "supplier_class": "REYMA",
+      "source_indicator": "NAME",
+      "in_run58_36_list": true,
+      "net_sales_quantity": 19541.125,
+      "net_sales_revenue_gtq": 3070722.06,
+      "movement_rank_within_class": 2,
+      "is_top_10_in_class": true
+    },
+    {
+      "default_code": "77201055",
+      "representative_name": "Vaso Plástico 12oz Plástico ¨20/50 Reyma",
+      "product_template_id": 8896,
+      "product_product_ids": [
+        6222
+      ],
+      "supplier_class": "REYMA",
+      "source_indicator": "NAME",
+      "in_run58_36_list": true,
+      "net_sales_quantity": 7387.7,
+      "net_sales_revenue_gtq": 1539875.93,
+      "movement_rank_within_class": 3,
+      "is_top_10_in_class": true
+    },
+    {
+      "default_code": "77201056",
+      "representative_name": "Vaso Plástico 8oz Plástico ¨20/50 REYMA",
+      "product_template_id": 9776,
+      "product_product_ids": [
+        7102
+      ],
+      "supplier_class": "REYMA",
+      "source_indicator": "NAME",
+      "in_run58_36_list": true,
+      "net_sales_quantity": 5185.222,
+      "net_sales_revenue_gtq": 765615.58,
+      "movement_rank_within_class": 4,
+      "is_top_10_in_class": true
+    },
+    {
+      "default_code": "77201023",
+      "representative_name": "Plato Foam N8 Hondo Duroport ¨20/25 Reyma",
+      "product_template_id": 8671,
+      "product_product_ids": [
+        5997
+      ],
+      "supplier_class": "REYMA",
+      "source_indicator": "NAME",
+      "in_run58_36_list": true,
+      "net_sales_quantity": 4919.25,
+      "net_sales_revenue_gtq": 706717.31,
+      "movement_rank_within_class": 5,
+      "is_top_10_in_class": true
+    },
+    {
+      "default_code": "77201047",
+      "representative_name": "Vaso Blanco 12oz Duroport ¨40/25 Reyma",
+      "product_template_id": 8855,
+      "product_product_ids": [
+        6181
+      ],
+      "supplier_class": "REYMA",
+      "source_indicator": "NAME",
+      "in_run58_36_list": true,
+      "net_sales_quantity": 4179.3,
+      "net_sales_revenue_gtq": 828526.09,
+      "movement_rank_within_class": 6,
+      "is_top_10_in_class": true
+    },
+    {
+      "default_code": "77201053",
+      "representative_name": "Vaso Plástico 16oz Plástico ¨40/25 Reyma",
+      "product_template_id": 8832,
+      "product_product_ids": [
+        6158
+      ],
+      "supplier_class": "REYMA",
+      "source_indicator": "NAME",
+      "in_run58_36_list": true,
+      "net_sales_quantity": 3800.1998,
+      "net_sales_revenue_gtq": 1198515.02,
+      "movement_rank_within_class": 7,
+      "is_top_10_in_class": true
+    },
+    {
+      "default_code": "77201041",
+      "representative_name": "Envase Blanco 16oz Duroport ¨20/25 Reyma",
+      "product_template_id": 9117,
+      "product_product_ids": [
+        6443
+      ],
+      "supplier_class": "REYMA",
+      "source_indicator": "NAME",
+      "in_run58_36_list": true,
+      "net_sales_quantity": 3735.25,
+      "net_sales_revenue_gtq": 623942.62,
+      "movement_rank_within_class": 8,
+      "is_top_10_in_class": true
+    },
+    {
+      "default_code": "77201069",
+      "representative_name": "Film 0 12\"x2000´ Plástico 0 Reyma",
+      "product_template_id": 9172,
+      "product_product_ids": [
+        6498
+      ],
+      "supplier_class": "REYMA",
+      "source_indicator": "NAME",
+      "in_run58_36_list": true,
+      "net_sales_quantity": 3724.0,
+      "net_sales_revenue_gtq": 289487.22,
+      "movement_rank_within_class": 9,
+      "is_top_10_in_class": true
+    },
+    {
+      "default_code": "77201014",
+      "representative_name": "Tapa P/Envase 16 y 32oz Plástico ¨20/25 Reyma",
+      "product_template_id": 8747,
+      "product_product_ids": [
+        6073
+      ],
+      "supplier_class": "REYMA",
+      "source_indicator": "NAME",
+      "in_run58_36_list": true,
+      "net_sales_quantity": 3062.2,
+      "net_sales_revenue_gtq": 351452.1,
+      "movement_rank_within_class": 10,
+      "is_top_10_in_class": true
+    }
+  ],
+  "top_10_carvajal_active": [
+    {
+      "default_code": "77205001",
+      "representative_name": "Bandeja Bio 2P Foam \"10/50 Termo Fom",
+      "product_template_id": 9790,
+      "product_product_ids": [
+        7116
+      ],
+      "supplier_class": "CARVAJAL",
+      "source_indicator": "SUPPLIER_LINK",
+      "in_run58_36_list": true,
+      "net_sales_quantity": 116368.6,
+      "net_sales_revenue_gtq": 6427980.45,
+      "movement_rank_within_class": 1,
+      "is_top_10_in_class": true
+    },
+    {
+      "default_code": "77205003",
+      "representative_name": "Bandeja Bio N1 Duroport ¨5/50 Termo Fom",
+      "product_template_id": 9282,
+      "product_product_ids": [
+        6608
+      ],
+      "supplier_class": "CARVAJAL",
+      "source_indicator": "SUPPLIER_LINK",
+      "in_run58_36_list": true,
+      "net_sales_quantity": 53529.08,
+      "net_sales_revenue_gtq": 1238458.18,
+      "movement_rank_within_class": 2,
+      "is_top_10_in_class": true
+    },
+    {
+      "default_code": "77205034",
+      "representative_name": "Portacomida Bio 7x7 C/D Duroport ¨4/50 Termo Fom",
+      "product_template_id": 8697,
+      "product_product_ids": [
+        6023
+      ],
+      "supplier_class": "CARVAJAL",
+      "source_indicator": "SUPPLIER_LINK",
+      "in_run58_36_list": true,
+      "net_sales_quantity": 29856.75,
+      "net_sales_revenue_gtq": 3054762.32,
+      "movement_rank_within_class": 3,
+      "is_top_10_in_class": true
+    },
+    {
+      "default_code": "77205287",
+      "representative_name": "Bandeja Bio N2 Duroport ¨10/50 Viva",
+      "product_template_id": 9247,
+      "product_product_ids": [
+        6573
+      ],
+      "supplier_class": "CARVAJAL",
+      "source_indicator": "SUPPLIER_LINK",
+      "in_run58_36_list": true,
+      "net_sales_quantity": 19311.8999,
+      "net_sales_revenue_gtq": 1067498.34,
+      "movement_rank_within_class": 4,
+      "is_top_10_in_class": true
+    },
+    {
+      "default_code": "77205207",
+      "representative_name": "Vaso Bio 8oz Duroport ¨40/25 Viva",
+      "product_template_id": 8824,
+      "product_product_ids": [
+        6150
+      ],
+      "supplier_class": "CARVAJAL",
+      "source_indicator": "SUPPLIER_LINK",
+      "in_run58_36_list": true,
+      "net_sales_quantity": 18101.275,
+      "net_sales_revenue_gtq": 2860635.68,
+      "movement_rank_within_class": 5,
+      "is_top_10_in_class": true
+    },
+    {
+      "default_code": "77205187",
+      "representative_name": "Plato Bio N6 Duroport ¨20/25 Viva",
+      "product_template_id": 8668,
+      "product_product_ids": [
+        5994
+      ],
+      "supplier_class": "CARVAJAL",
+      "source_indicator": "SUPPLIER_LINK",
+      "in_run58_36_list": false,
+      "net_sales_quantity": 16202.0,
+      "net_sales_revenue_gtq": 676931.15,
+      "movement_rank_within_class": 6,
+      "is_top_10_in_class": true
+    },
+    {
+      "default_code": "77205208",
+      "representative_name": "Vaso Bio 10oz Duroport ¨40/25 Viva",
+      "product_template_id": 8893,
+      "product_product_ids": [
+        6219
+      ],
+      "supplier_class": "CARVAJAL",
+      "source_indicator": "SUPPLIER_LINK",
+      "in_run58_36_list": true,
+      "net_sales_quantity": 11261.15,
+      "net_sales_revenue_gtq": 2386624.47,
+      "movement_rank_within_class": 7,
+      "is_top_10_in_class": true
+    },
+    {
+      "default_code": "77205005",
+      "representative_name": "Portacomida Bio 8x8 C/D Duroport ¨4/50 Termo Fom",
+      "product_template_id": 9727,
+      "product_product_ids": [
+        7053
+      ],
+      "supplier_class": "CARVAJAL",
+      "source_indicator": "SUPPLIER_LINK",
+      "in_run58_36_list": false,
+      "net_sales_quantity": 9535.0,
+      "net_sales_revenue_gtq": 1218840.0,
+      "movement_rank_within_class": 8,
+      "is_top_10_in_class": true
+    },
+    {
+      "default_code": "77205002",
+      "representative_name": "Plato Bio N6 Duroport ¨20/25 Termo Fom",
+      "product_template_id": 8681,
+      "product_product_ids": [
+        6007
+      ],
+      "supplier_class": "CARVAJAL",
+      "source_indicator": "SUPPLIER_LINK",
+      "in_run58_36_list": false,
+      "net_sales_quantity": 8293.2,
+      "net_sales_revenue_gtq": 282716.83,
+      "movement_rank_within_class": 9,
+      "is_top_10_in_class": true
+    },
+    {
+      "default_code": "77205190",
+      "representative_name": "Bandeja Bio N2 Duroport ¨20/25 Viva",
+      "product_template_id": 9222,
+      "product_product_ids": [
+        6548
+      ],
+      "supplier_class": "CARVAJAL",
+      "source_indicator": "SUPPLIER_LINK",
+      "in_run58_36_list": true,
+      "net_sales_quantity": 6515.7,
+      "net_sales_revenue_gtq": 521788.79,
+      "movement_rank_within_class": 10,
+      "is_top_10_in_class": true
+    }
+  ],
+  "archived_with_recent_activity_top15": [],
+  "run58_36_list_overlap_active": 36
+}

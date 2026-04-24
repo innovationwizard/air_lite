@@ -1,0 +1,78 @@
+Auth → https://suplicentro-2801-27990914.dev.odoo.com
+uid=182
+Loaded extract. 20 product variants.
+  Previously: sales_aml=20000, purch_aml=5336
+
+=== Refetch SALES AML per product ===
+   1/20  pid=5994   rows= 11285  cum=  11285
+   2/20  pid=5997   rows=  4552  cum=  15837
+   3/20  pid=6007   rows= 12398  cum=  28235
+   4/20  pid=6023   rows= 32515  cum=  60750
+   5/20  pid=6073   rows= 22561  cum=  83311
+   6/20  pid=6150   rows= 45218  cum= 128529
+   7/20  pid=6158   rows= 28273  cum= 156802
+   8/20  pid=6181   rows= 10968  cum= 167770
+   9/20  pid=6193   rows= 14280  cum= 182050
+  10/20  pid=6219   rows= 24329  cum= 206379
+  11/20  pid=6222   rows= 23957  cum= 230336
+  12/20  pid=6443   rows= 23585  cum= 253921
+  13/20  pid=6498   rows= 12929  cum= 266850
+  14/20  pid=6548   rows=  4482  cum= 271332
+  15/20  pid=6573   rows= 21939  cum= 293271
+  16/20  pid=6608   rows= 32084  cum= 325355
+  17/20  pid=7053   rows= 14196  cum= 339551
+  18/20  pid=7090   rows= 18219  cum= 357770
+  19/20  pid=7102   rows= 15917  cum= 373687
+  20/20  pid=7116   rows= 48229  cum= 421916
+
+  TOTAL sales aml: 421916, distinct moves: 76810
+
+=== Refetch PURCHASES AML per product ===
+   1/20  pid=5994   rows=    54  cum=     54
+   2/20  pid=5997   rows=    76  cum=    130
+   3/20  pid=6007   rows=    98  cum=    228
+   4/20  pid=6023   rows=   272  cum=    500
+   5/20  pid=6073   rows=   135  cum=    635
+   6/20  pid=6150   rows=   490  cum=   1125
+   7/20  pid=6158   rows=   207  cum=   1332
+   8/20  pid=6181   rows=   187  cum=   1519
+   9/20  pid=6193   rows=   392  cum=   1911
+  10/20  pid=6219   rows=   218  cum=   2129
+  11/20  pid=6222   rows=   205  cum=   2334
+  12/20  pid=6443   rows=   205  cum=   2539
+  13/20  pid=6498   rows=    78  cum=   2617
+  14/20  pid=6548   rows=   129  cum=   2746
+  15/20  pid=6573   rows=   143  cum=   2889
+  16/20  pid=6608   rows=   254  cum=   3143
+  17/20  pid=7053   rows=   145  cum=   3288
+  18/20  pid=7090   rows=   585  cum=   3873
+  19/20  pid=7102   rows=   188  cum=   4061
+  20/20  pid=7116   rows=  1275  cum=   5336
+
+  TOTAL purch aml: 5336, distinct moves: 1603
+
+=== Refetch account.move parents ===
+  All moves to fetch: 78413
+    ...1000/78413
+    ...6000/78413
+    ...11000/78413
+    ...16000/78413
+    ...21000/78413
+    ...26000/78413
+    ...31000/78413
+    ...36000/78413
+    ...41000/78413
+    ...46000/78413
+    ...51000/78413
+    ...56000/78413
+    ...61000/78413
+    ...66000/78413
+    ...71000/78413
+    ...76000/78413
+  Total: 78413
+
+=== Updated odoo_extract_top20_20260423_172237.json ===
+  sales_aml: 421916 (was 20000)
+  purch_aml: 5336
+  moves: 78413
+  Size: 266.1 MB

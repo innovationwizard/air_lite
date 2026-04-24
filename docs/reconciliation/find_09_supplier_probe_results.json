@@ -1,0 +1,674 @@
+{
+  "run_at": "2026-04-23T16:45:32.320240",
+  "reyma_partners": [
+    {
+      "id": 17694,
+      "name": "DEPOSITO REYMAPLAST",
+      "ref": "5513",
+      "supplier_rank": 0,
+      "customer_rank": 29,
+      "active": true,
+      "parent_id": false,
+      "is_company": true,
+      "company_type": "company",
+      "vat": "CF"
+    },
+    {
+      "id": 22733,
+      "name": "REYMA DEL SURESTE,S.A. DE C.V.",
+      "ref": false,
+      "supplier_rank": 15,
+      "customer_rank": 0,
+      "active": true,
+      "parent_id": false,
+      "is_company": false,
+      "company_type": "person",
+      "vat": false
+    }
+  ],
+  "carvajal_partners": [
+    {
+      "id": 24255,
+      "name": "CARVAJAL EMPAQUES CENTROAMERICA, S.A. DE C.V.",
+      "ref": "129",
+      "supplier_rank": 2104,
+      "customer_rank": 6,
+      "active": true,
+      "parent_id": false,
+      "is_company": true,
+      "company_type": "company",
+      "vat": "0001112"
+    },
+    {
+      "id": 909,
+      "name": "CARVAJAL EMPAQUES CENTROAMERICA, S.A. DE C.V.",
+      "ref": "129",
+      "supplier_rank": 1,
+      "customer_rank": 0,
+      "active": false,
+      "parent_id": false,
+      "is_company": true,
+      "company_type": "company",
+      "vat": false
+    },
+    {
+      "id": 24388,
+      "name": "CARVAJAL EMPAQUES, S. A. DE C. V.",
+      "ref": "83",
+      "supplier_rank": 152,
+      "customer_rank": 0,
+      "active": true,
+      "parent_id": false,
+      "is_company": true,
+      "company_type": "company",
+      "vat": "06142708211096"
+    },
+    {
+      "id": 873,
+      "name": "CARVAJAL EMPAQUES, S. A. DE C. V.",
+      "ref": "83",
+      "supplier_rank": 1,
+      "customer_rank": 0,
+      "active": false,
+      "parent_id": false,
+      "is_company": true,
+      "company_type": "company",
+      "vat": false
+    },
+    {
+      "id": 40228,
+      "name": "CARVAJAL,PULUC,,LUIS,FERNANDO,JOSUE",
+      "ref": false,
+      "supplier_rank": 0,
+      "customer_rank": 2,
+      "active": true,
+      "parent_id": false,
+      "is_company": false,
+      "company_type": "person",
+      "vat": "97495484"
+    },
+    {
+      "id": 24254,
+      "name": "Carvajal Empaques, CALI, COLOMBIA",
+      "ref": "128",
+      "supplier_rank": 1,
+      "customer_rank": 0,
+      "active": true,
+      "parent_id": false,
+      "is_company": true,
+      "company_type": "company",
+      "vat": false
+    },
+    {
+      "id": 903,
+      "name": "Carvajal Empaques, CALI, COLOMBIA",
+      "ref": "128",
+      "supplier_rank": 1,
+      "customer_rank": 0,
+      "active": false,
+      "parent_id": false,
+      "is_company": true,
+      "company_type": "company",
+      "vat": false
+    },
+    {
+      "id": 42114,
+      "name": "DISTRIBUIDORA CARVAJAL EMPAQUES S.A. DE CV",
+      "ref": "130",
+      "supplier_rank": 6,
+      "customer_rank": 0,
+      "active": true,
+      "parent_id": false,
+      "is_company": true,
+      "company_type": "company",
+      "vat": "0001112-1"
+    },
+    {
+      "id": 20092,
+      "name": "NO USAR CARVAJAL EMPAQUES, S.A. DE C.V.",
+      "ref": "9014",
+      "supplier_rank": 13,
+      "customer_rank": 1,
+      "active": true,
+      "parent_id": false,
+      "is_company": true,
+      "company_type": "company",
+      "vat": "EXPORT"
+    }
+  ],
+  "product_supplierinfo_count": 411,
+  "counts": {
+    "reyma_products_by_name": 146,
+    "reyma_products_by_supplier_link": 14,
+    "reyma_overlap": 7,
+    "reyma_name_only": 139,
+    "reyma_supplier_only": 7,
+    "carvajal_products_by_name": 35,
+    "carvajal_products_by_supplier_link": 106,
+    "carvajal_overlap": 17,
+    "carvajal_name_only": 18,
+    "carvajal_supplier_only": 89
+  },
+  "name_only_samples": {
+    "reyma": [
+      {
+        "id": 6151,
+        "name": "Vaso Plástico 10oz Plástico ¨20/50 Reyma",
+        "default_code": "77201019",
+        "active": true
+      },
+      {
+        "id": 6179,
+        "name": "Vaso Blanco 6oz Duroport ¨40/25 Reyma",
+        "default_code": "77201036",
+        "active": true
+      },
+      {
+        "id": 1536,
+        "name": "ENVSE DE DUROPORT 8oz REYMA 40/25",
+        "default_code": "77201039",
+        "active": false
+      },
+      {
+        "id": 1537,
+        "name": "ENVASE TRANSPA 4A OZ REYMA 20/50",
+        "default_code": "77201040",
+        "active": false
+      },
+      {
+        "id": 1538,
+        "name": "ENVASE DUROPORT 16OZ REYMA 20/25",
+        "default_code": "77201041",
+        "active": false
+      },
+      {
+        "id": 1540,
+        "name": "CUCHARA SOPERA REYMA 40/25",
+        "default_code": "77201045",
+        "active": false
+      },
+      {
+        "id": 1542,
+        "name": "VASO DUROPORT No.12 REYMA 40/25",
+        "default_code": "77201047",
+        "active": false
+      },
+      {
+        "id": 6181,
+        "name": "Vaso Blanco 12oz Duroport ¨40/25 Reyma",
+        "default_code": "77201047",
+        "active": true
+      },
+      {
+        "id": 1543,
+        "name": "CUCHARA BLANCA No.5 REYMA 60/50",
+        "default_code": "77201049",
+        "active": false
+      },
+      {
+        "id": 1544,
+        "name": "BANDEJA 8H BLANCA REYMA 1/400",
+        "default_code": "77201052",
+        "active": false
+      },
+      {
+        "id": 6158,
+        "name": "Vaso Plástico 16oz Plástico ¨40/25 Reyma",
+        "default_code": "77201053",
+        "active": true
+      },
+      {
+        "id": 1548,
+        "name": "VASO TRANSPA 8 ONZ. REYMA",
+        "default_code": "77201056",
+        "active": false
+      },
+      {
+        "id": 1549,
+        "name": "VASO TRANSPA 5.5ONZ REYMA",
+        "default_code": "77201057",
+        "active": false
+      },
+      {
+        "id": 1551,
+        "name": "VASO TRANSPA 14 ONZ REYMA 20/50",
+        "default_code": "77201059",
+        "active": false
+      },
+      {
+        "id": 6164,
+        "name": "Vaso Transparente 14oz Plástico ¨20/50 Reyma",
+        "default_code": "77201059",
+        "active": true
+      },
+      {
+        "id": 1552,
+        "name": "VASO TRANSPA 6 ONZ. REYMA 20/50",
+        "default_code": "77201060",
+        "active": false
+      },
+      {
+        "id": 6177,
+        "name": "Vaso Transparente 6oz Plástico ¨20/50 Reyma",
+        "default_code": "77201060",
+        "active": true
+      },
+      {
+        "id": 1553,
+        "name": "ENVASE TRANSP. 16 ONZ REYMA 20/25",
+        "default_code": "77201061",
+        "active": false
+      },
+      {
+        "id": 1554,
+        "name": "ENVASE TRANS 32 OZ. REYMA 20/25",
+        "default_code": "77201062",
+        "active": false
+      },
+      {
+        "id": 1555,
+        "name": "TAPA P/ENV/ 1/2 Y 1 LT TRANSP REYMA 20/25",
+        "default_code": "77201063",
+        "active": false
+      },
+      {
+        "id": 1556,
+        "name": "VASO DUROPORT REYMA No.16 25/20",
+        "default_code": "77201064",
+        "active": false
+      },
+      {
+        "id": 6171,
+        "name": "Vaso 0 16oz Duroport ¨25/20 Reyma",
+        "default_code": "77201064",
+        "active": true
+      },
+      {
+        "id": 1562,
+        "name": "PAJILLA CON FORRO CRISTAL Y C/RESORTE REYMA 100 UNI. 20/100",
+        "default_code": "77201073",
+        "active": false
+      },
+      {
+        "id": 1563,
+        "name": "TAPA DOMO P/VASO 16/12 REYMA 50 uni 20/50",
+        "default_code": "77201074",
+        "active": false
+      },
+      {
+        "id": 1564,
+        "name": "VASO PET 16 REYMA 50 uni 20/50",
+        "default_code": "77201075",
+        "active": false
+      },
+      {
+        "id": 1565,
+        "name": "VASO PET 12 REYMA 50 uni 20/50",
+        "default_code": "77201076",
+        "active": false
+      },
+      {
+        "id": 6180,
+        "name": "Vaso Cristal 12oz Plástico ¨20/50 Reyma",
+        "default_code": "77201076",
+        "active": true
+      },
+      {
+        "id": 1571,
+        "name": "VASO BL BIO 32oz REYMA 20/25",
+        "default_code": "77201084",
+        "active": false
+      },
+      {
+        "id": 1573,
+        "name": "VASO DUROPORT BIO 10oz REYMA 25uni 40/25",
+        "default_code": "77201087",
+        "active": false
+      },
+      {
+        "id": 1574,
+        "name": "TAPA P/VASO 1oz REYMA 25/100",
+        "default_code": "77201089",
+        "active": false
+      }
+    ],
+    "carvajal": [
+      {
+        "id": 6935,
+        "name": "Portacomida Bio 8x8 C/D Bagazo de caña y trigo ¨2/100 Carvajal",
+        "default_code": "77201502",
+        "active": true
+      },
+      {
+        "id": 6269,
+        "name": "Portacomida BIO 9*9 C/D Bagazo de caña y trigo ¨4/50 Carvajal",
+        "default_code": "77201504",
+        "active": true
+      },
+      {
+        "id": 1798,
+        "name": "VASO 16oz B Fria Diseño frutas Carvajal 20/50",
+        "default_code": "77201969",
+        "active": false
+      },
+      {
+        "id": 6880,
+        "name": "Vaso Termo Cup No. 10 Duroport ¨40/25 Carvajal",
+        "default_code": "77205015",
+        "active": true
+      },
+      {
+        "id": 7026,
+        "name": "Vaso Pet 20oz Plástico ¨16/40 Carvajal",
+        "default_code": "77205026",
+        "active": true
+      },
+      {
+        "id": 1987,
+        "name": "ENVASE SUNDAE PET 8oz CARVAJAL 16/50",
+        "default_code": "77205043",
+        "active": false
+      },
+      {
+        "id": 2009,
+        "name": "VASO CARTON 12oz BL carvajal 20/50",
+        "default_code": "77205077",
+        "active": false
+      },
+      {
+        "id": 6768,
+        "name": "Vaso Diseño Frutas 12oz Cartón ¨20/50 Carvajal",
+        "default_code": "77205078",
+        "active": true
+      },
+      {
+        "id": 6938,
+        "name": "Tapa Domo C/Agujero P/Vaso 12oz Plástico 20/100 Carvajal",
+        "default_code": "77205143",
+        "active": true
+      },
+      {
+        "id": 2031,
+        "name": "TAPA PLASTICA PS CARVAJAL 12oz 20/50",
+        "default_code": "77205148",
+        "active": false
+      },
+      {
+        "id": 6251,
+        "name": "Tapa P/Domo Blanca 12oz Plástico ¨20/50 Carvajal",
+        "default_code": "77205148",
+        "active": true
+      },
+      {
+        "id": 6841,
+        "name": "Vaso Frutas 22oz Cartón ¨12/50 Carvajal",
+        "default_code": "77205212",
+        "active": true
+      },
+      {
+        "id": 2046,
+        "name": "Tapa p/vaso carton 22 y16oz carvajal 20/50",
+        "default_code": "77205213",
+        "active": false
+      },
+      {
+        "id": 2051,
+        "name": "VASO 16oz DISEO FRUTAS CARVAJAL 20/50",
+        "default_code": "77205226",
+        "active": false
+      },
+      {
+        "id": 2054,
+        "name": "ENVASE 12oz PET 50 uni 16/50 CARVAJAL",
+        "default_code": "77205238",
+        "active": false
+      },
+      {
+        "id": 6925,
+        "name": "Plato \"Felices Fiestas\" N9 Cartón ¨20/20 Carvajal",
+        "default_code": "77205256",
+        "active": true
+      },
+      {
+        "id": 6245,
+        "name": "Vaso Transparente Bosco 80oz Plástico ¨20/50 Carvajal",
+        "default_code": "77205288",
+        "active": true
+      },
+      {
+        "id": 6226,
+        "name": "Caja Corrug P/Ten-Cu Blanco 0 Cartón 0 Carvajal",
+        "default_code": "89010082",
+        "active": false
+      }
+    ]
+  },
+  "supplier_only_samples": {
+    "reyma": [
+      {
+        "id": 1236,
+        "name": "Bolsa rollo 12 X 18 Bio OREPLAST",
+        "default_code": "10010003",
+        "active": false
+      },
+      {
+        "id": 1238,
+        "name": "Bolsa rollo 6 * 10 biodegradable",
+        "default_code": "10010005",
+        "active": false
+      },
+      {
+        "id": 1239,
+        "name": "CAJA KRAFT C/VENTANA 9.9 *9.5 * 5 CMS UNIDAD",
+        "default_code": "10010008",
+        "active": false
+      },
+      {
+        "id": 1264,
+        "name": "CAJA PASTEL No. 16/ 42 CMS 16 X 16",
+        "default_code": "10011219",
+        "active": false
+      },
+      {
+        "id": 1265,
+        "name": "CAJA PASTEL No. 8\"/ 21 CMS 1/50",
+        "default_code": "10011220",
+        "active": false
+      },
+      {
+        "id": 1518,
+        "name": "BANDEJA 855 BLANCA MARIEL 10/50",
+        "default_code": "77201018",
+        "active": false
+      },
+      {
+        "id": 2382,
+        "name": "772010146",
+        "default_code": false,
+        "active": false
+      }
+    ],
+    "carvajal": [
+      {
+        "id": 6150,
+        "name": "Vaso Bio 8oz Duroport ¨40/25 Viva",
+        "default_code": "77205207",
+        "active": true
+      },
+      {
+        "id": 6219,
+        "name": "Vaso Bio 10oz Duroport ¨40/25 Viva",
+        "default_code": "77205208",
+        "active": true
+      },
+      {
+        "id": 1238,
+        "name": "Bolsa rollo 6 * 10 biodegradable",
+        "default_code": "10010005",
+        "active": false
+      },
+      {
+        "id": 6220,
+        "name": "Vaso Blanco 8oz Duroport ¨40/25 Convermex",
+        "default_code": "77201105",
+        "active": true
+      },
+      {
+        "id": 6441,
+        "name": "Ensaladera Duplo 48oz Plástico ¨8/50 Converpro",
+        "default_code": "77201294",
+        "active": true
+      },
+      {
+        "id": 6802,
+        "name": "Envase Kraft 16oz Cartón ¨20/24 Bioform",
+        "default_code": "77201295",
+        "active": true
+      },
+      {
+        "id": 6389,
+        "name": "Contenedor Bio 6x6 Duroport ¨4/50 Termo Fom",
+        "default_code": "77205006",
+        "active": true
+      },
+      {
+        "id": 6188,
+        "name": "Vaso Bio 10oz Duroport ¨40/25 Viva",
+        "default_code": "77205010",
+        "active": true
+      },
+      {
+        "id": 8820,
+        "name": "BANDEJA No. 2P NEGRA INDUSTRIAL 10/50 (copia)",
+        "default_code": "77205020",
+        "active": true
+      },
+      {
+        "id": 8908,
+        "name": "TAPA PARA ENVASE 16 OZ. TERMO 40/25 (copia)",
+        "default_code": "77205061",
+        "active": true
+      },
+      {
+        "id": 6808,
+        "name": "Contenedor Termoformado 6x6 Negro Duroport ¨4/50 Termo Fom",
+        "default_code": "77205067",
+        "active": true
+      },
+      {
+        "id": 6449,
+        "name": "Envase Sopero 32oz Duroport ¨10/25 Viva",
+        "default_code": "77205095",
+        "active": true
+      },
+      {
+        "id": 9277,
+        "name": "BANDEJA 1P VIVA BIO FOM 5X50",
+        "default_code": "77205186",
+        "active": true
+      },
+      {
+        "id": 9280,
+        "name": "VASO PET ZOO 12 OZ 20/50",
+        "default_code": "77205196",
+        "active": true
+      },
+      {
+        "id": 9281,
+        "name": "TAPA DOMO PET ZOO C/AGUJ 16X50 VASOS 12Y16  ",
+        "default_code": "77205197",
+        "active": true
+      },
+      {
+        "id": 8507,
+        "name": "PORTACOMIDAS 8X8  LISO DUROPORT BIO 4/50",
+        "default_code": "77205198",
+        "active": true
+      },
+      {
+        "id": 6250,
+        "name": "Vaso Bio/Picnic 12oz Duroport 0 Biopicnic",
+        "default_code": "77205214",
+        "active": true
+      },
+      {
+        "id": 6145,
+        "name": "Tenedor Bio 0 Plástico ¨40/25 Converpro",
+        "default_code": "77205215",
+        "active": true
+      },
+      {
+        "id": 6403,
+        "name": "Cuchara Bio  Plástico ¨40/25 Converpro",
+        "default_code": "77205216",
+        "active": true
+      },
+      {
+        "id": 6413,
+        "name": "Cuchillo Bio  Plástico ¨40/25 Converpro",
+        "default_code": "77205217",
+        "active": true
+      },
+      {
+        "id": 9018,
+        "name": "VASO VIVA PET No. 12 ONZ. 20/50 ",
+        "default_code": "77205220",
+        "active": true
+      },
+      {
+        "id": 9253,
+        "name": "VASO NEON  PET SURTIDO 16 ONZAS 40/25 ",
+        "default_code": "77205231",
+        "active": true
+      },
+      {
+        "id": 9275,
+        "name": "TAPA TRANS. PET P/VASO 12-16 STRAWLESS 20X50 ",
+        "default_code": "77205234",
+        "active": true
+      },
+      {
+        "id": 6457,
+        "name": "Envase PET 12oz Plástico ¨16/50 Converpro",
+        "default_code": "77205238",
+        "active": true
+      },
+      {
+        "id": 6169,
+        "name": "Vaso PET 16onz Plástico ¨16/50 Converpro",
+        "default_code": "77205239",
+        "active": true
+      },
+      {
+        "id": 8814,
+        "name": "VASO 16 ONZ PET CANDY 16X50 ",
+        "default_code": "77205243",
+        "active": true
+      },
+      {
+        "id": 8347,
+        "name": "TENEDOR BLANCO PP A GRANEL 1X1000 ",
+        "default_code": "77205283",
+        "active": true
+      },
+      {
+        "id": 8779,
+        "name": "VASO 8OZ BC BLANCO BIOFORM 20X50 (copia)",
+        "default_code": "77205400",
+        "active": true
+      },
+      {
+        "id": 8781,
+        "name": "VASO 12OZ BC BLANCO BIOFORM 20X50",
+        "default_code": "77205402",
+        "active": true
+      },
+      {
+        "id": 8782,
+        "name": "VASO 12OZ BC IMPRESO CAFE BIOFORM 20X50 (copia)",
+        "default_code": "77205403",
+        "active": true
+      }
+    ]
+  }
+}

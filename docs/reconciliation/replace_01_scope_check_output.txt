@@ -1,0 +1,9 @@
+Supabase customers: 19902
+Odoo res.partner ids: 22791
+Customers: resolved=19330, unresolved=572
+
+Supabase warehouses: 25
+Odoo stock.warehouse records: 25
+Warehouses: resolved=25, unresolved=0
+
+Saved: /Users/jorgeluiscontrerasherrera/Documents/_git/air_lite/docs/reconciliation/replace_01_scope_check_results.json

@@ -1,0 +1,23 @@
+{
+  "run_at": "2026-04-23T15:16:43.348236",
+  "customers": {
+    "odoo_count": 1346,
+    "supabase_before": 19902,
+    "upserted": 1346
+  },
+  "suppliers": {
+    "odoo_count": 1,
+    "supabase_before": 2070,
+    "upserted": 1
+  },
+  "warehouses": {
+    "odoo_count": 8,
+    "supabase_before": 25,
+    "upserted": 8
+  },
+  "stock_locations": {
+    "odoo_count": 31,
+    "supabase_before": 209,
+    "upserted": 31
+  }
+}

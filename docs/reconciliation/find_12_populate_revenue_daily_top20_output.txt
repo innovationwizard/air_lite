@@ -1,0 +1,68 @@
+Authenticating to Odoo...
+Loading extract: odoo_extract_top20_20260423_172237.json
+  sales_aml: 421,916
+  purch_aml: 5,336
+  sale_order_line: 102,313
+  purchase_order_line: 1,226
+
+Distinct account IDs in AML: 4
+Fetching all referenced accounts from Odoo...
+  accounts: 4
+  income account IDs: 1
+
+=== Pre-flight: SKUs in Supabase products table ===
+  Top20 SKUs: ['77205001', '77205003', '77205034', '77205287', '77205207', '77205187', '77205208', '77205005', '77205002', '77205190', '77201046', '77201000', '77201055', '77201056', '77201023', '77201047', '77201053', '77201041', '77201069', '77201014']
+  Found in Supabase: 20/20
+  Odoo→Supabase product mapping: 20 entries
+
+=== Computing SSOT_SALES daily aggregations ===
+  filtered sales lines: 144570, distinct (supa_pid, day) cells: 8603
+
+=== Computing PO_ORDERED / PO_RECEIVED daily aggregations ===
+  PO ordered  daily cells: 954
+  PO received daily cells: 791
+
+Total revenue_daily rows to insert: 10266
+
+Clearing existing revenue_daily rows for top20 SKUs + winning ssot labels...
+  Deleted 411 for ssot_label=aml_income_posted_invoice_refund_neg_invoice_date_c40
+  Deleted 68 for ssot_label=pol_all_states_date_planned_product_qty_c40
+  Deleted 49 for ssot_label=pol_purchase_done_date_planned_qty_received_c40
+
+Inserting 10266 rows...
+  Inserted: 10266
+
+=== Verification: monthly aggregation ===
+
+  Anchor verification for SKU 77201046 (Supabase pid=33):
+    ✓ Nov sales: prod=6466.25  target=6466.25  Δ=-0.0000
+    ✓ Dec sales: prod=6496.50  target=6496.5  Δ=+0.0000
+    ✓ Nov po_ordered: prod=5917.00  target=5917  Δ=+0.0000
+    ✓ Nov po_received: prod=5500.00  target=5500  Δ=+0.0000
+
+  Period range: 2024-10-01 → 2026-04-23
+  Months covered: 19 (2024-10 → 2026-04)
+
+  Per-SKU summary (sales total all-time):
+    cls=CARVAJAL sku=77205001   sales_total=  580,143.62  months_w_sales= 19  'Bandeja Bio 2P Foam "10/50 Termo Fom'
+    cls=CARVAJAL sku=77205003   sales_total=  218,363.40  months_w_sales= 17  'Bandeja Bio N1 Duroport ¨5/50 Termo Fom'
+    cls=CARVAJAL sku=77205034   sales_total=  112,799.21  months_w_sales= 16  'Portacomida Bio 7x7 C/D Duroport ¨4/50 Termo Fom'
+    cls=CARVAJAL sku=77205287   sales_total=   87,578.70  months_w_sales= 16  'Bandeja Bio N2 Duroport ¨10/50 Viva'
+    cls=CARVAJAL sku=77205207   sales_total=  159,956.29  months_w_sales= 17  'Vaso Bio 8oz Duroport ¨40/25 Viva'
+    cls=CARVAJAL sku=77205187   sales_total=   21,536.90  months_w_sales= 17  'Plato Bio N6 Duroport ¨20/25 Viva'
+    cls=CARVAJAL sku=77205208   sales_total=   42,409.59  months_w_sales= 16  'Vaso Bio 10oz Duroport ¨40/25 Viva'
+    cls=CARVAJAL sku=77205005   sales_total=   34,602.09  months_w_sales= 16  'Portacomida Bio 8x8 C/D Duroport ¨4/50 Termo Fom'
+    cls=CARVAJAL sku=77205002   sales_total=   33,722.95  months_w_sales= 16  'Plato Bio N6 Duroport ¨20/25 Termo Fom'
+    cls=CARVAJAL sku=77205190   sales_total=   39,000.00  months_w_sales= 16  'Bandeja Bio N2 Duroport ¨20/25 Viva'
+    cls=REYMA    sku=77201046   sales_total=  103,126.82  months_w_sales= 16  'Vaso Blanco 10oz Duroport ¨40/25 Reyma'
+    cls=REYMA    sku=77201000   sales_total=   90,051.81  months_w_sales= 16  'Vaso Blanco 8oz Duroport ¨40/25 Reyma'
+    cls=REYMA    sku=77201055   sales_total=   32,416.78  months_w_sales= 17  'Vaso Plástico 12oz Plástico ¨20/50 Reyma'
+    cls=REYMA    sku=77201056   sales_total=   20,531.55  months_w_sales= 17  'Vaso Plástico 8oz Plástico ¨20/50 REYMA'
+    cls=REYMA    sku=77201023   sales_total=    6,678.70  months_w_sales= 16  'Plato Foam N8 Hondo Duroport ¨20/25 Reyma'
+    cls=REYMA    sku=77201047   sales_total=   16,102.59  months_w_sales= 16  'Vaso Blanco 12oz Duroport ¨40/25 Reyma'
+    cls=REYMA    sku=77201053   sales_total=   30,413.24  months_w_sales= 17  'Vaso Plástico 16oz Plástico ¨40/25 Reyma'
+    cls=REYMA    sku=77201041   sales_total=   21,935.25  months_w_sales= 17  'Envase Blanco 16oz Duroport ¨20/25 Reyma'
+    cls=REYMA    sku=77201069   sales_total=   28,638.00  months_w_sales= 16  'Film 0 12"x2000´ Plástico 0 Reyma'
+    cls=REYMA    sku=77201014   sales_total=   20,783.85  months_w_sales= 17  'Tapa P/Envase 16 y 32oz Plástico ¨20/25 Reyma'
+
+DONE.

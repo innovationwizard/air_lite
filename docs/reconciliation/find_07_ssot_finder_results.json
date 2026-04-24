@@ -1,0 +1,919 @@
+{
+  "run_at": "2026-04-23T16:17:38.763802",
+  "targets": {
+    "sales_nov2024": 6466.25,
+    "sales_dec2024": 6496.5,
+    "purchases_nov2024_ordered": 5917,
+    "purchases_nov2024_received": 5500,
+    "purchases_all_time_total": 8203
+  },
+  "sales_top50": [
+    {
+      "label": "AML | all_3_variants | acct=income | state=posted | type=invoice_refund_neg | date=invoice_date | norm_C40",
+      "source": "account.move.line",
+      "nov": 6466.25,
+      "dec": 6496.5,
+      "diff_nov": 0.0,
+      "diff_dec": 0.0,
+      "score": 0.0
+    },
+    {
+      "label": "AML | all_3_variants | acct=income | state=posted | type=invoice_refund_neg | date=move.date | norm_C40",
+      "source": "account.move.line",
+      "nov": 6466.25,
+      "dec": 6496.5,
+      "diff_nov": 0.0,
+      "diff_dec": 0.0,
+      "score": 0.0
+    },
+    {
+      "label": "AML | all_3_variants | acct=income | state=posted | type=invoice_refund_neg | date=aml.date | norm_C40",
+      "source": "account.move.line",
+      "nov": 6466.25,
+      "dec": 6496.5,
+      "diff_nov": 0.0,
+      "diff_dec": 0.0,
+      "score": 0.0
+    },
+    {
+      "label": "AML | all_3_variants | acct=income | state=posted+draft | type=invoice_refund_neg | date=invoice_date | norm_C40",
+      "source": "account.move.line",
+      "nov": 6466.25,
+      "dec": 6496.5,
+      "diff_nov": 0.0,
+      "diff_dec": 0.0,
+      "score": 0.0
+    },
+    {
+      "label": "AML | all_3_variants | acct=income | state=posted+draft | type=invoice_refund_neg | date=move.date | norm_C40",
+      "source": "account.move.line",
+      "nov": 6466.25,
+      "dec": 6496.5,
+      "diff_nov": 0.0,
+      "diff_dec": 0.0,
+      "score": 0.0
+    },
+    {
+      "label": "AML | all_3_variants | acct=income | state=posted+draft | type=invoice_refund_neg | date=aml.date | norm_C40",
+      "source": "account.move.line",
+      "nov": 6466.25,
+      "dec": 6496.5,
+      "diff_nov": 0.0,
+      "diff_dec": 0.0,
+      "score": 0.0
+    },
+    {
+      "label": "AML | all_3_variants | acct=income+income_other | state=posted | type=invoice_refund_neg | date=invoice_date | norm_C40",
+      "source": "account.move.line",
+      "nov": 6466.25,
+      "dec": 6496.5,
+      "diff_nov": 0.0,
+      "diff_dec": 0.0,
+      "score": 0.0
+    },
+    {
+      "label": "AML | all_3_variants | acct=income+income_other | state=posted | type=invoice_refund_neg | date=move.date | norm_C40",
+      "source": "account.move.line",
+      "nov": 6466.25,
+      "dec": 6496.5,
+      "diff_nov": 0.0,
+      "diff_dec": 0.0,
+      "score": 0.0
+    },
+    {
+      "label": "AML | all_3_variants | acct=income+income_other | state=posted | type=invoice_refund_neg | date=aml.date | norm_C40",
+      "source": "account.move.line",
+      "nov": 6466.25,
+      "dec": 6496.5,
+      "diff_nov": 0.0,
+      "diff_dec": 0.0,
+      "score": 0.0
+    },
+    {
+      "label": "AML | all_3_variants | acct=income+income_other | state=posted+draft | type=invoice_refund_neg | date=invoice_date | norm_C40",
+      "source": "account.move.line",
+      "nov": 6466.25,
+      "dec": 6496.5,
+      "diff_nov": 0.0,
+      "diff_dec": 0.0,
+      "score": 0.0
+    },
+    {
+      "label": "AML | all_3_variants | acct=income+income_other | state=posted+draft | type=invoice_refund_neg | date=move.date | norm_C40",
+      "source": "account.move.line",
+      "nov": 6466.25,
+      "dec": 6496.5,
+      "diff_nov": 0.0,
+      "diff_dec": 0.0,
+      "score": 0.0
+    },
+    {
+      "label": "AML | all_3_variants | acct=income+income_other | state=posted+draft | type=invoice_refund_neg | date=aml.date | norm_C40",
+      "source": "account.move.line",
+      "nov": 6466.25,
+      "dec": 6496.5,
+      "diff_nov": 0.0,
+      "diff_dec": 0.0,
+      "score": 0.0
+    },
+    {
+      "label": "AML | active_only_7090 | acct=income | state=posted | type=invoice_refund_neg | date=invoice_date | norm_C40",
+      "source": "account.move.line",
+      "nov": 6466.25,
+      "dec": 6496.5,
+      "diff_nov": 0.0,
+      "diff_dec": 0.0,
+      "score": 0.0
+    },
+    {
+      "label": "AML | active_only_7090 | acct=income | state=posted | type=invoice_refund_neg | date=move.date | norm_C40",
+      "source": "account.move.line",
+      "nov": 6466.25,
+      "dec": 6496.5,
+      "diff_nov": 0.0,
+      "diff_dec": 0.0,
+      "score": 0.0
+    },
+    {
+      "label": "AML | active_only_7090 | acct=income | state=posted | type=invoice_refund_neg | date=aml.date | norm_C40",
+      "source": "account.move.line",
+      "nov": 6466.25,
+      "dec": 6496.5,
+      "diff_nov": 0.0,
+      "diff_dec": 0.0,
+      "score": 0.0
+    },
+    {
+      "label": "AML | active_only_7090 | acct=income | state=posted+draft | type=invoice_refund_neg | date=invoice_date | norm_C40",
+      "source": "account.move.line",
+      "nov": 6466.25,
+      "dec": 6496.5,
+      "diff_nov": 0.0,
+      "diff_dec": 0.0,
+      "score": 0.0
+    },
+    {
+      "label": "AML | active_only_7090 | acct=income | state=posted+draft | type=invoice_refund_neg | date=move.date | norm_C40",
+      "source": "account.move.line",
+      "nov": 6466.25,
+      "dec": 6496.5,
+      "diff_nov": 0.0,
+      "diff_dec": 0.0,
+      "score": 0.0
+    },
+    {
+      "label": "AML | active_only_7090 | acct=income | state=posted+draft | type=invoice_refund_neg | date=aml.date | norm_C40",
+      "source": "account.move.line",
+      "nov": 6466.25,
+      "dec": 6496.5,
+      "diff_nov": 0.0,
+      "diff_dec": 0.0,
+      "score": 0.0
+    },
+    {
+      "label": "AML | active_only_7090 | acct=income+income_other | state=posted | type=invoice_refund_neg | date=invoice_date | norm_C40",
+      "source": "account.move.line",
+      "nov": 6466.25,
+      "dec": 6496.5,
+      "diff_nov": 0.0,
+      "diff_dec": 0.0,
+      "score": 0.0
+    },
+    {
+      "label": "AML | active_only_7090 | acct=income+income_other | state=posted | type=invoice_refund_neg | date=move.date | norm_C40",
+      "source": "account.move.line",
+      "nov": 6466.25,
+      "dec": 6496.5,
+      "diff_nov": 0.0,
+      "diff_dec": 0.0,
+      "score": 0.0
+    },
+    {
+      "label": "AML | active_only_7090 | acct=income+income_other | state=posted | type=invoice_refund_neg | date=aml.date | norm_C40",
+      "source": "account.move.line",
+      "nov": 6466.25,
+      "dec": 6496.5,
+      "diff_nov": 0.0,
+      "diff_dec": 0.0,
+      "score": 0.0
+    },
+    {
+      "label": "AML | active_only_7090 | acct=income+income_other | state=posted+draft | type=invoice_refund_neg | date=invoice_date | norm_C40",
+      "source": "account.move.line",
+      "nov": 6466.25,
+      "dec": 6496.5,
+      "diff_nov": 0.0,
+      "diff_dec": 0.0,
+      "score": 0.0
+    },
+    {
+      "label": "AML | active_only_7090 | acct=income+income_other | state=posted+draft | type=invoice_refund_neg | date=move.date | norm_C40",
+      "source": "account.move.line",
+      "nov": 6466.25,
+      "dec": 6496.5,
+      "diff_nov": 0.0,
+      "diff_dec": 0.0,
+      "score": 0.0
+    },
+    {
+      "label": "AML | active_only_7090 | acct=income+income_other | state=posted+draft | type=invoice_refund_neg | date=aml.date | norm_C40",
+      "source": "account.move.line",
+      "nov": 6466.25,
+      "dec": 6496.5,
+      "diff_nov": 0.0,
+      "diff_dec": 0.0,
+      "score": 0.0
+    },
+    {
+      "label": "AML | all_except_archived_2371 | acct=income | state=posted | type=invoice_refund_neg | date=invoice_date | norm_C40",
+      "source": "account.move.line",
+      "nov": 6466.25,
+      "dec": 6496.5,
+      "diff_nov": 0.0,
+      "diff_dec": 0.0,
+      "score": 0.0
+    },
+    {
+      "label": "AML | all_except_archived_2371 | acct=income | state=posted | type=invoice_refund_neg | date=move.date | norm_C40",
+      "source": "account.move.line",
+      "nov": 6466.25,
+      "dec": 6496.5,
+      "diff_nov": 0.0,
+      "diff_dec": 0.0,
+      "score": 0.0
+    },
+    {
+      "label": "AML | all_except_archived_2371 | acct=income | state=posted | type=invoice_refund_neg | date=aml.date | norm_C40",
+      "source": "account.move.line",
+      "nov": 6466.25,
+      "dec": 6496.5,
+      "diff_nov": 0.0,
+      "diff_dec": 0.0,
+      "score": 0.0
+    },
+    {
+      "label": "AML | all_except_archived_2371 | acct=income | state=posted+draft | type=invoice_refund_neg | date=invoice_date | norm_C40",
+      "source": "account.move.line",
+      "nov": 6466.25,
+      "dec": 6496.5,
+      "diff_nov": 0.0,
+      "diff_dec": 0.0,
+      "score": 0.0
+    },
+    {
+      "label": "AML | all_except_archived_2371 | acct=income | state=posted+draft | type=invoice_refund_neg | date=move.date | norm_C40",
+      "source": "account.move.line",
+      "nov": 6466.25,
+      "dec": 6496.5,
+      "diff_nov": 0.0,
+      "diff_dec": 0.0,
+      "score": 0.0
+    },
+    {
+      "label": "AML | all_except_archived_2371 | acct=income | state=posted+draft | type=invoice_refund_neg | date=aml.date | norm_C40",
+      "source": "account.move.line",
+      "nov": 6466.25,
+      "dec": 6496.5,
+      "diff_nov": 0.0,
+      "diff_dec": 0.0,
+      "score": 0.0
+    },
+    {
+      "label": "AML | all_except_archived_2371 | acct=income+income_other | state=posted | type=invoice_refund_neg | date=invoice_date | norm_C40",
+      "source": "account.move.line",
+      "nov": 6466.25,
+      "dec": 6496.5,
+      "diff_nov": 0.0,
+      "diff_dec": 0.0,
+      "score": 0.0
+    },
+    {
+      "label": "AML | all_except_archived_2371 | acct=income+income_other | state=posted | type=invoice_refund_neg | date=move.date | norm_C40",
+      "source": "account.move.line",
+      "nov": 6466.25,
+      "dec": 6496.5,
+      "diff_nov": 0.0,
+      "diff_dec": 0.0,
+      "score": 0.0
+    },
+    {
+      "label": "AML | all_except_archived_2371 | acct=income+income_other | state=posted | type=invoice_refund_neg | date=aml.date | norm_C40",
+      "source": "account.move.line",
+      "nov": 6466.25,
+      "dec": 6496.5,
+      "diff_nov": 0.0,
+      "diff_dec": 0.0,
+      "score": 0.0
+    },
+    {
+      "label": "AML | all_except_archived_2371 | acct=income+income_other | state=posted+draft | type=invoice_refund_neg | date=invoice_date | norm_C40",
+      "source": "account.move.line",
+      "nov": 6466.25,
+      "dec": 6496.5,
+      "diff_nov": 0.0,
+      "diff_dec": 0.0,
+      "score": 0.0
+    },
+    {
+      "label": "AML | all_except_archived_2371 | acct=income+income_other | state=posted+draft | type=invoice_refund_neg | date=move.date | norm_C40",
+      "source": "account.move.line",
+      "nov": 6466.25,
+      "dec": 6496.5,
+      "diff_nov": 0.0,
+      "diff_dec": 0.0,
+      "score": 0.0
+    },
+    {
+      "label": "AML | all_except_archived_2371 | acct=income+income_other | state=posted+draft | type=invoice_refund_neg | date=aml.date | norm_C40",
+      "source": "account.move.line",
+      "nov": 6466.25,
+      "dec": 6496.5,
+      "diff_nov": 0.0,
+      "diff_dec": 0.0,
+      "score": 0.0
+    },
+    {
+      "label": "SOL | all_3_variants | state=sale_done | qty=qty_delivered_gt0 | date=eff_or_order | norm_C40",
+      "source": "sale.order.line",
+      "nov": 6370.8,
+      "dec": 6496.75,
+      "diff_nov": 95.45,
+      "diff_dec": 0.25,
+      "score": 95.7
+    },
+    {
+      "label": "SOL | all_3_variants | state=sale_done | qty=qty_delivered_any | date=eff_or_order | norm_C40",
+      "source": "sale.order.line",
+      "nov": 6370.8,
+      "dec": 6496.75,
+      "diff_nov": 95.45,
+      "diff_dec": 0.25,
+      "score": 95.7
+    },
+    {
+      "label": "SOL | all_3_variants | state=sale_only | qty=qty_delivered_gt0 | date=eff_or_order | norm_C40",
+      "source": "sale.order.line",
+      "nov": 6370.8,
+      "dec": 6496.75,
+      "diff_nov": 95.45,
+      "diff_dec": 0.25,
+      "score": 95.7
+    },
+    {
+      "label": "SOL | all_3_variants | state=sale_only | qty=qty_delivered_any | date=eff_or_order | norm_C40",
+      "source": "sale.order.line",
+      "nov": 6370.8,
+      "dec": 6496.75,
+      "diff_nov": 95.45,
+      "diff_dec": 0.25,
+      "score": 95.7
+    },
+    {
+      "label": "SOL | active_only_7090 | state=sale_done | qty=qty_delivered_gt0 | date=eff_or_order | norm_C40",
+      "source": "sale.order.line",
+      "nov": 6370.8,
+      "dec": 6496.75,
+      "diff_nov": 95.45,
+      "diff_dec": 0.25,
+      "score": 95.7
+    },
+    {
+      "label": "SOL | active_only_7090 | state=sale_done | qty=qty_delivered_any | date=eff_or_order | norm_C40",
+      "source": "sale.order.line",
+      "nov": 6370.8,
+      "dec": 6496.75,
+      "diff_nov": 95.45,
+      "diff_dec": 0.25,
+      "score": 95.7
+    },
+    {
+      "label": "SOL | active_only_7090 | state=sale_only | qty=qty_delivered_gt0 | date=eff_or_order | norm_C40",
+      "source": "sale.order.line",
+      "nov": 6370.8,
+      "dec": 6496.75,
+      "diff_nov": 95.45,
+      "diff_dec": 0.25,
+      "score": 95.7
+    },
+    {
+      "label": "SOL | active_only_7090 | state=sale_only | qty=qty_delivered_any | date=eff_or_order | norm_C40",
+      "source": "sale.order.line",
+      "nov": 6370.8,
+      "dec": 6496.75,
+      "diff_nov": 95.45,
+      "diff_dec": 0.25,
+      "score": 95.7
+    },
+    {
+      "label": "SOL | all_except_archived_2371 | state=sale_done | qty=qty_delivered_gt0 | date=eff_or_order | norm_C40",
+      "source": "sale.order.line",
+      "nov": 6370.8,
+      "dec": 6496.75,
+      "diff_nov": 95.45,
+      "diff_dec": 0.25,
+      "score": 95.7
+    },
+    {
+      "label": "SOL | all_except_archived_2371 | state=sale_done | qty=qty_delivered_any | date=eff_or_order | norm_C40",
+      "source": "sale.order.line",
+      "nov": 6370.8,
+      "dec": 6496.75,
+      "diff_nov": 95.45,
+      "diff_dec": 0.25,
+      "score": 95.7
+    },
+    {
+      "label": "SOL | all_except_archived_2371 | state=sale_only | qty=qty_delivered_gt0 | date=eff_or_order | norm_C40",
+      "source": "sale.order.line",
+      "nov": 6370.8,
+      "dec": 6496.75,
+      "diff_nov": 95.45,
+      "diff_dec": 0.25,
+      "score": 95.7
+    },
+    {
+      "label": "SOL | all_except_archived_2371 | state=sale_only | qty=qty_delivered_any | date=eff_or_order | norm_C40",
+      "source": "sale.order.line",
+      "nov": 6370.8,
+      "dec": 6496.75,
+      "diff_nov": 95.45,
+      "diff_dec": 0.25,
+      "score": 95.7
+    },
+    {
+      "label": "SOL | all_3_variants | state=sale_done | qty=qty_delivered_gt0 | date=eff_or_commit | norm_C40",
+      "source": "sale.order.line",
+      "nov": 6366.8,
+      "dec": 6496.75,
+      "diff_nov": 99.45,
+      "diff_dec": 0.25,
+      "score": 99.7
+    },
+    {
+      "label": "SOL | all_3_variants | state=sale_done | qty=qty_delivered_any | date=eff_or_commit | norm_C40",
+      "source": "sale.order.line",
+      "nov": 6366.8,
+      "dec": 6496.75,
+      "diff_nov": 99.45,
+      "diff_dec": 0.25,
+      "score": 99.7
+    }
+  ],
+  "sales_total_candidates": 738,
+  "purchase_ordered_top30": [
+    {
+      "label": "POL | all_3_variants | state=all_states | date=date_planned | qty=product_qty | norm_C40",
+      "value_nov": 5917.0,
+      "diff": 0.0
+    },
+    {
+      "label": "POL | all_3_variants | state=all_states | date=date_planned | qty=product_qty | raw",
+      "value_nov": 5917.0,
+      "diff": 0.0
+    },
+    {
+      "label": "POL | active_only_7090 | state=all_states | date=date_planned | qty=product_qty | norm_C40",
+      "value_nov": 5917.0,
+      "diff": 0.0
+    },
+    {
+      "label": "POL | active_only_7090 | state=all_states | date=date_planned | qty=product_qty | raw",
+      "value_nov": 5917.0,
+      "diff": 0.0
+    },
+    {
+      "label": "POL | all_except_archived_2371 | state=all_states | date=date_planned | qty=product_qty | norm_C40",
+      "value_nov": 5917.0,
+      "diff": 0.0
+    },
+    {
+      "label": "POL | all_except_archived_2371 | state=all_states | date=date_planned | qty=product_qty | raw",
+      "value_nov": 5917.0,
+      "diff": 0.0
+    },
+    {
+      "label": "POL | all_3_variants | state=purchase_done | date=date_planned | qty=product_qty | norm_C40",
+      "value_nov": 5855.0,
+      "diff": 62.0
+    },
+    {
+      "label": "POL | all_3_variants | state=purchase_done | date=date_planned | qty=product_qty | raw",
+      "value_nov": 5855.0,
+      "diff": 62.0
+    },
+    {
+      "label": "POL | active_only_7090 | state=purchase_done | date=date_planned | qty=product_qty | norm_C40",
+      "value_nov": 5855.0,
+      "diff": 62.0
+    },
+    {
+      "label": "POL | active_only_7090 | state=purchase_done | date=date_planned | qty=product_qty | raw",
+      "value_nov": 5855.0,
+      "diff": 62.0
+    },
+    {
+      "label": "POL | all_except_archived_2371 | state=purchase_done | date=date_planned | qty=product_qty | norm_C40",
+      "value_nov": 5855.0,
+      "diff": 62.0
+    },
+    {
+      "label": "POL | all_except_archived_2371 | state=purchase_done | date=date_planned | qty=product_qty | raw",
+      "value_nov": 5855.0,
+      "diff": 62.0
+    },
+    {
+      "label": "POL | all_3_variants | state=purchase_only | date=date_planned | qty=product_qty | norm_C40",
+      "value_nov": 5022.0,
+      "diff": 895.0
+    },
+    {
+      "label": "POL | all_3_variants | state=purchase_only | date=date_planned | qty=product_qty | raw",
+      "value_nov": 5022.0,
+      "diff": 895.0
+    },
+    {
+      "label": "POL | active_only_7090 | state=purchase_only | date=date_planned | qty=product_qty | norm_C40",
+      "value_nov": 5022.0,
+      "diff": 895.0
+    },
+    {
+      "label": "POL | active_only_7090 | state=purchase_only | date=date_planned | qty=product_qty | raw",
+      "value_nov": 5022.0,
+      "diff": 895.0
+    },
+    {
+      "label": "POL | all_except_archived_2371 | state=purchase_only | date=date_planned | qty=product_qty | norm_C40",
+      "value_nov": 5022.0,
+      "diff": 895.0
+    },
+    {
+      "label": "POL | all_except_archived_2371 | state=purchase_only | date=date_planned | qty=product_qty | raw",
+      "value_nov": 5022.0,
+      "diff": 895.0
+    },
+    {
+      "label": "POL | all_3_variants | state=purchase_only | date=date_order | qty=product_qty | norm_C40",
+      "value_nov": 7500.0,
+      "diff": 1583.0
+    },
+    {
+      "label": "POL | all_3_variants | state=purchase_only | date=date_order | qty=product_qty | raw",
+      "value_nov": 7500.0,
+      "diff": 1583.0
+    },
+    {
+      "label": "POL | all_3_variants | state=purchase_only | date=effective_date | qty=product_qty | norm_C40",
+      "value_nov": 7500.0,
+      "diff": 1583.0
+    },
+    {
+      "label": "POL | all_3_variants | state=purchase_only | date=effective_date | qty=product_qty | raw",
+      "value_nov": 7500.0,
+      "diff": 1583.0
+    },
+    {
+      "label": "POL | active_only_7090 | state=purchase_only | date=date_order | qty=product_qty | norm_C40",
+      "value_nov": 7500.0,
+      "diff": 1583.0
+    },
+    {
+      "label": "POL | active_only_7090 | state=purchase_only | date=date_order | qty=product_qty | raw",
+      "value_nov": 7500.0,
+      "diff": 1583.0
+    },
+    {
+      "label": "POL | active_only_7090 | state=purchase_only | date=effective_date | qty=product_qty | norm_C40",
+      "value_nov": 7500.0,
+      "diff": 1583.0
+    },
+    {
+      "label": "POL | active_only_7090 | state=purchase_only | date=effective_date | qty=product_qty | raw",
+      "value_nov": 7500.0,
+      "diff": 1583.0
+    },
+    {
+      "label": "POL | all_except_archived_2371 | state=purchase_only | date=date_order | qty=product_qty | norm_C40",
+      "value_nov": 7500.0,
+      "diff": 1583.0
+    },
+    {
+      "label": "POL | all_except_archived_2371 | state=purchase_only | date=date_order | qty=product_qty | raw",
+      "value_nov": 7500.0,
+      "diff": 1583.0
+    },
+    {
+      "label": "POL | all_except_archived_2371 | state=purchase_only | date=effective_date | qty=product_qty | norm_C40",
+      "value_nov": 7500.0,
+      "diff": 1583.0
+    },
+    {
+      "label": "POL | all_except_archived_2371 | state=purchase_only | date=effective_date | qty=product_qty | raw",
+      "value_nov": 7500.0,
+      "diff": 1583.0
+    }
+  ],
+  "purchase_received_top30": [
+    {
+      "label": "POL | all_3_variants | state=purchase_done | date=date_planned | qty=qty_received | norm_C40",
+      "value_nov": 5500.0,
+      "diff": 0.0
+    },
+    {
+      "label": "POL | all_3_variants | state=purchase_done | date=date_planned | qty=qty_received | raw",
+      "value_nov": 5500.0,
+      "diff": 0.0
+    },
+    {
+      "label": "POL | all_3_variants | state=all_states | date=date_planned | qty=qty_received | norm_C40",
+      "value_nov": 5500.0,
+      "diff": 0.0
+    },
+    {
+      "label": "POL | all_3_variants | state=all_states | date=date_planned | qty=qty_received | raw",
+      "value_nov": 5500.0,
+      "diff": 0.0
+    },
+    {
+      "label": "POL | active_only_7090 | state=purchase_done | date=date_planned | qty=qty_received | norm_C40",
+      "value_nov": 5500.0,
+      "diff": 0.0
+    },
+    {
+      "label": "POL | active_only_7090 | state=purchase_done | date=date_planned | qty=qty_received | raw",
+      "value_nov": 5500.0,
+      "diff": 0.0
+    },
+    {
+      "label": "POL | active_only_7090 | state=all_states | date=date_planned | qty=qty_received | norm_C40",
+      "value_nov": 5500.0,
+      "diff": 0.0
+    },
+    {
+      "label": "POL | active_only_7090 | state=all_states | date=date_planned | qty=qty_received | raw",
+      "value_nov": 5500.0,
+      "diff": 0.0
+    },
+    {
+      "label": "POL | all_except_archived_2371 | state=purchase_done | date=date_planned | qty=qty_received | norm_C40",
+      "value_nov": 5500.0,
+      "diff": 0.0
+    },
+    {
+      "label": "POL | all_except_archived_2371 | state=purchase_done | date=date_planned | qty=qty_received | raw",
+      "value_nov": 5500.0,
+      "diff": 0.0
+    },
+    {
+      "label": "POL | all_except_archived_2371 | state=all_states | date=date_planned | qty=qty_received | norm_C40",
+      "value_nov": 5500.0,
+      "diff": 0.0
+    },
+    {
+      "label": "POL | all_except_archived_2371 | state=all_states | date=date_planned | qty=qty_received | raw",
+      "value_nov": 5500.0,
+      "diff": 0.0
+    },
+    {
+      "label": "POL | all_3_variants | state=purchase_only | date=date_planned | qty=qty_received | norm_C40",
+      "value_nov": 4667.0,
+      "diff": 833.0
+    },
+    {
+      "label": "POL | all_3_variants | state=purchase_only | date=date_planned | qty=qty_received | raw",
+      "value_nov": 4667.0,
+      "diff": 833.0
+    },
+    {
+      "label": "POL | active_only_7090 | state=purchase_only | date=date_planned | qty=qty_received | norm_C40",
+      "value_nov": 4667.0,
+      "diff": 833.0
+    },
+    {
+      "label": "POL | active_only_7090 | state=purchase_only | date=date_planned | qty=qty_received | raw",
+      "value_nov": 4667.0,
+      "diff": 833.0
+    },
+    {
+      "label": "POL | all_except_archived_2371 | state=purchase_only | date=date_planned | qty=qty_received | norm_C40",
+      "value_nov": 4667.0,
+      "diff": 833.0
+    },
+    {
+      "label": "POL | all_except_archived_2371 | state=purchase_only | date=date_planned | qty=qty_received | raw",
+      "value_nov": 4667.0,
+      "diff": 833.0
+    },
+    {
+      "label": "AML | all_3_variants | acct=asset_current | type=inv_only | date=move.date | norm_C40",
+      "value_nov": 6901.0,
+      "diff": 1401.0
+    },
+    {
+      "label": "AML | all_3_variants | acct=asset_current | type=inv_only | date=move.date | raw",
+      "value_nov": 6901.0,
+      "diff": 1401.0
+    },
+    {
+      "label": "AML | all_3_variants | acct=asset_current | type=inv_refund_neg | date=move.date | norm_C40",
+      "value_nov": 6901.0,
+      "diff": 1401.0
+    },
+    {
+      "label": "AML | all_3_variants | acct=asset_current | type=inv_refund_neg | date=move.date | raw",
+      "value_nov": 6901.0,
+      "diff": 1401.0
+    },
+    {
+      "label": "AML | all_3_variants | acct=expense+asset | type=inv_only | date=move.date | norm_C40",
+      "value_nov": 6901.0,
+      "diff": 1401.0
+    },
+    {
+      "label": "AML | all_3_variants | acct=expense+asset | type=inv_only | date=move.date | raw",
+      "value_nov": 6901.0,
+      "diff": 1401.0
+    },
+    {
+      "label": "AML | all_3_variants | acct=expense+asset | type=inv_refund_neg | date=move.date | norm_C40",
+      "value_nov": 6901.0,
+      "diff": 1401.0
+    },
+    {
+      "label": "AML | all_3_variants | acct=expense+asset | type=inv_refund_neg | date=move.date | raw",
+      "value_nov": 6901.0,
+      "diff": 1401.0
+    },
+    {
+      "label": "AML | active_only_7090 | acct=asset_current | type=inv_only | date=move.date | norm_C40",
+      "value_nov": 6901.0,
+      "diff": 1401.0
+    },
+    {
+      "label": "AML | active_only_7090 | acct=asset_current | type=inv_only | date=move.date | raw",
+      "value_nov": 6901.0,
+      "diff": 1401.0
+    },
+    {
+      "label": "AML | active_only_7090 | acct=asset_current | type=inv_refund_neg | date=move.date | norm_C40",
+      "value_nov": 6901.0,
+      "diff": 1401.0
+    },
+    {
+      "label": "AML | active_only_7090 | acct=asset_current | type=inv_refund_neg | date=move.date | raw",
+      "value_nov": 6901.0,
+      "diff": 1401.0
+    }
+  ],
+  "purchase_total_top30": [
+    {
+      "label": "AML | all_3_variants | acct=expense_direct_cost | type=inv_only | date=invoice_date | norm_C40 | total",
+      "value": 0.0,
+      "diff": 8203.0
+    },
+    {
+      "label": "AML | all_3_variants | acct=expense_direct_cost | type=inv_only | date=invoice_date | raw | total",
+      "value": 0.0,
+      "diff": 8203.0
+    },
+    {
+      "label": "AML | all_3_variants | acct=expense_direct_cost | type=inv_only | date=move.date | norm_C40 | total",
+      "value": 0.0,
+      "diff": 8203.0
+    },
+    {
+      "label": "AML | all_3_variants | acct=expense_direct_cost | type=inv_only | date=move.date | raw | total",
+      "value": 0.0,
+      "diff": 8203.0
+    },
+    {
+      "label": "AML | all_3_variants | acct=expense_direct_cost | type=inv_refund_neg | date=invoice_date | norm_C40 | total",
+      "value": 0.0,
+      "diff": 8203.0
+    },
+    {
+      "label": "AML | all_3_variants | acct=expense_direct_cost | type=inv_refund_neg | date=invoice_date | raw | total",
+      "value": 0.0,
+      "diff": 8203.0
+    },
+    {
+      "label": "AML | all_3_variants | acct=expense_direct_cost | type=inv_refund_neg | date=move.date | norm_C40 | total",
+      "value": 0.0,
+      "diff": 8203.0
+    },
+    {
+      "label": "AML | all_3_variants | acct=expense_direct_cost | type=inv_refund_neg | date=move.date | raw | total",
+      "value": 0.0,
+      "diff": 8203.0
+    },
+    {
+      "label": "AML | active_only_7090 | acct=expense_direct_cost | type=inv_only | date=invoice_date | norm_C40 | total",
+      "value": 0.0,
+      "diff": 8203.0
+    },
+    {
+      "label": "AML | active_only_7090 | acct=expense_direct_cost | type=inv_only | date=invoice_date | raw | total",
+      "value": 0.0,
+      "diff": 8203.0
+    },
+    {
+      "label": "AML | active_only_7090 | acct=expense_direct_cost | type=inv_only | date=move.date | norm_C40 | total",
+      "value": 0.0,
+      "diff": 8203.0
+    },
+    {
+      "label": "AML | active_only_7090 | acct=expense_direct_cost | type=inv_only | date=move.date | raw | total",
+      "value": 0.0,
+      "diff": 8203.0
+    },
+    {
+      "label": "AML | active_only_7090 | acct=expense_direct_cost | type=inv_refund_neg | date=invoice_date | norm_C40 | total",
+      "value": 0.0,
+      "diff": 8203.0
+    },
+    {
+      "label": "AML | active_only_7090 | acct=expense_direct_cost | type=inv_refund_neg | date=invoice_date | raw | total",
+      "value": 0.0,
+      "diff": 8203.0
+    },
+    {
+      "label": "AML | active_only_7090 | acct=expense_direct_cost | type=inv_refund_neg | date=move.date | norm_C40 | total",
+      "value": 0.0,
+      "diff": 8203.0
+    },
+    {
+      "label": "AML | active_only_7090 | acct=expense_direct_cost | type=inv_refund_neg | date=move.date | raw | total",
+      "value": 0.0,
+      "diff": 8203.0
+    },
+    {
+      "label": "AML | all_except_archived_2371 | acct=expense_direct_cost | type=inv_only | date=invoice_date | norm_C40 | total",
+      "value": 0.0,
+      "diff": 8203.0
+    },
+    {
+      "label": "AML | all_except_archived_2371 | acct=expense_direct_cost | type=inv_only | date=invoice_date | raw | total",
+      "value": 0.0,
+      "diff": 8203.0
+    },
+    {
+      "label": "AML | all_except_archived_2371 | acct=expense_direct_cost | type=inv_only | date=move.date | norm_C40 | total",
+      "value": 0.0,
+      "diff": 8203.0
+    },
+    {
+      "label": "AML | all_except_archived_2371 | acct=expense_direct_cost | type=inv_only | date=move.date | raw | total",
+      "value": 0.0,
+      "diff": 8203.0
+    },
+    {
+      "label": "AML | all_except_archived_2371 | acct=expense_direct_cost | type=inv_refund_neg | date=invoice_date | norm_C40 | total",
+      "value": 0.0,
+      "diff": 8203.0
+    },
+    {
+      "label": "AML | all_except_archived_2371 | acct=expense_direct_cost | type=inv_refund_neg | date=invoice_date | raw | total",
+      "value": 0.0,
+      "diff": 8203.0
+    },
+    {
+      "label": "AML | all_except_archived_2371 | acct=expense_direct_cost | type=inv_refund_neg | date=move.date | norm_C40 | total",
+      "value": 0.0,
+      "diff": 8203.0
+    },
+    {
+      "label": "AML | all_except_archived_2371 | acct=expense_direct_cost | type=inv_refund_neg | date=move.date | raw | total",
+      "value": 0.0,
+      "diff": 8203.0
+    },
+    {
+      "label": "POL | total | all_3_variants | state=purchase_only | qty=qty_received | norm_C40",
+      "value": 90926.0,
+      "diff": 82723.0
+    },
+    {
+      "label": "POL | total | all_3_variants | state=purchase_only | qty=qty_received | raw",
+      "value": 90926.0,
+      "diff": 82723.0
+    },
+    {
+      "label": "POL | total | all_3_variants | state=purchase_only | qty=qty_received | norm_C40",
+      "value": 90926.0,
+      "diff": 82723.0
+    },
+    {
+      "label": "POL | total | all_3_variants | state=purchase_only | qty=qty_received | raw",
+      "value": 90926.0,
+      "diff": 82723.0
+    },
+    {
+      "label": "POL | total | all_3_variants | state=purchase_only | qty=qty_received | norm_C40",
+      "value": 90926.0,
+      "diff": 82723.0
+    },
+    {
+      "label": "POL | total | all_3_variants | state=purchase_only | qty=qty_received | raw",
+      "value": 90926.0,
+      "diff": 82723.0
+    }
+  ]
+}

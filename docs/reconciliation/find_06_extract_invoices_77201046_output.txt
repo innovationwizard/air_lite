@@ -1,0 +1,27 @@
+Auth → https://suplicentro-2801-27990914.dev.odoo.com
+uid=182
+
+1. Fetching account.move.line for 3 variants...
+   aml IDs: 35744
+   account.move.line records: 35744
+
+2. Fetching account.move (parents)...
+   Unique move IDs: 13840
+   account.move records: 13840
+
+3. Fetching account.account (chart)...
+   Unique account IDs: 8
+   account.account records: 8
+
+=== Extraction summary ===
+   account.move.line: 35744
+   account.move:      13840
+   account.account:   8
+
+   move_type distribution: {'entry': 7137, 'out_invoice': 6302, 'in_invoice': 217, 'out_refund': 184}
+   state distribution:     {'posted': 13559, 'cancel': 280, 'draft': 1}
+   account_type distribution (by aml count): {'asset_current': 21704, 'income': 6503, 'expense_direct_cost': 6209, 'liability_current': 1319, 'equity': 9}
+
+Saved: /Users/jorgeluiscontrerasherrera/Documents/_git/air_lite/docs/reconciliation/odoo_extract_77201046_invoices_20260423_161419.json
+Latest pointer: /Users/jorgeluiscontrerasherrera/Documents/_git/air_lite/docs/reconciliation/odoo_extract_77201046_invoices_latest.json
+Size: 41.4 MB
