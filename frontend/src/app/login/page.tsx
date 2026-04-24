@@ -14,6 +14,12 @@ const CALLBACK_ERROR_MESSAGES: Record<string, string> = {
   invalid_code: 'El enlace ya se usó o expiró. Solicitá uno nuevo.',
 };
 
+// Demo shorthands: typing e.g. "gerencia" resolves to the registered email
+// so decision-makers don't have to type out the full address on stage.
+const USERNAME_MAP: Record<string, string> = {
+  gerencia: 'gerencia@airefill.app',
+};
+
 export default function LoginPage() {
   const router = useRouter();
   const supabase = createClient();
@@ -63,8 +69,12 @@ export default function LoginPage() {
     setError(null);
     setLoading(true);
 
+    const resolvedEmail = email.includes('@')
+      ? email
+      : (USERNAME_MAP[email.trim().toLowerCase()] ?? email);
+
     const { error: authError } = await supabase.auth.signInWithPassword({
-      email,
+      email: resolvedEmail,
       password,
     });
 
@@ -107,7 +117,7 @@ export default function LoginPage() {
             </label>
             <input
               id="email"
-              type="email"
+              type="text"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
