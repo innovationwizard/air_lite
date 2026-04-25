@@ -275,6 +275,12 @@ const allNavGroups: NavGroup[] = [
         icon: Activity,
         subtitle: 'Salud del sistema y ML',
       },
+      {
+        name: 'Forecast Diagnostic',
+        href: '/superuser/forecast-diagnostic',
+        icon: BarChart3,
+        subtitle: 'Ratio bars + series por UoM + drilldown SKU',
+      },
     ],
   },
 ];

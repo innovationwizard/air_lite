@@ -7,11 +7,12 @@ const ML_SERVICE_API_KEY = process.env.ML_SERVICE_API_KEY || '';
 
 export async function GET(
   _request: NextRequest,
-  { params }: { params: { runId: string } },
+  { params }: { params: Promise<{ runId: string }> },
 ) {
   try {
+    const { runId } = await params;
     const response = await fetch(
-      `${ML_SERVICE_URL}/backtest/status/${params.runId}`,
+      `${ML_SERVICE_URL}/backtest/status/${runId}`,
       {
         headers: { 'X-API-Key': ML_SERVICE_API_KEY },
       },

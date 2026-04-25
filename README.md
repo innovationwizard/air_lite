@@ -57,7 +57,7 @@ AIRefill ingests sales, returns, and inventory data from an Aurora PostgreSQL cl
               │ api.airefill│       │  www.airefill   │
               │    .app     │       │      .app       │
               └──────┬──────┘       └─────────────────┘
-                     │ /api/* → 8080     Next.js 14 Frontend
+                     │ /api/* → 8080     Next.js 15 Frontend
               ┌──────▼──────────┐
               │  ECS Fargate    │
               │  airefill-api   │  ← Node 20 · Fastify 4 · Prisma
@@ -124,7 +124,7 @@ airefill/
 │   ├── Dockerfile
 │   └── .env.example
 │
-├── frontend/                     # Next.js 14 App Router (App Runner)
+├── frontend/                     # Next.js 15 App Router (App Runner)
 │   ├── src/
 │   │   ├── middleware.ts         # Auth guard — redirects unauthenticated to /login
 │   │   ├── app/
@@ -233,7 +233,7 @@ npm run dev                # Hot reload via tsx watch
 
 ---
 
-### Frontend — Next.js 14
+### Frontend — Next.js 15
 
 ```bash
 cd frontend

@@ -1,0 +1,45 @@
+Add /superuser/forecast-diagnostic + Next 14→15 vulnerability hardening
+
+Diagnostic chart (the deliverable):
+- New ECharts-based 3-panel page at /superuser/forecast-diagnostic
+  - Panel A: log-scale ratio bars (forecast / 12m history mean), color-bucketed
+    — makes order-of-magnitude misses unmissable
+  - Panel B: per-UoM time series (history solid + forecast dashed), one chart
+    per UoM bucket; never aggregates across distinct stock UoMs (§3 policy)
+  - Panel C: SKU drilldown with native UoM labeled + per-metric ratio table
+- Endpoint /api/superuser/forecast-diagnostic reads revenue_daily +
+  forecast_results, filters non-ok forecast cells from aggregates
+- Migration 20260424000001 grants superuser access to /api/superuser/*
+- Sidebar entry under Sistema, gated by CAN_VIEW_SYSTEM
+- echarts + echarts-for-react added; dynamic-imported for SSR safety
+
+Vulnerability hardening (V1–V6, npm audit 16 → 0):
+- npm audit fix cleared 7 compatible auto-fixes (lodash, minimatch, picomatch,
+  flatted, ajv, brace-expansion, js-yaml)
+- next ^14.2.18 → ^15.5.15: resolves 5 production CVEs in next core
+  (Image Optimizer DoS, RSC HTTP deserialization, rewrite smuggling,
+  next/image disk cache growth, RSC DoS). 15.5.15 chosen over 16.x to keep
+  React 18 peer — same security outcome, smaller blast radius
+- postcss XSS resolved via "overrides": { "postcss": "^8.5.10" } to force
+  the version bundled inside next to a fixed release
+- eslint-config-next ^14.2.x → ^15.5.15 (dev-only glob command-injection chain)
+- jest-environment-jsdom ^29 → ^30.3.0 (dev-only jsdom chain)
+- Migrated Next 14 → 15 breaking changes: cookies() is now async
+  (lib/supabase/server.ts + callers in lib/auth/server.ts and
+  app/auth/callback/route.ts), dynamic-route params now Promise
+  (backtest/[runId]/route.ts + .../savings/route.ts)
+- npm run build and npm test green; npm audit reports 0 advisories
+
+Documentation:
+- changelogs/2026-04-24_vulnerability-remediation-and-next-15-migration.md
+  — full technical justification, diffs, lessons recorded
+- docs/april_jumpstart/_VULNERABILITY_POLICY.md — codifies the binding
+  policy ("standing pre-existing vulnerabilities are not acceptable") that
+  drove this work, citing _THE_RULES.MD
+- docs/april_jumpstart/_FORECAST_DEEP_DIVE_APR24.md (v4) — plan with
+  immutable relevant quotes, UoM standardization
+  policy, hypothesis triage, execution order
+- docs/april_jumpstart/step0_audit/ — read-only Step 0 audit (script +
+  findings per substep + executive summary) that ruled out H0a, promoted
+  H0b (UoM mismatch) to top hypothesis
+- README.md: Next.js 14 → Next.js 15

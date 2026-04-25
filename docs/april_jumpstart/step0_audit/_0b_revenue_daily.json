@@ -1,0 +1,698 @@
+{
+  "n_rows": 11812,
+  "n_product_ids_in_scope": 23,
+  "global_min_date": "2024-10-01",
+  "global_max_date": "2026-04-23",
+  "per_cell": {
+    "1035|sales": {
+      "n_rows": 459,
+      "min_date": "2024-10-01",
+      "max_date": "2026-03-10",
+      "nonzero_days": 459,
+      "total_qty": 21536.9,
+      "ssot_labels": [
+        "aml_income_posted_invoice_refund_neg_invoice_date_c40"
+      ]
+    },
+    "1096|sales": {
+      "n_rows": 366,
+      "min_date": "2024-10-02",
+      "max_date": "2026-01-28",
+      "nonzero_days": 366,
+      "total_qty": 6678.700000000009,
+      "ssot_labels": [
+        "aml_income_posted_invoice_refund_neg_invoice_date_c40"
+      ]
+    },
+    "1069|sales": {
+      "n_rows": 398,
+      "min_date": "2024-10-01",
+      "max_date": "2026-01-28",
+      "nonzero_days": 398,
+      "total_qty": 33722.94999999999,
+      "ssot_labels": [
+        "aml_income_posted_invoice_refund_neg_invoice_date_c40"
+      ]
+    },
+    "29|sales": {
+      "n_rows": 451,
+      "min_date": "2024-10-01",
+      "max_date": "2026-01-28",
+      "nonzero_days": 451,
+      "total_qty": 112799.20999999999,
+      "ssot_labels": [
+        "aml_income_posted_invoice_refund_neg_invoice_date_c40"
+      ]
+    },
+    "1366|sales": {
+      "n_rows": 457,
+      "min_date": "2024-10-01",
+      "max_date": "2026-03-10",
+      "nonzero_days": 457,
+      "total_qty": 20783.849999999984,
+      "ssot_labels": [
+        "aml_income_posted_invoice_refund_neg_invoice_date_c40"
+      ]
+    },
+    "37|sales": {
+      "n_rows": 472,
+      "min_date": "2024-10-01",
+      "max_date": "2026-03-10",
+      "nonzero_days": 472,
+      "total_qty": 159956.29380000013,
+      "ssot_labels": [
+        "aml_income_posted_invoice_refund_neg_invoice_date_c40"
+      ]
+    },
+    "1606|sales": {
+      "n_rows": 457,
+      "min_date": "2024-10-01",
+      "max_date": "2026-03-10",
+      "nonzero_days": 457,
+      "total_qty": 30413.24480000002,
+      "ssot_labels": [
+        "aml_income_posted_invoice_refund_neg_invoice_date_c40"
+      ]
+    },
+    "1562|sales": {
+      "n_rows": 417,
+      "min_date": "2024-10-01",
+      "max_date": "2026-01-28",
+      "nonzero_days": 416,
+      "total_qty": 16102.59,
+      "ssot_labels": [
+        "aml_income_posted_invoice_refund_neg_invoice_date_c40"
+      ]
+    },
+    "34|sales": {
+      "n_rows": 411,
+      "min_date": "2024-10-01",
+      "max_date": "2026-01-28",
+      "nonzero_days": 411,
+      "total_qty": 90051.81000000007,
+      "ssot_labels": [
+        "aml_income_posted_invoice_refund_neg_invoice_date_c40"
+      ]
+    },
+    "36|sales": {
+      "n_rows": 450,
+      "min_date": "2024-10-01",
+      "max_date": "2026-01-28",
+      "nonzero_days": 450,
+      "total_qty": 42409.589999999975,
+      "ssot_labels": [
+        "aml_income_posted_invoice_refund_neg_invoice_date_c40"
+      ]
+    },
+    "1590|sales": {
+      "n_rows": 436,
+      "min_date": "2024-10-01",
+      "max_date": "2026-03-26",
+      "nonzero_days": 436,
+      "total_qty": 32416.77499999997,
+      "ssot_labels": [
+        "aml_income_posted_invoice_refund_neg_invoice_date_c40"
+      ]
+    },
+    "20|sales": {
+      "n_rows": 459,
+      "min_date": "2024-10-01",
+      "max_date": "2026-03-10",
+      "nonzero_days": 459,
+      "total_qty": 21935.24999999999,
+      "ssot_labels": [
+        "aml_income_posted_invoice_refund_neg_invoice_date_c40"
+      ]
+    },
+    "469|sales": {
+      "n_rows": 409,
+      "min_date": "2024-10-01",
+      "max_date": "2026-01-28",
+      "nonzero_days": 409,
+      "total_qty": 28638.0,
+      "ssot_labels": [
+        "aml_income_posted_invoice_refund_neg_invoice_date_c40"
+      ]
+    },
+    "145|sales": {
+      "n_rows": 369,
+      "min_date": "2024-10-01",
+      "max_date": "2026-01-28",
+      "nonzero_days": 367,
+      "total_qty": 38999.999999999985,
+      "ssot_labels": [
+        "aml_income_posted_invoice_refund_neg_invoice_date_c40"
+      ]
+    },
+    "3|sales": {
+      "n_rows": 405,
+      "min_date": "2024-10-01",
+      "max_date": "2026-01-28",
+      "nonzero_days": 405,
+      "total_qty": 87578.69989999999,
+      "ssot_labels": [
+        "aml_income_posted_invoice_refund_neg_invoice_date_c40"
+      ]
+    },
+    "5|sales": {
+      "n_rows": 453,
+      "min_date": "2024-10-01",
+      "max_date": "2026-04-23",
+      "nonzero_days": 453,
+      "total_qty": 218363.3999999997,
+      "ssot_labels": [
+        "aml_income_posted_invoice_refund_neg_invoice_date_c40"
+      ]
+    },
+    "1127|sales": {
+      "n_rows": 414,
+      "min_date": "2024-10-02",
+      "max_date": "2026-01-28",
+      "nonzero_days": 412,
+      "total_qty": 34602.09,
+      "ssot_labels": [
+        "aml_income_posted_invoice_refund_neg_invoice_date_c40"
+      ]
+    },
+    "33|sales": {
+      "n_rows": 411,
+      "min_date": "2024-10-01",
+      "max_date": "2026-01-28",
+      "nonzero_days": 411,
+      "total_qty": 103126.82499999997,
+      "ssot_labels": [
+        "aml_income_posted_invoice_refund_neg_invoice_date_c40"
+      ]
+    },
+    "1600|sales": {
+      "n_rows": 436,
+      "min_date": "2024-10-01",
+      "max_date": "2026-03-10",
+      "nonzero_days": 436,
+      "total_qty": 20531.546999999977,
+      "ssot_labels": [
+        "aml_income_posted_invoice_refund_neg_invoice_date_c40"
+      ]
+    },
+    "2|sales": {
+      "n_rows": 473,
+      "min_date": "2024-10-01",
+      "max_date": "2026-04-23",
+      "nonzero_days": 473,
+      "total_qty": 580143.62,
+      "ssot_labels": [
+        "aml_income_posted_invoice_refund_neg_invoice_date_c40"
+      ]
+    },
+    "1096|purchases_ordered": {
+      "n_rows": 32,
+      "min_date": "2024-10-11",
+      "max_date": "2026-02-03",
+      "nonzero_days": 31,
+      "total_qty": 11104.0,
+      "ssot_labels": [
+        "pol_all_states_date_planned_product_qty_c40"
+      ]
+    },
+    "1606|purchases_ordered": {
+      "n_rows": 58,
+      "min_date": "2024-10-03",
+      "max_date": "2026-02-03",
+      "nonzero_days": 57,
+      "total_qty": 48573.0,
+      "ssot_labels": [
+        "pol_all_states_date_planned_product_qty_c40"
+      ]
+    },
+    "33|purchases_ordered": {
+      "n_rows": 68,
+      "min_date": "2024-10-03",
+      "max_date": "2026-02-03",
+      "nonzero_days": 68,
+      "total_qty": 172745.0,
+      "ssot_labels": [
+        "pol_all_states_date_planned_product_qty_c40"
+      ]
+    },
+    "34|purchases_ordered": {
+      "n_rows": 58,
+      "min_date": "2024-10-11",
+      "max_date": "2026-02-03",
+      "nonzero_days": 57,
+      "total_qty": 134415.0,
+      "ssot_labels": [
+        "pol_all_states_date_planned_product_qty_c40"
+      ]
+    },
+    "20|purchases_ordered": {
+      "n_rows": 46,
+      "min_date": "2024-10-03",
+      "max_date": "2026-02-03",
+      "nonzero_days": 45,
+      "total_qty": 35803.0,
+      "ssot_labels": [
+        "pol_all_states_date_planned_product_qty_c40"
+      ]
+    },
+    "1366|purchases_ordered": {
+      "n_rows": 46,
+      "min_date": "2024-10-03",
+      "max_date": "2026-02-03",
+      "nonzero_days": 44,
+      "total_qty": 33513.0,
+      "ssot_labels": [
+        "pol_all_states_date_planned_product_qty_c40"
+      ]
+    },
+    "1590|purchases_ordered": {
+      "n_rows": 59,
+      "min_date": "2024-10-11",
+      "max_date": "2026-02-03",
+      "nonzero_days": 59,
+      "total_qty": 55325.0,
+      "ssot_labels": [
+        "pol_all_states_date_planned_product_qty_c40"
+      ]
+    },
+    "1600|purchases_ordered": {
+      "n_rows": 50,
+      "min_date": "2024-10-11",
+      "max_date": "2026-02-03",
+      "nonzero_days": 50,
+      "total_qty": 33879.0,
+      "ssot_labels": [
+        "pol_all_states_date_planned_product_qty_c40"
+      ]
+    },
+    "469|purchases_ordered": {
+      "n_rows": 33,
+      "min_date": "2024-10-03",
+      "max_date": "2026-02-03",
+      "nonzero_days": 31,
+      "total_qty": 50612.0,
+      "ssot_labels": [
+        "pol_all_states_date_planned_product_qty_c40"
+      ]
+    },
+    "1562|purchases_ordered": {
+      "n_rows": 53,
+      "min_date": "2024-10-03",
+      "max_date": "2026-02-03",
+      "nonzero_days": 51,
+      "total_qty": 23837.0,
+      "ssot_labels": [
+        "pol_all_states_date_planned_product_qty_c40"
+      ]
+    },
+    "2|purchases_ordered": {
+      "n_rows": 84,
+      "min_date": "2024-10-02",
+      "max_date": "2026-03-05",
+      "nonzero_days": 84,
+      "total_qty": 765851.0,
+      "ssot_labels": [
+        "pol_all_states_date_planned_product_qty_c40"
+      ]
+    },
+    "3|purchases_ordered": {
+      "n_rows": 38,
+      "min_date": "2024-10-02",
+      "max_date": "2026-01-28",
+      "nonzero_days": 38,
+      "total_qty": 121532.0,
+      "ssot_labels": [
+        "pol_all_states_date_planned_product_qty_c40"
+      ]
+    },
+    "1069|purchases_ordered": {
+      "n_rows": 30,
+      "min_date": "2024-10-09",
+      "max_date": "2026-01-28",
+      "nonzero_days": 28,
+      "total_qty": 43494.0,
+      "ssot_labels": [
+        "pol_all_states_date_planned_product_qty_c40"
+      ]
+    },
+    "145|purchases_ordered": {
+      "n_rows": 25,
+      "min_date": "2024-10-02",
+      "max_date": "2026-01-28",
+      "nonzero_days": 25,
+      "total_qty": 51663.0,
+      "ssot_labels": [
+        "pol_all_states_date_planned_product_qty_c40"
+      ]
+    },
+    "1035|purchases_ordered": {
+      "n_rows": 23,
+      "min_date": "2024-10-02",
+      "max_date": "2026-01-28",
+      "nonzero_days": 23,
+      "total_qty": 35525.0,
+      "ssot_labels": [
+        "pol_all_states_date_planned_product_qty_c40"
+      ]
+    },
+    "1127|purchases_ordered": {
+      "n_rows": 34,
+      "min_date": "2024-10-09",
+      "max_date": "2026-01-28",
+      "nonzero_days": 33,
+      "total_qty": 45296.0,
+      "ssot_labels": [
+        "pol_all_states_date_planned_product_qty_c40"
+      ]
+    },
+    "36|purchases_ordered": {
+      "n_rows": 38,
+      "min_date": "2024-10-02",
+      "max_date": "2026-01-28",
+      "nonzero_days": 38,
+      "total_qty": 75318.0,
+      "ssot_labels": [
+        "pol_all_states_date_planned_product_qty_c40"
+      ]
+    },
+    "37|purchases_ordered": {
+      "n_rows": 58,
+      "min_date": "2024-10-02",
+      "max_date": "2026-01-28",
+      "nonzero_days": 58,
+      "total_qty": 366058.0,
+      "ssot_labels": [
+        "pol_all_states_date_planned_product_qty_c40"
+      ]
+    },
+    "5|purchases_ordered": {
+      "n_rows": 60,
+      "min_date": "2024-10-09",
+      "max_date": "2026-01-28",
+      "nonzero_days": 59,
+      "total_qty": 305646.0,
+      "ssot_labels": [
+        "pol_all_states_date_planned_product_qty_c40"
+      ]
+    },
+    "29|purchases_ordered": {
+      "n_rows": 61,
+      "min_date": "2024-10-09",
+      "max_date": "2026-01-28",
+      "nonzero_days": 61,
+      "total_qty": 168553.0,
+      "ssot_labels": [
+        "pol_all_states_date_planned_product_qty_c40"
+      ]
+    },
+    "1096|purchases_received": {
+      "n_rows": 20,
+      "min_date": "2024-11-08",
+      "max_date": "2026-01-23",
+      "nonzero_days": 20,
+      "total_qty": 6507.0,
+      "ssot_labels": [
+        "pol_purchase_done_date_planned_qty_received_c40"
+      ]
+    },
+    "1606|purchases_received": {
+      "n_rows": 44,
+      "min_date": "2024-10-03",
+      "max_date": "2026-01-23",
+      "nonzero_days": 44,
+      "total_qty": 31233.0,
+      "ssot_labels": [
+        "pol_purchase_done_date_planned_qty_received_c40"
+      ]
+    },
+    "33|purchases_received": {
+      "n_rows": 49,
+      "min_date": "2024-10-03",
+      "max_date": "2026-01-27",
+      "nonzero_days": 49,
+      "total_qty": 102712.0,
+      "ssot_labels": [
+        "pol_purchase_done_date_planned_qty_received_c40"
+      ]
+    },
+    "34|purchases_received": {
+      "n_rows": 43,
+      "min_date": "2024-11-08",
+      "max_date": "2026-01-27",
+      "nonzero_days": 43,
+      "total_qty": 88890.0,
+      "ssot_labels": [
+        "pol_purchase_done_date_planned_qty_received_c40"
+      ]
+    },
+    "20|purchases_received": {
+      "n_rows": 29,
+      "min_date": "2024-10-03",
+      "max_date": "2026-01-23",
+      "nonzero_days": 29,
+      "total_qty": 21486.0,
+      "ssot_labels": [
+        "pol_purchase_done_date_planned_qty_received_c40"
+      ]
+    },
+    "1366|purchases_received": {
+      "n_rows": 27,
+      "min_date": "2024-10-03",
+      "max_date": "2026-01-23",
+      "nonzero_days": 27,
+      "total_qty": 20552.0,
+      "ssot_labels": [
+        "pol_purchase_done_date_planned_qty_received_c40"
+      ]
+    },
+    "1590|purchases_received": {
+      "n_rows": 44,
+      "min_date": "2024-10-31",
+      "max_date": "2026-01-23",
+      "nonzero_days": 44,
+      "total_qty": 32337.0,
+      "ssot_labels": [
+        "pol_purchase_done_date_planned_qty_received_c40"
+      ]
+    },
+    "1600|purchases_received": {
+      "n_rows": 38,
+      "min_date": "2024-10-11",
+      "max_date": "2026-01-23",
+      "nonzero_days": 38,
+      "total_qty": 20805.0,
+      "ssot_labels": [
+        "pol_purchase_done_date_planned_qty_received_c40"
+      ]
+    },
+    "469|purchases_received": {
+      "n_rows": 16,
+      "min_date": "2024-10-03",
+      "max_date": "2026-01-23",
+      "nonzero_days": 16,
+      "total_qty": 27346.0,
+      "ssot_labels": [
+        "pol_purchase_done_date_planned_qty_received_c40"
+      ]
+    },
+    "1562|purchases_received": {
+      "n_rows": 41,
+      "min_date": "2024-10-03",
+      "max_date": "2026-01-23",
+      "nonzero_days": 41,
+      "total_qty": 15840.0,
+      "ssot_labels": [
+        "pol_purchase_done_date_planned_qty_received_c40"
+      ]
+    },
+    "2|purchases_received": {
+      "n_rows": 68,
+      "min_date": "2024-10-02",
+      "max_date": "2026-03-05",
+      "nonzero_days": 68,
+      "total_qty": 587102.0,
+      "ssot_labels": [
+        "pol_purchase_done_date_planned_qty_received_c40"
+      ]
+    },
+    "3|purchases_received": {
+      "n_rows": 29,
+      "min_date": "2024-10-04",
+      "max_date": "2026-01-28",
+      "nonzero_days": 29,
+      "total_qty": 82060.0,
+      "ssot_labels": [
+        "pol_purchase_done_date_planned_qty_received_c40"
+      ]
+    },
+    "1069|purchases_received": {
+      "n_rows": 23,
+      "min_date": "2024-10-11",
+      "max_date": "2026-01-28",
+      "nonzero_days": 23,
+      "total_qty": 35480.0,
+      "ssot_labels": [
+        "pol_purchase_done_date_planned_qty_received_c40"
+      ]
+    },
+    "145|purchases_received": {
+      "n_rows": 19,
+      "min_date": "2024-11-01",
+      "max_date": "2026-01-28",
+      "nonzero_days": 19,
+      "total_qty": 40467.0,
+      "ssot_labels": [
+        "pol_purchase_done_date_planned_qty_received_c40"
+      ]
+    },
+    "1035|purchases_received": {
+      "n_rows": 18,
+      "min_date": "2024-10-04",
+      "max_date": "2026-01-28",
+      "nonzero_days": 18,
+      "total_qty": 21406.0,
+      "ssot_labels": [
+        "pol_purchase_done_date_planned_qty_received_c40"
+      ]
+    },
+    "1127|purchases_received": {
+      "n_rows": 29,
+      "min_date": "2024-10-22",
+      "max_date": "2026-01-28",
+      "nonzero_days": 29,
+      "total_qty": 34828.0,
+      "ssot_labels": [
+        "pol_purchase_done_date_planned_qty_received_c40"
+      ]
+    },
+    "36|purchases_received": {
+      "n_rows": 30,
+      "min_date": "2024-10-02",
+      "max_date": "2026-01-28",
+      "nonzero_days": 30,
+      "total_qty": 41975.0,
+      "ssot_labels": [
+        "pol_purchase_done_date_planned_qty_received_c40"
+      ]
+    },
+    "37|purchases_received": {
+      "n_rows": 44,
+      "min_date": "2024-10-02",
+      "max_date": "2026-01-28",
+      "nonzero_days": 44,
+      "total_qty": 160017.0,
+      "ssot_labels": [
+        "pol_purchase_done_date_planned_qty_received_c40"
+      ]
+    },
+    "5|purchases_received": {
+      "n_rows": 48,
+      "min_date": "2024-10-11",
+      "max_date": "2026-01-28",
+      "nonzero_days": 48,
+      "total_qty": 214091.0,
+      "ssot_labels": [
+        "pol_purchase_done_date_planned_qty_received_c40"
+      ]
+    },
+    "29|purchases_received": {
+      "n_rows": 50,
+      "min_date": "2024-10-09",
+      "max_date": "2026-01-28",
+      "nonzero_days": 50,
+      "total_qty": 110935.0,
+      "ssot_labels": [
+        "pol_purchase_done_date_planned_qty_received_c40"
+      ]
+    },
+    "1113|sales": {
+      "n_rows": 441,
+      "min_date": "2024-10-01",
+      "max_date": "2026-04-17",
+      "nonzero_days": 441,
+      "total_qty": 28295.75,
+      "ssot_labels": [
+        "aml_income_posted_invoice_refund_neg_invoice_date_c40"
+      ]
+    },
+    "1587|sales": {
+      "n_rows": 435,
+      "min_date": "2024-10-01",
+      "max_date": "2026-03-10",
+      "nonzero_days": 435,
+      "total_qty": 17806.699999999975,
+      "ssot_labels": [
+        "aml_income_posted_invoice_refund_neg_invoice_date_c40"
+      ]
+    },
+    "539|sales": {
+      "n_rows": 431,
+      "min_date": "2024-10-01",
+      "max_date": "2026-01-28",
+      "nonzero_days": 430,
+      "total_qty": 17141.0,
+      "ssot_labels": [
+        "aml_income_posted_invoice_refund_neg_invoice_date_c40"
+      ]
+    },
+    "539|purchases_ordered": {
+      "n_rows": 49,
+      "min_date": "2024-10-03",
+      "max_date": "2026-02-03",
+      "nonzero_days": 49,
+      "total_qty": 30905.0,
+      "ssot_labels": [
+        "pol_all_states_date_planned_product_qty_c40"
+      ]
+    },
+    "1587|purchases_ordered": {
+      "n_rows": 52,
+      "min_date": "2024-10-11",
+      "max_date": "2026-02-03",
+      "nonzero_days": 51,
+      "total_qty": 27469.0,
+      "ssot_labels": [
+        "pol_all_states_date_planned_product_qty_c40"
+      ]
+    },
+    "1113|purchases_ordered": {
+      "n_rows": 36,
+      "min_date": "2024-10-21",
+      "max_date": "2026-01-28",
+      "nonzero_days": 35,
+      "total_qty": 35706.0,
+      "ssot_labels": [
+        "pol_all_states_date_planned_product_qty_c40"
+      ]
+    },
+    "539|purchases_received": {
+      "n_rows": 34,
+      "min_date": "2024-10-03",
+      "max_date": "2026-01-23",
+      "nonzero_days": 34,
+      "total_qty": 17645.0,
+      "ssot_labels": [
+        "pol_purchase_done_date_planned_qty_received_c40"
+      ]
+    },
+    "1587|purchases_received": {
+      "n_rows": 39,
+      "min_date": "2024-11-08",
+      "max_date": "2026-01-23",
+      "nonzero_days": 39,
+      "total_qty": 17278.0,
+      "ssot_labels": [
+        "pol_purchase_done_date_planned_qty_received_c40"
+      ]
+    },
+    "1113|purchases_received": {
+      "n_rows": 29,
+      "min_date": "2024-11-01",
+      "max_date": "2026-01-28",
+      "nonzero_days": 29,
+      "total_qty": 28212.0,
+      "ssot_labels": [
+        "pol_purchase_done_date_planned_qty_received_c40"
+      ]
+    }
+  }
+}

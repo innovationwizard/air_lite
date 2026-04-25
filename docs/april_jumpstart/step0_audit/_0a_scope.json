@@ -1,0 +1,416 @@
+[
+  {
+    "default_code": "77205001",
+    "representative_name": "Bandeja Bio 2P Foam \"10/50 Termo Fom",
+    "supplier_class": "CARVAJAL",
+    "source_indicator": "SUPPLIER_LINK",
+    "movement_rank_within_class": 1,
+    "net_sales_quantity": 580143.62,
+    "net_sales_revenue_gtq": 6427980.45,
+    "product_template_id": 9790,
+    "product_product_ids": [
+      7116
+    ],
+    "supabase_product_id": 2,
+    "supabase_odoo_id": "9790",
+    "supabase_stock_uom": "FARDO10",
+    "supabase_stock_uom_ratio": 1.0,
+    "supabase_is_active": true
+  },
+  {
+    "default_code": "77205003",
+    "representative_name": "Bandeja Bio N1 Duroport \u00a85/50 Termo Fom",
+    "supplier_class": "CARVAJAL",
+    "source_indicator": "SUPPLIER_LINK",
+    "movement_rank_within_class": 2,
+    "net_sales_quantity": 218363.4,
+    "net_sales_revenue_gtq": 1238458.18,
+    "product_template_id": 9282,
+    "product_product_ids": [
+      6608
+    ],
+    "supabase_product_id": 5,
+    "supabase_odoo_id": "9282",
+    "supabase_stock_uom": "FARDO5",
+    "supabase_stock_uom_ratio": 1.0,
+    "supabase_is_active": true
+  },
+  {
+    "default_code": "77205207",
+    "representative_name": "Vaso Bio 8oz Duroport \u00a840/25 Viva",
+    "supplier_class": "CARVAJAL",
+    "source_indicator": "SUPPLIER_LINK",
+    "movement_rank_within_class": 3,
+    "net_sales_quantity": 159956.2937,
+    "net_sales_revenue_gtq": 2860635.68,
+    "product_template_id": 8824,
+    "product_product_ids": [
+      6150
+    ],
+    "supabase_product_id": 37,
+    "supabase_odoo_id": "8824",
+    "supabase_stock_uom": "CAJA40",
+    "supabase_stock_uom_ratio": 1.0,
+    "supabase_is_active": true
+  },
+  {
+    "default_code": "77205034",
+    "representative_name": "Portacomida Bio 7x7 C/D Duroport \u00a84/50 Termo Fom",
+    "supplier_class": "CARVAJAL",
+    "source_indicator": "SUPPLIER_LINK",
+    "movement_rank_within_class": 4,
+    "net_sales_quantity": 112799.21,
+    "net_sales_revenue_gtq": 3054762.32,
+    "product_template_id": 8697,
+    "product_product_ids": [
+      6023
+    ],
+    "supabase_product_id": 29,
+    "supabase_odoo_id": "8697",
+    "supabase_stock_uom": "FARDO4",
+    "supabase_stock_uom_ratio": 1.0,
+    "supabase_is_active": true
+  },
+  {
+    "default_code": "77205287",
+    "representative_name": "Bandeja Bio N2 Duroport \u00a810/50 Viva",
+    "supplier_class": "CARVAJAL",
+    "source_indicator": "SUPPLIER_LINK",
+    "movement_rank_within_class": 5,
+    "net_sales_quantity": 87578.6999,
+    "net_sales_revenue_gtq": 1067498.34,
+    "product_template_id": 9247,
+    "product_product_ids": [
+      6573
+    ],
+    "supabase_product_id": 3,
+    "supabase_odoo_id": "9247",
+    "supabase_stock_uom": "FARDO10",
+    "supabase_stock_uom_ratio": 1.0,
+    "supabase_is_active": true
+  },
+  {
+    "default_code": "77205208",
+    "representative_name": "Vaso Bio 10oz Duroport \u00a840/25 Viva",
+    "supplier_class": "CARVAJAL",
+    "source_indicator": "SUPPLIER_LINK",
+    "movement_rank_within_class": 6,
+    "net_sales_quantity": 42409.59,
+    "net_sales_revenue_gtq": 2386624.47,
+    "product_template_id": 8893,
+    "product_product_ids": [
+      6219
+    ],
+    "supabase_product_id": 36,
+    "supabase_odoo_id": "8893",
+    "supabase_stock_uom": "CAJA40",
+    "supabase_stock_uom_ratio": 1.0,
+    "supabase_is_active": true
+  },
+  {
+    "default_code": "77205190",
+    "representative_name": "Bandeja Bio N2 Duroport \u00a820/25 Viva",
+    "supplier_class": "CARVAJAL",
+    "source_indicator": "SUPPLIER_LINK",
+    "movement_rank_within_class": 7,
+    "net_sales_quantity": 39000.0,
+    "net_sales_revenue_gtq": 521788.79,
+    "product_template_id": 9222,
+    "product_product_ids": [
+      6548
+    ],
+    "supabase_product_id": 145,
+    "supabase_odoo_id": "9222",
+    "supabase_stock_uom": "FARDO20",
+    "supabase_stock_uom_ratio": 1.0,
+    "supabase_is_active": true
+  },
+  {
+    "default_code": "77205005",
+    "representative_name": "Portacomida Bio 8x8 C/D Duroport \u00a84/50 Termo Fom",
+    "supplier_class": "CARVAJAL",
+    "source_indicator": "SUPPLIER_LINK",
+    "movement_rank_within_class": 8,
+    "net_sales_quantity": 34602.09,
+    "net_sales_revenue_gtq": 1218840.0,
+    "product_template_id": 9727,
+    "product_product_ids": [
+      7053
+    ],
+    "supabase_product_id": 1127,
+    "supabase_odoo_id": "9727",
+    "supabase_stock_uom": "FARDO4",
+    "supabase_stock_uom_ratio": 1.0,
+    "supabase_is_active": true
+  },
+  {
+    "default_code": "77205002",
+    "representative_name": "Plato Bio N6 Duroport \u00a820/25 Termo Fom",
+    "supplier_class": "CARVAJAL",
+    "source_indicator": "SUPPLIER_LINK",
+    "movement_rank_within_class": 9,
+    "net_sales_quantity": 33722.95,
+    "net_sales_revenue_gtq": 282716.83,
+    "product_template_id": 8681,
+    "product_product_ids": [
+      6007
+    ],
+    "supabase_product_id": 1069,
+    "supabase_odoo_id": "8681",
+    "supabase_stock_uom": "FARDO20",
+    "supabase_stock_uom_ratio": 1.0,
+    "supabase_is_active": true
+  },
+  {
+    "default_code": "77205035",
+    "representative_name": "Portacomida Bio 7x7 Liso Negro Duroport \u00a84/50 Termo Fom",
+    "supplier_class": "CARVAJAL",
+    "source_indicator": "SUPPLIER_LINK",
+    "movement_rank_within_class": 10,
+    "net_sales_quantity": 28295.75,
+    "net_sales_revenue_gtq": 344398.19,
+    "product_template_id": 8728,
+    "product_product_ids": [
+      6054
+    ],
+    "supabase_product_id": 1113,
+    "supabase_odoo_id": "8728",
+    "supabase_stock_uom": "FARDO4",
+    "supabase_stock_uom_ratio": 1.0,
+    "supabase_is_active": true
+  },
+  {
+    "default_code": "77205187",
+    "representative_name": "Plato Bio N6 Duroport \u00a820/25 Viva",
+    "supplier_class": "CARVAJAL",
+    "source_indicator": "SUPPLIER_LINK",
+    "movement_rank_within_class": 11,
+    "net_sales_quantity": 21536.9,
+    "net_sales_revenue_gtq": 676931.15,
+    "product_template_id": 8668,
+    "product_product_ids": [
+      5994
+    ],
+    "supabase_product_id": 1035,
+    "supabase_odoo_id": "8668",
+    "supabase_stock_uom": "FARDO20",
+    "supabase_stock_uom_ratio": 1.0,
+    "supabase_is_active": true
+  },
+  {
+    "default_code": "77201046",
+    "representative_name": "Vaso Blanco 10oz Duroport \u00a840/25 Reyma",
+    "supplier_class": "REYMA",
+    "source_indicator": "NAME",
+    "movement_rank_within_class": 1,
+    "net_sales_quantity": 103126.825,
+    "net_sales_revenue_gtq": 5999320.82,
+    "product_template_id": 9764,
+    "product_product_ids": [
+      7090
+    ],
+    "supabase_product_id": 33,
+    "supabase_odoo_id": "9764",
+    "supabase_stock_uom": "CAJA40",
+    "supabase_stock_uom_ratio": 1.0,
+    "supabase_is_active": true
+  },
+  {
+    "default_code": "77201000",
+    "representative_name": "Vaso Blanco 8oz Duroport \u00a840/25 Reyma",
+    "supplier_class": "REYMA",
+    "source_indicator": "NAME",
+    "movement_rank_within_class": 2,
+    "net_sales_quantity": 90051.81,
+    "net_sales_revenue_gtq": 3070722.06,
+    "product_template_id": 8867,
+    "product_product_ids": [
+      6193
+    ],
+    "supabase_product_id": 34,
+    "supabase_odoo_id": "8867",
+    "supabase_stock_uom": "CAJA40",
+    "supabase_stock_uom_ratio": 1.0,
+    "supabase_is_active": true
+  },
+  {
+    "default_code": "77201055",
+    "representative_name": "Vaso Pl\u00e1stico 12oz Pl\u00e1stico \u00a820/50 Reyma",
+    "supplier_class": "REYMA",
+    "source_indicator": "NAME",
+    "movement_rank_within_class": 3,
+    "net_sales_quantity": 32416.775,
+    "net_sales_revenue_gtq": 1539875.93,
+    "product_template_id": 8896,
+    "product_product_ids": [
+      6222
+    ],
+    "supabase_product_id": 1590,
+    "supabase_odoo_id": "8896",
+    "supabase_stock_uom": "CAJA20",
+    "supabase_stock_uom_ratio": 1.0,
+    "supabase_is_active": true
+  },
+  {
+    "default_code": "77201053",
+    "representative_name": "Vaso Pl\u00e1stico 16oz Pl\u00e1stico \u00a840/25 Reyma",
+    "supplier_class": "REYMA",
+    "source_indicator": "NAME",
+    "movement_rank_within_class": 4,
+    "net_sales_quantity": 30413.2447,
+    "net_sales_revenue_gtq": 1198515.02,
+    "product_template_id": 8832,
+    "product_product_ids": [
+      6158
+    ],
+    "supabase_product_id": 1606,
+    "supabase_odoo_id": "8832",
+    "supabase_stock_uom": "CAJA40",
+    "supabase_stock_uom_ratio": 1.0,
+    "supabase_is_active": true
+  },
+  {
+    "default_code": "77201069",
+    "representative_name": "Film 0 12\"x2000\u00b4 Pl\u00e1stico 0 Reyma",
+    "supplier_class": "REYMA",
+    "source_indicator": "NAME",
+    "movement_rank_within_class": 5,
+    "net_sales_quantity": 28638.0,
+    "net_sales_revenue_gtq": 289487.22,
+    "product_template_id": 9172,
+    "product_product_ids": [
+      6498
+    ],
+    "supabase_product_id": 469,
+    "supabase_odoo_id": "9172",
+    "supabase_stock_uom": "CAJA",
+    "supabase_stock_uom_ratio": 1.0,
+    "supabase_is_active": true
+  },
+  {
+    "default_code": "77201041",
+    "representative_name": "Envase Blanco 16oz Duroport \u00a820/25 Reyma",
+    "supplier_class": "REYMA",
+    "source_indicator": "NAME",
+    "movement_rank_within_class": 6,
+    "net_sales_quantity": 21935.25,
+    "net_sales_revenue_gtq": 623942.62,
+    "product_template_id": 9117,
+    "product_product_ids": [
+      6443
+    ],
+    "supabase_product_id": 20,
+    "supabase_odoo_id": "9117",
+    "supabase_stock_uom": "CAJA20",
+    "supabase_stock_uom_ratio": 1.0,
+    "supabase_is_active": true
+  },
+  {
+    "default_code": "77201014",
+    "representative_name": "Tapa P/Envase 16 y 32oz Pl\u00e1stico \u00a820/25 Reyma",
+    "supplier_class": "REYMA",
+    "source_indicator": "NAME",
+    "movement_rank_within_class": 7,
+    "net_sales_quantity": 20783.85,
+    "net_sales_revenue_gtq": 351452.1,
+    "product_template_id": 8747,
+    "product_product_ids": [
+      6073
+    ],
+    "supabase_product_id": 1366,
+    "supabase_odoo_id": "8747",
+    "supabase_stock_uom": "CAJA20",
+    "supabase_stock_uom_ratio": 1.0,
+    "supabase_is_active": true
+  },
+  {
+    "default_code": "77201056",
+    "representative_name": "Vaso Pl\u00e1stico 8oz Pl\u00e1stico \u00a820/50 REYMA",
+    "supplier_class": "REYMA",
+    "source_indicator": "NAME",
+    "movement_rank_within_class": 8,
+    "net_sales_quantity": 20531.547,
+    "net_sales_revenue_gtq": 765615.58,
+    "product_template_id": 9776,
+    "product_product_ids": [
+      7102
+    ],
+    "supabase_product_id": 1600,
+    "supabase_odoo_id": "9776",
+    "supabase_stock_uom": "CAJA20",
+    "supabase_stock_uom_ratio": 1.0,
+    "supabase_is_active": true
+  },
+  {
+    "default_code": "77201019",
+    "representative_name": "Vaso Pl\u00e1stico 10oz Pl\u00e1stico \u00a820/50 Reyma",
+    "supplier_class": "REYMA",
+    "source_indicator": "NAME",
+    "movement_rank_within_class": 9,
+    "net_sales_quantity": 17806.7,
+    "net_sales_revenue_gtq": 293062.23,
+    "product_template_id": 8825,
+    "product_product_ids": [
+      6151
+    ],
+    "supabase_product_id": 1587,
+    "supabase_odoo_id": "8825",
+    "supabase_stock_uom": "CAJA20",
+    "supabase_stock_uom_ratio": 1.0,
+    "supabase_is_active": true
+  },
+  {
+    "default_code": "77201038",
+    "representative_name": "Contenedor Termoformado 6x6 Duroport \u00a81/500 Reyma",
+    "supplier_class": "REYMA",
+    "source_indicator": "NAME",
+    "movement_rank_within_class": 10,
+    "net_sales_quantity": 17141.0,
+    "net_sales_revenue_gtq": 425261.83,
+    "product_template_id": 9055,
+    "product_product_ids": [
+      6381
+    ],
+    "supabase_product_id": 539,
+    "supabase_odoo_id": "9055",
+    "supabase_stock_uom": "CAJA10",
+    "supabase_stock_uom_ratio": 1.0,
+    "supabase_is_active": true
+  },
+  {
+    "default_code": "77201047",
+    "representative_name": "Vaso Blanco 12oz Duroport \u00a840/25 Reyma",
+    "supplier_class": "REYMA",
+    "source_indicator": "NAME",
+    "movement_rank_within_class": 11,
+    "net_sales_quantity": 16102.59,
+    "net_sales_revenue_gtq": 828526.09,
+    "product_template_id": 8855,
+    "product_product_ids": [
+      6181
+    ],
+    "supabase_product_id": 1562,
+    "supabase_odoo_id": "8855",
+    "supabase_stock_uom": "CAJA40",
+    "supabase_stock_uom_ratio": 1.0,
+    "supabase_is_active": true
+  },
+  {
+    "default_code": "77201023",
+    "representative_name": "Plato Foam N8 Hondo Duroport \u00a820/25 Reyma",
+    "supplier_class": "REYMA",
+    "source_indicator": "NAME",
+    "movement_rank_within_class": 18,
+    "net_sales_quantity": 6678.7,
+    "net_sales_revenue_gtq": 706717.31,
+    "product_template_id": 8671,
+    "product_product_ids": [
+      5997
+    ],
+    "supabase_product_id": 1096,
+    "supabase_odoo_id": "8671",
+    "supabase_stock_uom": "FARDO20",
+    "supabase_stock_uom_ratio": 1.0,
+    "supabase_is_active": true
+  }
+]

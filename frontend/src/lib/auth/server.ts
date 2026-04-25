@@ -14,7 +14,7 @@ export interface AuthUser {
  * Use in API routes and server components.
  */
 export async function getAuthUser(): Promise<AuthUser | null> {
-  const supabase = createServerSupabaseClient();
+  const supabase = await createServerSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();
 
   if (!user) return null;
