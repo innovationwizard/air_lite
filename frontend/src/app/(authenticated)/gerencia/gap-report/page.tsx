@@ -166,10 +166,10 @@ export default function GapReportPage() {
         {comoUsarOpen && (
           <div className="px-4 pb-4">
             <ol className="list-decimal ml-5 space-y-1">
-              <li>Filtrá por SKU + rango de meses (default: todos los meses con datos en Odoo live).</li>
-              <li>En el dashboard del CEO, buscá el mismo SKU y mes.</li>
-              <li>Pegá los números esperados en las casillas <span className="font-mono bg-blue-100 px-1 rounded">esperado</span>; verás el Δ contra nuestra cifra.</li>
-              <li>Si Δ &lt; 1% → match perfecto. Si &gt; 5% → la fórmula necesita revisión.</li>
+              <li>Filtra por SKU y mes.</li>
+              <li>En el dashboard de Odoo, busca el mismo SKU y mes.</li>
+              <li>Pega los números esperados en las casillas <span className="font-mono bg-blue-100 px-1 rounded">esperado</span>; verás el Δ contra nuestros cálculos.</li>
+              <li>Si Δ &lt; 1% → el cálculo es acertado. Si &gt; 5% → el cálculo necesita revisión.</li>
             </ol>
             <p className="mt-2 text-xs">
               <strong>Fórmulas:</strong> Ventas = <span className="font-mono">aml.income.posted.invoice±refund.invoice_date</span>;
