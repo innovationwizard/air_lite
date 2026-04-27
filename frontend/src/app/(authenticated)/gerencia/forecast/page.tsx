@@ -185,8 +185,8 @@ export default function ForecastPage() {
                   <th className="text-right px-2 py-2 font-medium text-blue-700 bg-blue-50" colSpan={2}>Compras Ordenadas</th>
                   <th className="text-right px-2 py-2 font-medium text-purple-700 bg-purple-50" colSpan={2}>Compras Recibidas</th>
                   <th className="text-center px-2 py-2 font-medium text-emerald-800 bg-emerald-100" colSpan={2}>Furgones — Ventas</th>
-                  <th className="text-center px-2 py-2 font-medium text-blue-800 bg-blue-100" colSpan={2}>Furgones — Ord.</th>
-                  <th className="text-center px-2 py-2 font-medium text-purple-800 bg-purple-100" colSpan={2}>Furgones — Rec.</th>
+                  <th className="text-center px-2 py-2 font-medium text-blue-800 bg-blue-100" colSpan={2}>Furgones — Compras Ordenadas</th>
+                  <th className="text-center px-2 py-2 font-medium text-purple-800 bg-purple-100" colSpan={2}>Furgones — Compras Recibidas</th>
                   <th className="text-right px-2 py-2 font-medium text-gray-500 bg-gray-50">m³ / unidad</th>
                   <th className="text-right px-2 py-2 font-medium text-gray-500 bg-gray-50">m³ / furgón</th>
                 </tr>
