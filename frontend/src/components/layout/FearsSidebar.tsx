@@ -75,13 +75,13 @@ const allNavGroups: NavGroup[] = [
         name: 'Validación Histórica',
         href: '/gerencia/validacion',
         icon: ScanEye,
-        subtitle: 'Sistema vs compradores vs realidad',
+        subtitle: 'Cifras cuadran con Odoo',
       },
       {
-        name: 'Reporte de Discrepancias',
+        name: 'Auditoría de Discrepancias',
         href: '/gerencia/gap-report',
         icon: FileCheck,
-        subtitle: 'App vs Odoo lado a lado',
+        subtitle: 'Puedes verificar cada cifra tú mismo',
       },
       {
         name: 'Forecast a Ciegas',

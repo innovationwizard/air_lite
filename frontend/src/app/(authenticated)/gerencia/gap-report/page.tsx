@@ -76,7 +76,7 @@ export default function GapReportPage() {
   const [supplierClass, setSupplierClass] = useState<'' | 'REYMA' | 'CARVAJAL'>('');
   const [skuFilter, setSkuFilter] = useState<string>('');
   // null = show all months; a YYYY-MM string = single-month view
-  const [selectedMonth, setSelectedMonth] = useState<string | null>(null);
+  const [selectedMonth, setSelectedMonth] = useState<string | null>('2025-01');
 
   // User's "expected" overlay — keyed by `${sku}|${month}|${metric}`
   const [expected, setExpected] = useState<Record<string, string>>({});
@@ -147,7 +147,7 @@ export default function GapReportPage() {
       <div>
         <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
           <Target className="w-6 h-6 text-emerald-600" />
-          Reporte de Discrepancias
+          Auditoría de Discrepancias
         </h1>
         {/* <p className="text-gray-500 mt-1">
           Spot-check de los números de la app contra el dashboard del CEO.

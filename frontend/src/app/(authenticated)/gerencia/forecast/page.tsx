@@ -109,7 +109,7 @@ export default function ForecastPage() {
 
       <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 text-sm text-emerald-900">
         <p className="font-semibold flex items-center gap-1.5">
-          <Sparkles className="w-4 h-4" /> Acid Test 2 — cómo leer esto
+          <Sparkles className="w-4 h-4" /> Cómo leer esto
         </p>
         <p className="mt-1">
           Cada fila es un SKU del top 23 (12 REYMA + 11 CARVAJAL por Net Sales). Las columnas muestran las
@@ -120,10 +120,10 @@ export default function ForecastPage() {
       </div>
 
       <div className="flex gap-2 items-center">
-        <span className="text-sm text-gray-600">Clase:</span>
+        <span className="text-sm text-gray-600">Proveedor:</span>
         <button onClick={() => setClassFilter('')}
           className={`px-3 py-1 text-sm rounded-lg ${classFilter === '' ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-700'}`}>
-          Todas ({rows.length})
+          Todos ({rows.length})
         </button>
         <button onClick={() => setClassFilter('REYMA')}
           className={`px-3 py-1 text-sm rounded-lg ${classFilter === 'REYMA' ? 'bg-emerald-600 text-white' : 'bg-emerald-50 text-emerald-700'}`}>

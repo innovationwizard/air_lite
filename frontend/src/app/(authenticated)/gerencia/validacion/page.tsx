@@ -42,7 +42,7 @@ function fmtGtq(n: number | null | undefined): string {
 }
 
 export default function GerenciaValidacionPage() {
-  const [selectedMonth, setSelectedMonth] = useState<string>('2025-02');
+  const [selectedMonth, setSelectedMonth] = useState<string>('2025-01');
   const [rows, setRows] = useState<GapRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
