@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { Target, Filter, ExternalLink, Info } from 'lucide-react';
+import { Target, Filter, ExternalLink, Info, ChevronDown } from 'lucide-react';
 
 interface SkuMeta {
   sku: string;
@@ -70,6 +70,7 @@ export default function GapReportPage() {
   const [loadingSkus, setLoadingSkus] = useState(true);
   const [loadingRows, setLoadingRows] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [comoUsarOpen, setComoUsarOpen] = useState(false);
 
   // Filters
   const [supplierClass, setSupplierClass] = useState<'' | 'REYMA' | 'CARVAJAL'>('');
@@ -154,20 +155,30 @@ export default function GapReportPage() {
         </p> */}
       </div>
 
-      <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 text-sm text-blue-900">
-        <p className="font-semibold mb-1 flex items-center gap-1.5"><Info className="w-4 h-4" /> Cómo usar</p>
-        <ol className="list-decimal ml-5 space-y-1">
-          <li>Filtrá por SKU + rango de meses (default: todos los meses con datos en Odoo live).</li>
-          <li>En el dashboard del CEO, buscá el mismo SKU y mes.</li>
-          <li>Pegá los números esperados en las casillas <span className="font-mono bg-blue-100 px-1 rounded">esperado</span>; verás el Δ contra nuestra cifra.</li>
-          <li>Si Δ &lt; 1% → match perfecto. Si &gt; 5% → la fórmula necesita revisión.</li>
-        </ol>
-        <p className="mt-2 text-xs">
-          <strong>Fórmulas:</strong> Ventas = <span className="font-mono">aml.income.posted.invoice±refund.invoice_date</span>;
-          Compras Ord = <span className="font-mono">pol.all_states.date_planned.product_qty</span>;
-          Compras Rec = <span className="font-mono">pol.purchase|done.date_planned.qty_received</span>.
-          Todas normalizadas a UoM de stock del producto.
-        </p>
+      <div className="bg-blue-50 border border-blue-200 rounded-xl text-sm text-blue-900 overflow-hidden">
+        <button
+          onClick={() => setComoUsarOpen((o) => !o)}
+          className="w-full flex items-center justify-between gap-2 px-4 py-3 font-semibold hover:bg-blue-100 transition-colors"
+        >
+          <span className="flex items-center gap-1.5"><Info className="w-4 h-4" /> Cómo usar</span>
+          <ChevronDown className={`w-4 h-4 transition-transform ${comoUsarOpen ? 'rotate-180' : ''}`} />
+        </button>
+        {comoUsarOpen && (
+          <div className="px-4 pb-4">
+            <ol className="list-decimal ml-5 space-y-1">
+              <li>Filtrá por SKU + rango de meses (default: todos los meses con datos en Odoo live).</li>
+              <li>En el dashboard del CEO, buscá el mismo SKU y mes.</li>
+              <li>Pegá los números esperados en las casillas <span className="font-mono bg-blue-100 px-1 rounded">esperado</span>; verás el Δ contra nuestra cifra.</li>
+              <li>Si Δ &lt; 1% → match perfecto. Si &gt; 5% → la fórmula necesita revisión.</li>
+            </ol>
+            <p className="mt-2 text-xs">
+              <strong>Fórmulas:</strong> Ventas = <span className="font-mono">aml.income.posted.invoice±refund.invoice_date</span>;
+              Compras Ord = <span className="font-mono">pol.all_states.date_planned.product_qty</span>;
+              Compras Rec = <span className="font-mono">pol.purchase|done.date_planned.qty_received</span>.
+              Todas normalizadas a UoM de stock del producto.
+            </p>
+          </div>
+        )}
       </div>
 
       {/* Month navigation */}
@@ -204,10 +215,10 @@ export default function GapReportPage() {
 
         <div className="flex flex-wrap gap-6">
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Clase</label>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Proveedor</label>
             <div className="inline-flex rounded-lg border border-gray-300 overflow-hidden">
               {([
-                { v: '', label: 'Todas' },
+                { v: '', label: 'Todos' },
                 { v: 'REYMA', label: 'REYMA' },
                 { v: 'CARVAJAL', label: 'CARVAJAL' },
               ] as const).map((opt, i) => (
