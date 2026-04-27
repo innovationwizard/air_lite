@@ -29,9 +29,9 @@ interface GapRow {
 }
 
 const MONTH_LABELS_ES: Record<string, string> = {
-  '01': 'Ene', '02': 'Feb', '03': 'Mar', '04': 'Abr',
-  '05': 'May', '06': 'Jun', '07': 'Jul', '08': 'Ago',
-  '09': 'Sep', '10': 'Oct', '11': 'Nov', '12': 'Dic',
+  '01': 'Enero', '02': 'Febrero', '03': 'Marzo', '04': 'Abril',
+  '05': 'Mayo', '06': 'Junio', '07': 'Julio', '08': 'Agosto',
+  '09': 'Septiembre', '10': 'Octubre', '11': 'Noviembre', '12': 'Diciembre',
 };
 
 function fmtMonth(yyyymm: string): string {
@@ -146,12 +146,12 @@ export default function GapReportPage() {
       <div>
         <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
           <Target className="w-6 h-6 text-emerald-600" />
-          Reporte de Discrepancias — Acid Test 1
+          Reporte de Discrepancias
         </h1>
-        <p className="text-gray-500 mt-1">
+        {/* <p className="text-gray-500 mt-1">
           Spot-check de los números de la app contra el dashboard del CEO.
           SKUs en alcance: 23 (top REYMA + CARVAJAL) — mismo universo que el Forecast a Ciegas.
-        </p>
+        </p> */}
       </div>
 
       <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 text-sm text-blue-900">
@@ -172,19 +172,6 @@ export default function GapReportPage() {
 
       {/* Month navigation */}
       <div className="space-y-2">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-xs font-semibold text-gray-400 w-8 shrink-0" />
-          <button
-            onClick={() => setSelectedMonth(null)}
-            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-              selectedMonth === null
-                ? 'bg-emerald-600 text-white shadow-sm'
-                : 'bg-white border border-gray-200 text-gray-500 hover:bg-gray-50'
-            }`}
-          >
-            Todo
-          </button>
-        </div>
         {Object.entries(MONTH_NAV).map(([year, months]) => (
           <div key={year} className="flex flex-wrap items-center gap-2">
             <span className="text-xs font-semibold text-gray-400 w-8 shrink-0">{year}</span>

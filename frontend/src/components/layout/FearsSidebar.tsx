@@ -78,7 +78,7 @@ const allNavGroups: NavGroup[] = [
         subtitle: 'Sistema vs compradores vs realidad',
       },
       {
-        name: 'Gap Report',
+        name: 'Reporte de Discrepancias',
         href: '/gerencia/gap-report',
         icon: FileCheck,
         subtitle: 'App vs Odoo lado a lado',
