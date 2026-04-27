@@ -201,21 +201,44 @@ export default function GerenciaValidacionPage() {
         )}
       </div>
 
-      <div className="flex flex-wrap items-center gap-3">
-        <label className="text-sm text-gray-500">Ciclo:</label>
-        <select
-          value={selectedRunId ?? ''}
-          onChange={(e) => setSelectedRunId(Number(e.target.value))}
-          disabled={loadingRuns}
-          className="border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white min-w-[260px]"
-        >
-          {runs.map((r) => (
-            <option key={r.run_id} value={r.run_id}>
-              Predicción para {predictionMonthLabel(r.prediction_month)} (entrenado hasta {fmtDateEs(r.training_end_date)})
-            </option>
-          ))}
-        </select>
+      {/* Month navigation */}
+      {!loadingRuns && runs.length > 0 && (() => {
+        const byYear = runs.reduce<Record<string, Run[]>>((acc, r) => {
+          const year = r.prediction_month.split('-')[0];
+          (acc[year] ??= []).push(r);
+          return acc;
+        }, {});
+        return (
+          <div className="space-y-2">
+            {Object.entries(byYear).sort(([a], [b]) => a.localeCompare(b)).map(([year, yearRuns]) => (
+              <div key={year} className="flex flex-wrap items-center gap-2">
+                <span className="text-xs font-semibold text-gray-400 w-8 shrink-0">{year}</span>
+                {yearRuns.map((r) => {
+                  const [, mm] = r.prediction_month.split('-');
+                  const isActive = r.run_id === selectedRunId;
+                  return (
+                    <button
+                      key={r.run_id}
+                      onClick={() => setSelectedRunId(r.run_id)}
+                      title={`Predicción para ${predictionMonthLabel(r.prediction_month)} — entrenado hasta ${fmtDateEs(r.training_end_date)}`}
+                      className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                        isActive
+                          ? 'bg-emerald-600 text-white shadow-sm'
+                          : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-50'
+                      }`}
+                    >
+                      {MONTH_LABELS_ES[mm]}
+                    </button>
+                  );
+                })}
+              </div>
+            ))}
+          </div>
+        );
+      })()}
 
+      {/* Scope toggle */}
+      <div className="flex flex-wrap items-center gap-2 text-sm">
         {/*
           Scope toggle. Three options, mutually exclusive:
             1. `carvajal_reyma` — the default; all 36-38 Carvajal + Reyma SKUs
@@ -227,38 +250,36 @@ export default function GerenciaValidacionPage() {
                maker will ask for. Client-side filter; see `visibleRows`.
             3. `all` — widens to every SKU the cycle modeled (100).
         */}
-        <div className="ml-auto flex items-center gap-2 text-sm">
-          <button
-            onClick={() => setScope('carvajal_reyma')}
-            className={`px-3 py-1.5 rounded-lg transition-colors ${
-              scope === 'carvajal_reyma'
-                ? 'bg-emerald-600 text-white'
-                : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-50'
-            }`}
-          >
-            Carvajal + Reyma
-          </button>
-          <button
-            onClick={() => setScope('same_as_humans')}
-            className={`px-3 py-1.5 rounded-lg transition-colors ${
-              scope === 'same_as_humans'
-                ? 'bg-emerald-600 text-white'
-                : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-50'
-            }`}
-          >
-            Mismos SKUs que Humanos
-          </button>
-          <button
-            onClick={() => setScope('all')}
-            className={`px-3 py-1.5 rounded-lg transition-colors ${
-              scope === 'all'
-                ? 'bg-emerald-600 text-white'
-                : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-50'
-            }`}
-          >
-            Todos los SKUs modelados
-          </button>
-        </div>
+        <button
+          onClick={() => setScope('carvajal_reyma')}
+          className={`px-3 py-1.5 rounded-lg transition-colors ${
+            scope === 'carvajal_reyma'
+              ? 'bg-emerald-600 text-white'
+              : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-50'
+          }`}
+        >
+          Carvajal + Reyma
+        </button>
+        <button
+          onClick={() => setScope('same_as_humans')}
+          className={`px-3 py-1.5 rounded-lg transition-colors ${
+            scope === 'same_as_humans'
+              ? 'bg-emerald-600 text-white'
+              : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-50'
+          }`}
+        >
+          Mismos SKUs que Humanos
+        </button>
+        <button
+          onClick={() => setScope('all')}
+          className={`px-3 py-1.5 rounded-lg transition-colors ${
+            scope === 'all'
+              ? 'bg-emerald-600 text-white'
+              : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-50'
+          }`}
+        >
+          Todos los SKUs modelados
+        </button>
       </div>
 
       {summary && (
