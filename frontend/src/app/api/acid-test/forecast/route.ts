@@ -33,10 +33,11 @@ export async function GET(req: NextRequest) {
     // Resolve product.id for those SKUs
     const { data: supaProducts, error: spErr } = await supabase
       .from('products')
-      .select('id, sku')
+      .select('id, sku, stock_uom')
       .in('sku', Array.from(skuSet));
     if (spErr) throw spErr;
     const productIdToSku = new Map((supaProducts ?? []).map((p) => [p.id, p.sku]));
+    const skuToUom = new Map((supaProducts ?? []).map((p) => [p.sku, p.stock_uom]));
     const productIds = Array.from(productIdToSku.keys());
 
     // Query forecast_results
@@ -71,6 +72,7 @@ export async function GET(req: NextRequest) {
       product_name: skuMeta.get(productIdToSku.get(r.product_id) ?? '')?.representative_name ?? null,
       supplier_class: skuMeta.get(productIdToSku.get(r.product_id) ?? '')?.supplier_class ?? null,
       movement_rank_within_class: skuMeta.get(productIdToSku.get(r.product_id) ?? '')?.movement_rank_within_class ?? null,
+      stock_uom: skuToUom.get(productIdToSku.get(r.product_id) ?? '') ?? null,
     }));
 
     return NextResponse.json({

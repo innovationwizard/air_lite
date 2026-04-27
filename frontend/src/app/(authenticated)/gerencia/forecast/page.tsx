@@ -8,6 +8,7 @@ interface ForecastRow {
   product_name: string | null;
   supplier_class: string | null;
   movement_rank_within_class: number | null;
+  stock_uom: string | null;
   metric: string;
   forecast_month: string;
   yhat_sum: number;
@@ -22,6 +23,7 @@ type SkuRow = {
   name: string;
   supplier_class: string;
   movement_rank_within_class: number | null;
+  stock_uom: string | null;
   sales_feb: number | null;
   sales_mar: number | null;
   purchases_ordered_feb: number | null;
@@ -63,6 +65,7 @@ export default function ForecastPage() {
         name: r.product_name ?? '',
         supplier_class: r.supplier_class ?? '',
         movement_rank_within_class: r.movement_rank_within_class ?? null,
+        stock_uom: r.stock_uom ?? null,
         sales_feb: null, sales_mar: null,
         purchases_ordered_feb: null, purchases_ordered_mar: null,
         purchases_received_feb: null, purchases_received_mar: null,
@@ -174,9 +177,16 @@ export default function ForecastPage() {
                       <td className="px-3 py-2 sticky left-0 bg-white z-10">
                         <div className="font-mono text-xs text-gray-600">{r.sku}</div>
                         <div className="text-sm font-medium text-gray-900 max-w-xs truncate">{r.name}</div>
-                        <span className={`text-[10px] px-1.5 py-0.5 rounded ${r.supplier_class === 'REYMA' ? 'bg-emerald-100 text-emerald-800' : 'bg-sky-100 text-sky-800'}`}>
-                          {r.supplier_class}
-                        </span>
+                        <div className="flex items-center gap-1 mt-0.5">
+                          <span className={`text-[10px] px-1.5 py-0.5 rounded ${r.supplier_class === 'REYMA' ? 'bg-emerald-100 text-emerald-800' : 'bg-sky-100 text-sky-800'}`}>
+                            {r.supplier_class}
+                          </span>
+                          {r.stock_uom && (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 font-mono">
+                              {r.stock_uom}
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td className="px-2 py-1.5 text-right font-mono text-emerald-900 bg-emerald-50/60">{fmt(r.sales_feb)}</td>
                       <td className="px-2 py-1.5 text-right font-mono text-emerald-900 bg-emerald-50/60">{fmt(r.sales_mar)}</td>
