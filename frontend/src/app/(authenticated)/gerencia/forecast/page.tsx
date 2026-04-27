@@ -45,6 +45,11 @@ function fmt(n: number | null | undefined): string {
   return Math.round(n).toLocaleString('es-GT');
 }
 
+function fmtFurgo(units: number | null | undefined, volume_m3: number | null | undefined): string {
+  if (units == null || volume_m3 == null || volume_m3 === 0) return '—';
+  return ((units * volume_m3) / FURGO_M3).toFixed(1);
+}
+
 export default function ForecastPage() {
   const [raw, setRaw] = useState<ForecastRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -99,6 +104,13 @@ export default function ForecastPage() {
 
   const totals = useMemo(() => {
     const sum = (key: keyof SkuRow) => visible.reduce((a, r) => a + Number(r[key] ?? 0), 0);
+    const furgoSum = (unitsKey: keyof SkuRow) =>
+      visible.reduce((a, r) => {
+        const units = Number(r[unitsKey] ?? 0);
+        const vol = r.volume_m3;
+        if (vol == null) return a;
+        return a + (units * vol) / FURGO_M3;
+      }, 0);
     return {
       sales_feb: sum('sales_feb'),
       sales_mar: sum('sales_mar'),
@@ -106,6 +118,12 @@ export default function ForecastPage() {
       po_ord_mar: sum('purchases_ordered_mar'),
       po_rcv_feb: sum('purchases_received_feb'),
       po_rcv_mar: sum('purchases_received_mar'),
+      furgo_sales_feb: furgoSum('sales_feb'),
+      furgo_sales_mar: furgoSum('sales_mar'),
+      furgo_ord_feb: furgoSum('purchases_ordered_feb'),
+      furgo_ord_mar: furgoSum('purchases_ordered_mar'),
+      furgo_rcv_feb: furgoSum('purchases_received_feb'),
+      furgo_rcv_mar: furgoSum('purchases_received_mar'),
     };
   }, [visible]);
 
@@ -166,6 +184,9 @@ export default function ForecastPage() {
                   <th className="text-right px-2 py-2 font-medium text-emerald-700 bg-emerald-50" colSpan={2}>Ventas (cantidad)</th>
                   <th className="text-right px-2 py-2 font-medium text-blue-700 bg-blue-50" colSpan={2}>Compras Ordenadas</th>
                   <th className="text-right px-2 py-2 font-medium text-purple-700 bg-purple-50" colSpan={2}>Compras Recibidas</th>
+                  <th className="text-center px-2 py-2 font-medium text-emerald-800 bg-emerald-100" colSpan={2}>Furgones — Ventas</th>
+                  <th className="text-center px-2 py-2 font-medium text-blue-800 bg-blue-100" colSpan={2}>Furgones — Ord.</th>
+                  <th className="text-center px-2 py-2 font-medium text-purple-800 bg-purple-100" colSpan={2}>Furgones — Rec.</th>
                   <th className="text-right px-2 py-2 font-medium text-gray-500 bg-gray-50">m³ / unidad</th>
                   <th className="text-right px-2 py-2 font-medium text-gray-500 bg-gray-50">m³ / furgón</th>
                 </tr>
@@ -177,6 +198,12 @@ export default function ForecastPage() {
                   <th className="text-right px-2 py-1 bg-blue-50">Mar 26</th>
                   <th className="text-right px-2 py-1 bg-purple-50">Feb 26</th>
                   <th className="text-right px-2 py-1 bg-purple-50">Mar 26</th>
+                  <th className="text-right px-2 py-1 bg-emerald-100">Feb 26</th>
+                  <th className="text-right px-2 py-1 bg-emerald-100">Mar 26</th>
+                  <th className="text-right px-2 py-1 bg-blue-100">Feb 26</th>
+                  <th className="text-right px-2 py-1 bg-blue-100">Mar 26</th>
+                  <th className="text-right px-2 py-1 bg-purple-100">Feb 26</th>
+                  <th className="text-right px-2 py-1 bg-purple-100">Mar 26</th>
                   <th className="bg-gray-50"></th>
                   <th className="bg-gray-50"></th>
                 </tr>
@@ -206,6 +233,12 @@ export default function ForecastPage() {
                       <td className="px-2 py-1.5 text-right font-mono text-blue-900 bg-blue-50/60">{fmt(r.purchases_ordered_mar)}</td>
                       <td className="px-2 py-1.5 text-right font-mono text-purple-900 bg-purple-50/60">{fmt(r.purchases_received_feb)}</td>
                       <td className="px-2 py-1.5 text-right font-mono text-purple-900 bg-purple-50/60">{fmt(r.purchases_received_mar)}</td>
+                      <td className="px-2 py-1.5 text-right font-mono text-emerald-900 bg-emerald-100/70 font-semibold">{fmtFurgo(r.sales_feb, r.volume_m3)}</td>
+                      <td className="px-2 py-1.5 text-right font-mono text-emerald-900 bg-emerald-100/70 font-semibold">{fmtFurgo(r.sales_mar, r.volume_m3)}</td>
+                      <td className="px-2 py-1.5 text-right font-mono text-blue-900 bg-blue-100/70 font-semibold">{fmtFurgo(r.purchases_ordered_feb, r.volume_m3)}</td>
+                      <td className="px-2 py-1.5 text-right font-mono text-blue-900 bg-blue-100/70 font-semibold">{fmtFurgo(r.purchases_ordered_mar, r.volume_m3)}</td>
+                      <td className="px-2 py-1.5 text-right font-mono text-purple-900 bg-purple-100/70 font-semibold">{fmtFurgo(r.purchases_received_feb, r.volume_m3)}</td>
+                      <td className="px-2 py-1.5 text-right font-mono text-purple-900 bg-purple-100/70 font-semibold">{fmtFurgo(r.purchases_received_mar, r.volume_m3)}</td>
                       <td className="px-2 py-1.5 text-right font-mono text-gray-500 bg-gray-50/60 text-xs">
                         {r.volume_m3 != null ? r.volume_m3.toFixed(4) : '—'}
                       </td>
@@ -225,6 +258,12 @@ export default function ForecastPage() {
                   <td className="px-2 py-2 text-right font-mono text-blue-900 bg-blue-50">{fmt(totals.po_ord_mar)}</td>
                   <td className="px-2 py-2 text-right font-mono text-purple-900 bg-purple-50">{fmt(totals.po_rcv_feb)}</td>
                   <td className="px-2 py-2 text-right font-mono text-purple-900 bg-purple-50">{fmt(totals.po_rcv_mar)}</td>
+                  <td className="px-2 py-2 text-right font-mono text-emerald-900 bg-emerald-100">{totals.furgo_sales_feb.toFixed(1)}</td>
+                  <td className="px-2 py-2 text-right font-mono text-emerald-900 bg-emerald-100">{totals.furgo_sales_mar.toFixed(1)}</td>
+                  <td className="px-2 py-2 text-right font-mono text-blue-900 bg-blue-100">{totals.furgo_ord_feb.toFixed(1)}</td>
+                  <td className="px-2 py-2 text-right font-mono text-blue-900 bg-blue-100">{totals.furgo_ord_mar.toFixed(1)}</td>
+                  <td className="px-2 py-2 text-right font-mono text-purple-900 bg-purple-100">{totals.furgo_rcv_feb.toFixed(1)}</td>
+                  <td className="px-2 py-2 text-right font-mono text-purple-900 bg-purple-100">{totals.furgo_rcv_mar.toFixed(1)}</td>
                   <td className="bg-gray-50"></td>
                   <td className="bg-gray-50"></td>
                 </tr>
