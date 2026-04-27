@@ -1,11 +1,10 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
-import { ScanEye, TrendingUp, TrendingDown, Minus } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { ScanEye } from 'lucide-react';
 
 interface Run {
   run_id: number;
-  training_start_date: string;
   training_end_date: string;
   prediction_month: string;
   products_modeled: number;
@@ -13,29 +12,14 @@ interface Run {
 
 interface ValidationRow {
   run_id: number;
-  training_start_date: string;
-  training_end_date: string;
-  prediction_month: string;
   product_id: number;
   sku: string;
   product_name: string;
   supplier_label: string | null;
-  predicted_demand: number | null;
   comprador_purchase_qty: number | null;
-  actual_sales_qty: number | null;
-  predicted_reorder_point: number | null;
-  predicted_safety_stock: number | null;
-  acierto_system_pct: number | null;
-  acierto_comprador_pct: number | null;
-  unit_cost_gtq: number | null;
-  unit_price_gtq: number | null;
-  predicted_purchase_cost_gtq: number | null;
-  predicted_revenue_gtq: number | null;
-  predicted_margin_gtq: number | null;
   comprador_purchase_cost_gtq: number | null;
+  actual_sales_qty: number | null;
   actual_revenue_gtq: number | null;
-  actual_margin_gtq: number | null;
-  margin_uplift_gtq: number | null;
 }
 
 const MONTH_LABELS_ES: Record<string, string> = {
@@ -57,11 +41,6 @@ function fmtGtq(n: number | null | undefined): string {
   return `Q ${n.toLocaleString('es-GT', { maximumFractionDigits: 0 })}`;
 }
 
-function fmtPct(n: number | null | undefined): string {
-  if (n === null || n === undefined) return '—';
-  return `${(n * 100).toFixed(0)}%`;
-}
-
 function fmtDateEs(iso: string): string {
   const d = new Date(iso + 'T00:00:00');
   return d.toLocaleDateString('es-GT', { day: '2-digit', month: 'long', year: 'numeric' });
@@ -72,38 +51,12 @@ function predictionMonthLabel(iso: string): string {
   return `${MONTH_LABELS_ES[month]} ${year}`;
 }
 
-function aciertoClass(pct: number | null): string {
-  if (pct === null) return 'bg-gray-100 text-gray-500';
-  if (pct >= 0.75) return 'bg-green-100 text-green-700';
-  if (pct >= 0.5) return 'bg-yellow-100 text-yellow-800';
-  return 'bg-red-100 text-red-700';
-}
-
 export default function GerenciaValidacionPage() {
   const [runs, setRuns] = useState<Run[]>([]);
   const [selectedRunId, setSelectedRunId] = useState<number | null>(null);
   const [rows, setRows] = useState<ValidationRow[]>([]);
   const [loadingRuns, setLoadingRuns] = useState(true);
   const [loadingRows, setLoadingRows] = useState(false);
-  // Three scopes. Two of them (`carvajal_reyma`, `all`) correspond one-to-one
-  // with the API's `p_carvajal_reyma_only` flag. The third, `same_as_humans`,
-  // is a CLIENT-SIDE filter layered on top of the `carvajal_reyma` dataset —
-  // it hides rows where the compradores did not place a confirmed OC in the
-  // prediction month. The RPC has no same-as-humans mode on purpose: the
-  // filter is purely presentational, so the base dataset stays intact and
-  // can be re-filtered without another round-trip.
-  //
-  // Why this scope exists at all (meeting narrative, 2026-04-23):
-  // the default "Carvajal + Reyma" view averages App acierto over all 36
-  // SKUs but Humanos acierto over only the 8 SKUs compradores actually
-  // touched. That is a selection-bias artifact (humans choose the easy
-  // SKUs and skip the hard ones), not evidence that humans are sharper.
-  // Flipping this scope to `same_as_humans` restricts both metrics to the
-  // same apples-to-apples subset so the KPI cards read as a fair head-to-
-  // head. Verified 2026-04-22: on the head-to-head subset, App averages
-  // 74.7–78.6% acierto across runs 58–61 (humans 75.5–82.5%) — i.e. a
-  // 3–7 pt human edge where they choose to play, not a 10 pt one.
-  const [scope, setScope] = useState<'carvajal_reyma' | 'same_as_humans' | 'all'>('carvajal_reyma');
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -123,207 +76,88 @@ export default function GerenciaValidacionPage() {
     if (selectedRunId === null) return;
     setLoadingRows(true);
     setError(null);
-    // Translate UI scope -> API scope. `same_as_humans` reuses the same API
-    // request as `carvajal_reyma` (the default); the subset filtering happens
-    // in `visibleRows` below. Only `all` changes the API query.
-    const scopeParam = scope === 'all' ? '&scope=all' : '';
-    fetch(`/api/gerencia/validacion?run_id=${selectedRunId}${scopeParam}`)
+    fetch(`/api/gerencia/validacion?run_id=${selectedRunId}`)
       .then((res) => { if (!res.ok) throw new Error('HTTP ' + res.status); return res.json(); })
       .then((data) => { setRows(data.rows ?? []); setLoadingRows(false); })
       .catch((err) => { setError(String(err)); setLoadingRows(false); });
-  }, [selectedRunId, scope]);
-
-  const selectedRun = runs.find((r) => r.run_id === selectedRunId) ?? null;
-
-  // `visibleRows` is the single source of truth for what the UI renders —
-  // both the KPI cards and the table read from here. For the two API-backed
-  // scopes it is identical to the raw `rows`; for `same_as_humans` it is
-  // filtered down to rows where the compradores placed a confirmed OC in
-  // the prediction month (i.e. `comprador_purchase_qty` is not null).
-  //
-  // Doing this filter here (and NOT when setting state) means:
-  //   (a) toggling the scope button is instant — no network round-trip.
-  //   (b) the KPI card subtitles (`SKUs en comparación`, `SKUs con OC en
-  //       el mes`) update in lockstep with the table, so the decision
-  //       maker never sees "36 SKUs" at the top and 8 rows at the bottom.
-  //   (c) the summary aggregation logic below never has to branch on scope
-  //       — it just averages whatever it is given.
-  const visibleRows = useMemo(() => {
-    if (scope === 'same_as_humans') {
-      return rows.filter((r) => r.comprador_purchase_qty !== null);
-    }
-    return rows;
-  }, [rows, scope]);
-
-  const summary = useMemo(() => {
-    if (visibleRows.length === 0) return null;
-    const systemAciertos = visibleRows.map((r) => r.acierto_system_pct).filter((v): v is number => v !== null);
-    const comprAciertos = visibleRows.map((r) => r.acierto_comprador_pct).filter((v): v is number => v !== null);
-    const marginUplift = visibleRows.reduce((acc, r) => acc + (r.margin_uplift_gtq ?? 0), 0);
-    const predRev = visibleRows.reduce((acc, r) => acc + (r.predicted_revenue_gtq ?? 0), 0);
-    const actualRev = visibleRows.reduce((acc, r) => acc + (r.actual_revenue_gtq ?? 0), 0);
-    const avg = (arr: number[]) => arr.length === 0 ? null : arr.reduce((a, b) => a + b, 0) / arr.length;
-    return {
-      skuCount: visibleRows.length,
-      systemAcierto: avg(systemAciertos),
-      comprAcierto: avg(comprAciertos),
-      comprAciertoN: comprAciertos.length,
-      marginUplift,
-      predRev,
-      actualRev,
-    };
-  }, [visibleRows]);
+  }, [selectedRunId]);
 
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
           <ScanEye className="w-6 h-6 text-emerald-600" />
-          Validación Histórica — Gerencia
+          Validación Histórica
         </h1>
-        <p className="text-gray-500 mt-1">
-          Por SKU, mes por mes: qué predijo la App, qué compraron los Humanos, qué se vendió realmente.
-        </p>
-      </div>
-
-      <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-900">
-        <p className="font-semibold mb-1">Metodología — holdout honesto</p>
-        {selectedRun ? (
-          <p>
-            El modelo fue entrenado con datos del <strong>{fmtDateEs(selectedRun.training_start_date)}</strong> al{' '}
-            <strong>{fmtDateEs(selectedRun.training_end_date)}</strong>. A partir de ahí, proyectó la demanda para{' '}
-            <strong>{predictionMonthLabel(selectedRun.prediction_month)}</strong> sin haber visto lo que ocurrió
-            después. Las cifras reales de esta tabla provienen de Odoo (ventas y órdenes de compra).
-            {' '}El ciclo priorizó <strong>{selectedRun.products_modeled}</strong> SKUs de alto movimiento.
-          </p>
-        ) : (
-          <p>Seleccioná un ciclo para ver su ventana de entrenamiento.</p>
-        )}
       </div>
 
       {/* Month navigation */}
-      {!loadingRuns && runs.length > 0 && (() => {
-        const byYear = runs.reduce<Record<string, Run[]>>((acc, r) => {
-          const year = r.prediction_month.split('-')[0];
-          (acc[year] ??= []).push(r);
+      {!loadingRuns && (() => {
+        const runByMonth = new Map(runs.map((r) => [r.prediction_month, r]));
+        const byYear = runs.reduce<Record<string, true>>((acc, r) => {
+          acc[r.prediction_month.split('-')[0]] = true;
           return acc;
         }, {});
+        const years2025plus = Object.keys(byYear).filter((y) => y !== '2024').sort();
+        const ALL_2024 = ['01','02','03','04','05','06','07','08','09','10','11','12'];
+
         return (
           <div className="space-y-2">
-            {Object.entries(byYear).sort(([a], [b]) => a.localeCompare(b)).map(([year, yearRuns]) => (
-              <div key={year} className="flex flex-wrap items-center gap-2">
-                <span className="text-xs font-semibold text-gray-400 w-8 shrink-0">{year}</span>
-                {yearRuns.map((r) => {
-                  const [, mm] = r.prediction_month.split('-');
-                  const isActive = r.run_id === selectedRunId;
-                  return (
-                    <button
-                      key={r.run_id}
-                      onClick={() => setSelectedRunId(r.run_id)}
-                      title={`Predicción para ${predictionMonthLabel(r.prediction_month)} — entrenado hasta ${fmtDateEs(r.training_end_date)}`}
-                      className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                        isActive
-                          ? 'bg-emerald-600 text-white shadow-sm'
-                          : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-50'
-                      }`}
-                    >
-                      {MONTH_LABELS_ES[mm]}
-                    </button>
-                  );
-                })}
-              </div>
-            ))}
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs font-semibold text-gray-400 w-8 shrink-0">2024</span>
+              {ALL_2024.map((mm) => {
+                const ym = `2024-${mm}`;
+                const run = runByMonth.get(ym) ?? null;
+                const isActive = run !== null && run.run_id === selectedRunId;
+                return run ? (
+                  <button
+                    key={ym}
+                    onClick={() => setSelectedRunId(run.run_id)}
+                    title={`${predictionMonthLabel(ym)} — datos hasta ${fmtDateEs(run.training_end_date)}`}
+                    className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                      isActive
+                        ? 'bg-emerald-600 text-white shadow-sm'
+                        : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-50'
+                    }`}
+                  >
+                    {MONTH_LABELS_ES[mm]}
+                  </button>
+                ) : (
+                  <span key={ym} className="px-3 py-1.5 rounded-lg text-sm font-medium border border-gray-100 text-gray-300 cursor-default">
+                    {MONTH_LABELS_ES[mm]}
+                  </span>
+                );
+              })}
+            </div>
+            {years2025plus.map((year) => {
+              const yearRuns = runs.filter((r) => r.prediction_month.startsWith(year));
+              return (
+                <div key={year} className="flex flex-wrap items-center gap-2">
+                  <span className="text-xs font-semibold text-gray-400 w-8 shrink-0">{year}</span>
+                  {yearRuns.map((r) => {
+                    const [, mm] = r.prediction_month.split('-');
+                    const isActive = r.run_id === selectedRunId;
+                    return (
+                      <button
+                        key={r.run_id}
+                        onClick={() => setSelectedRunId(r.run_id)}
+                        title={`${predictionMonthLabel(r.prediction_month)} — datos hasta ${fmtDateEs(r.training_end_date)}`}
+                        className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                          isActive
+                            ? 'bg-emerald-600 text-white shadow-sm'
+                            : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-50'
+                        }`}
+                      >
+                        {MONTH_LABELS_ES[mm]}
+                      </button>
+                    );
+                  })}
+                </div>
+              );
+            })}
           </div>
         );
       })()}
-
-      {/* Scope toggle */}
-      <div className="flex flex-wrap items-center gap-2 text-sm">
-        {/*
-          Scope toggle. Three options, mutually exclusive:
-            1. `carvajal_reyma` — the default; all 36-38 Carvajal + Reyma SKUs
-               in the cycle (App rated on 36, Humanos rated on the ~8 they
-               chose to buy — asymmetric by construction).
-            2. `same_as_humans` — restricts both App and Humanos metrics to
-               only the SKUs where a confirmed OC exists in the prediction
-               month. This is the apples-to-apples head-to-head the decision
-               maker will ask for. Client-side filter; see `visibleRows`.
-            3. `all` — widens to every SKU the cycle modeled (100).
-        */}
-        <button
-          onClick={() => setScope('carvajal_reyma')}
-          className={`px-3 py-1.5 rounded-lg transition-colors ${
-            scope === 'carvajal_reyma'
-              ? 'bg-emerald-600 text-white'
-              : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-50'
-          }`}
-        >
-          Carvajal + Reyma
-        </button>
-        <button
-          onClick={() => setScope('same_as_humans')}
-          className={`px-3 py-1.5 rounded-lg transition-colors ${
-            scope === 'same_as_humans'
-              ? 'bg-emerald-600 text-white'
-              : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-50'
-          }`}
-        >
-          Mismos SKUs que Humanos
-        </button>
-        <button
-          onClick={() => setScope('all')}
-          className={`px-3 py-1.5 rounded-lg transition-colors ${
-            scope === 'all'
-              ? 'bg-emerald-600 text-white'
-              : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-50'
-          }`}
-        >
-          Todos los SKUs modelados
-        </button>
-      </div>
-
-      {summary && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          {/*
-            The SKU-count subtitle tells the reader which population the
-            acierto percentages were averaged over. This matters because
-            the three scopes produce qualitatively different comparisons:
-              - `carvajal_reyma`: App on all 36, Humanos on the 8 they
-                chose. Asymmetric by construction — mention this live.
-              - `same_as_humans`: both on the same 8. Head-to-head.
-              - `all`: App on 100, Humanos on the subset with OC.
-          */}
-          <KpiCard
-            label="SKUs en comparación"
-            value={fmtNum(summary.skuCount)}
-            subtitle={
-              scope === 'carvajal_reyma'
-                ? 'Carvajal + Reyma'
-                : scope === 'same_as_humans'
-                ? 'Cara a cara — solo SKUs con OC'
-                : `de ${selectedRun?.products_modeled ?? '—'} modelados`
-            }
-          />
-          <KpiCard
-            label="Acierto App (promedio)"
-            value={fmtPct(summary.systemAcierto)}
-            subtitle="1 − error relativo por SKU"
-            color="text-emerald-700"
-          />
-          <KpiCard
-            label="Acierto Humanos"
-            value={fmtPct(summary.comprAcierto)}
-            subtitle={summary.comprAciertoN > 0 ? `${summary.comprAciertoN} SKUs con OC en el mes` : 'Sin OC en el mes'}
-            color="text-blue-700"
-          />
-          <KpiCard
-            label="Margen proyectado vs real"
-            value={fmtGtq(summary.marginUplift)}
-            subtitle={summary.marginUplift >= 0 ? 'App habría superado' : 'App habría quedado corto'}
-            color={summary.marginUplift >= 0 ? 'text-emerald-700' : 'text-red-700'}
-          />
-        </div>
-      )}
 
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
         <div className="overflow-x-auto">
@@ -332,70 +166,35 @@ export default function GerenciaValidacionPage() {
               <tr>
                 <th className="text-left px-3 py-3 font-medium text-gray-500 sticky left-0 bg-gray-50">Producto</th>
                 <th className="text-left px-3 py-3 font-medium text-gray-500">Proveedor</th>
-                <th className="text-right px-3 py-3 font-medium text-gray-500">App predijo</th>
-                <th className="text-right px-3 py-3 font-medium text-gray-500">Humanos compraron</th>
-                <th className="text-right px-3 py-3 font-medium text-gray-500">Se vendió</th>
-                <th className="text-center px-3 py-3 font-medium text-gray-500">Acierto App</th>
-                <th className="text-center px-3 py-3 font-medium text-gray-500">Acierto Humanos</th>
-                <th className="text-right px-3 py-3 font-medium text-gray-500">Margen proyectado</th>
-                <th className="text-right px-3 py-3 font-medium text-gray-500">Margen real</th>
-                <th className="text-right px-3 py-3 font-medium text-gray-500">Delta (Q)</th>
+                <th className="text-right px-3 py-3 font-medium text-gray-500">Ventas (unid)</th>
+                <th className="text-right px-3 py-3 font-medium text-gray-500">Ventas GTQ</th>
+                <th className="text-right px-3 py-3 font-medium text-gray-500">Compras (unid)</th>
+                <th className="text-right px-3 py-3 font-medium text-gray-500">Compras GTQ</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
               {loadingRows || loadingRuns ? (
-                <tr><td colSpan={10} className="px-4 py-8 text-center text-gray-400">Cargando datos…</td></tr>
+                <tr><td colSpan={6} className="px-4 py-8 text-center text-gray-400">Cargando datos…</td></tr>
               ) : error ? (
-                <tr><td colSpan={10} className="px-4 py-8 text-center text-red-500">No se pudieron cargar los datos.</td></tr>
-              ) : visibleRows.length === 0 ? (
-                <tr><td colSpan={10} className="px-4 py-8 text-center text-gray-400">Este ciclo no tiene SKUs en el alcance seleccionado.</td></tr>
+                <tr><td colSpan={6} className="px-4 py-8 text-center text-red-500">No se pudieron cargar los datos.</td></tr>
+              ) : rows.length === 0 ? (
+                <tr><td colSpan={6} className="px-4 py-8 text-center text-gray-400">Sin datos para el mes seleccionado.</td></tr>
               ) : (
-                // Render `visibleRows`, not `rows`, so the `same_as_humans`
-                // filter hides rows without an OC in lockstep with the KPI
-                // card counts above. Both read from the same derived array.
-                visibleRows.map((r) => {
-                  const upliftIcon = r.margin_uplift_gtq === null
-                    ? Minus
-                    : r.margin_uplift_gtq > 0 ? TrendingUp : r.margin_uplift_gtq < 0 ? TrendingDown : Minus;
-                  const UpliftIcon = upliftIcon;
-                  const upliftColor = r.margin_uplift_gtq === null
-                    ? 'text-gray-500'
-                    : r.margin_uplift_gtq > 0 ? 'text-emerald-700' : r.margin_uplift_gtq < 0 ? 'text-red-700' : 'text-gray-500';
-                  return (
-                    <tr key={`${r.run_id}-${r.product_id}`} className="hover:bg-gray-50">
-                      <td className="px-3 py-3 sticky left-0 bg-white hover:bg-gray-50">
-                        <div className="font-medium text-gray-900 max-w-[220px] truncate" title={r.product_name}>
-                          {r.product_name}
-                        </div>
-                        <div className="text-xs text-gray-400 font-mono">{r.sku}</div>
-                      </td>
-                      <td className="px-3 py-3 text-gray-600 text-xs">
-                        {r.supplier_label ?? '—'}
-                      </td>
-                      <td className="px-3 py-3 text-right text-gray-900">{fmtNum(r.predicted_demand)}</td>
-                      <td className="px-3 py-3 text-right text-gray-900">{fmtNum(r.comprador_purchase_qty)}</td>
-                      <td className="px-3 py-3 text-right text-gray-900 font-medium">{fmtNum(r.actual_sales_qty)}</td>
-                      <td className="px-3 py-3 text-center">
-                        <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${aciertoClass(r.acierto_system_pct)}`}>
-                          {fmtPct(r.acierto_system_pct)}
-                        </span>
-                      </td>
-                      <td className="px-3 py-3 text-center">
-                        <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${aciertoClass(r.acierto_comprador_pct)}`}>
-                          {fmtPct(r.acierto_comprador_pct)}
-                        </span>
-                      </td>
-                      <td className="px-3 py-3 text-right text-gray-700">{fmtGtq(r.predicted_margin_gtq)}</td>
-                      <td className="px-3 py-3 text-right text-gray-700">{fmtGtq(r.actual_margin_gtq)}</td>
-                      <td className={`px-3 py-3 text-right font-medium ${upliftColor}`}>
-                        <span className="inline-flex items-center gap-1 justify-end">
-                          <UpliftIcon className="w-3.5 h-3.5" />
-                          {fmtGtq(r.margin_uplift_gtq)}
-                        </span>
-                      </td>
-                    </tr>
-                  );
-                })
+                rows.map((r) => (
+                  <tr key={`${r.run_id}-${r.product_id}`} className="hover:bg-gray-50">
+                    <td className="px-3 py-3 sticky left-0 bg-white hover:bg-gray-50">
+                      <div className="font-medium text-gray-900 max-w-[220px] truncate" title={r.product_name}>
+                        {r.product_name}
+                      </div>
+                      <div className="text-xs text-gray-400 font-mono">{r.sku}</div>
+                    </td>
+                    <td className="px-3 py-3 text-gray-600 text-xs">{r.supplier_label ?? '—'}</td>
+                    <td className="px-3 py-3 text-right text-gray-900">{fmtNum(r.actual_sales_qty)}</td>
+                    <td className="px-3 py-3 text-right text-gray-700">{fmtGtq(r.actual_revenue_gtq)}</td>
+                    <td className="px-3 py-3 text-right text-gray-900">{fmtNum(r.comprador_purchase_qty)}</td>
+                    <td className="px-3 py-3 text-right text-gray-700">{fmtGtq(r.comprador_purchase_cost_gtq)}</td>
+                  </tr>
+                ))
               )}
             </tbody>
           </table>
@@ -403,43 +202,19 @@ export default function GerenciaValidacionPage() {
       </div>
 
       <div className="space-y-2 text-xs text-gray-500 bg-gray-50 border border-gray-200 rounded-xl p-4">
-        <p className="font-semibold text-gray-700">Notas de transparencia</p>
+        <p className="font-semibold text-gray-700">Notas</p>
         <p>
-          <strong>Crédito vs bruto:</strong> los montos en GTQ se calculan sobre las ventas registradas en la base
-          de datos. Está <em>pendiente de verificar con David</em> si esta cifra es neta o bruta de notas de crédito.
-          El número puede estar inflado entre 3–10% si incluye devoluciones. Pregunta a levantar en la reunión.
+          <strong>Crédito vs bruto:</strong> los montos GTQ se calculan sobre ventas registradas en Odoo.
+          Pendiente verificar con David si son netos o brutos de notas de crédito (posible inflación de 3–10%).
         </p>
         <p>
-          <strong>Reyma por nombre:</strong> el catálogo de Odoo tiene un proveedor &quot;REYMA DEL SURESTE&quot; registrado,
-          pero la tabla de relaciones producto-proveedor no tiene a Reyma cargado. Los SKUs con etiqueta
-          &quot;Reyma (por nombre)&quot; se identifican por el nombre del producto. Corregir post-demo.
+          <strong>Reyma por nombre:</strong> la tabla de relaciones producto-proveedor no tiene a Reyma cargado.
+          SKUs etiquetados &quot;Reyma (por nombre)&quot; se identifican por nombre del producto. Corregir post-demo.
         </p>
         <p>
-          <strong>Margen proyectado:</strong> asume que la demanda pronosticada se habría vendido al precio de
-          lista. Es un techo teórico. En SKUs con acierto bajo, el margen real alcanzable habría sido menor.
-        </p>
-        <p>
-          <strong>Órdenes de compra:</strong> &quot;Humanos compraron&quot; cuenta solo OC en estado <code>purchase</code>
-          o <code>done</code>. Borradores y canceladas no cuentan.
+          <strong>Órdenes de compra:</strong> &quot;Compras&quot; cuenta solo OC en estado <code>purchase</code> o <code>done</code>. Borradores y canceladas no cuentan.
         </p>
       </div>
-    </div>
-  );
-}
-
-interface KpiCardProps {
-  label: string;
-  value: string;
-  subtitle: string;
-  color?: string;
-}
-
-function KpiCard({ label, value, subtitle, color = 'text-gray-900' }: KpiCardProps) {
-  return (
-    <div className="bg-white rounded-xl border border-gray-200 p-5">
-      <p className="text-sm text-gray-500">{label}</p>
-      <p className={`text-2xl font-bold mt-1 ${color}`}>{value}</p>
-      <p className="text-xs text-gray-400 mt-1">{subtitle}</p>
     </div>
   );
 }

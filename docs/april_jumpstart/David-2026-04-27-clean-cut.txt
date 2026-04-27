@@ -1,0 +1,126 @@
+David — 2026-04-27 (Lunes)
+==============================
+
+[Inicio de llamada]
+
+David: Hola David, muy buenos días.
+Yo: Hola, buenos días, ¿cómo estás?
+David: Bien, bien. Comenzando la semana con todo.
+Yo: Me parece. ¿Tenés a la mano la app? ¿O te paso el link?
+David: Permíteme, ahorita lo voy a buscar rapidito.
+Yo: Muy bien.
+David: Pues no me carga para poder entrar.
+Yo: Ok, voy a probar a mandarte el link de nuevo. Ahí te lo mandé por WhatsApp.
+David: Ok. Como que me lo mandaste directo por lo que veo.
+Yo: Sí, sí, para que no haya muchas vueltas.
+
+---
+
+[Revisión de datos históricos — Gap Report]
+
+David: Entonces, yo donde fue que lo vi... si no estoy mal, creo que fue este. Y seleccioné uno.
+Yo: Ajá.
+David: Imagino que aquí es de qué mes o qué más. Yo no me acuerdo. Pero... 2024, no. Mejor voy a utilizar el 2025. Desde acá hasta acá. Entonces, aquí me dice octubre, noviembre, diciembre.
+Yo: Ajá.
+David: Esto me recuerdo que ya lo había revisado. Y efectivamente sí me pegaba en las betas. En cantidad.
+Yo: ¿Hasta dónde revisaste y hasta dónde te pegó?
+David: Me pegó desde octubre de 24 hasta diciembre de 25.
+Yo: Enero no te iba a pegar porque solo tenés hasta el 28. Pero debería de pegarlo más cerca.
+David: Sí, cabal.
+Yo: Ah, va. Ok, entonces en histórico, en Gap Report, estamos bien.
+David: Sí.
+Yo: Buenísimo. Esa era mi preocupación mayor.
+
+---
+
+[Pausa — problemas técnicos / ruido]
+
+Yo: Te vamos a permitir... dame un momento.
+David: Dale, dale, sin prisa. Este tiempo es tuyo.
+
+[Sección incomprensible — ruido / audio cortado]
+No, no, ni, ni, algún, ni, ni, ni, ni, ni, ni, ni, ni, ni, ni, ni, ni, ni, ni, ni, ni, ni, ni.
+
+[Reconexión]
+Gracias. Hola, buenos días. Aquí estoy, aquí estoy.
+
+---
+
+[Pausa larga — audio repetitivo]
+
+Gracias. (repetido múltiples veces)
+
+---
+
+[Reanudación — Validación de datos por producto]
+
+David: Entonces, si yo me voy a... ahí está, ahí está. Ya salió. Podía verla pero era un duplicado de la otra. Ahí estamos.
+
+David: Entonces por ejemplo yo aquí agarré... vamos a agarrar el mes de hasta diciembre. Solo de un producto.
+Yo: Correcto.
+
+David: Entonces yo me voy a solo un producto en venta cantidad y voy a agarrar por ejemplo abril 2025. Me dice que fueron 34,634... 34,800... 34,800.
+Yo: Sí.
+David: En cantidad. Este es abril 2025.
+
+David: Si yo me voy a abril 2025: 34,816.40, que es este, mira, 34,816.40.
+Yo: Perfecto.
+
+David: Representa 1.4 millones... 1.94, perdón.
+Yo: Sí. 1.94.
+David: Aquí se mira. 1.94 millones. Estamos.
+Yo: Bueno, eso. Exactamente.
+
+David: Después me fui a ver lo que es cantidad. Voy a ver el mes de abril 2025 en cantidades ordenadas y recibidas. En el mes de abril, mira: 36,246.
+Yo: 36,246.
+David: De los cuales se recibieron 27,986.
+Yo: Que son 27,986. Ahí estamos. Hasta ahí vamos bien.
+David: Hasta ahí todo está excelente.
+
+---
+
+[Proyecciones — Incidente de ciberataques]
+
+David: ¿Cómo puedo ver la proyección de esto?
+Yo: No trates de verla. Como te comenté, el... según yo era yo el que al que se le había roto la cosa. Pero aquí entre nos, hubo ciberataques en Estados Unidos el viernes. Se tronaron todos los servidores de la West Coast. Y ahí estábamos nosotros. Por eso es que de pronto nada de mis proyecciones funcionó.
+
+Yo: Lo que hice durante el fin de semana es que comencé a mover mi infraestructura a otros países que no sean Estados Unidos. Así que hoy amanecimos en Canadá. Y no he corrido todavía motores de predicción.
+
+Yo: Entonces me quedo confiado como resultado de esta mini reunión de la mañana con que los históricos cuadran. Sabiendo que los históricos cuadran, entonces ya me aviento a correr la predicción. Porque sé que no estamos corriendo la sobre números que no cuadran. Estamos corriendo la sobre números que ya cuadraron.
+
+Yo: Como no estamos usando el historial completo, solamente los 23 meses que tenés acá, no debería tardar horas y horas la predicción. Debería tardar sin mucho un par de horas. Siendo las 10, yo estimo — espero optimistamente — que antes de las 12 te pongo un mensajito para que veas predicciones.
+
+David: Ok.
+Yo: Si te queda bien así. ¿Te funciona eso?
+David: ¿A qué hora me dijiste? Disculpa.
+Yo: Antes de las 12 del mediodía.
+David: Ah, sí. Es que tengo una reunión entre las 11 y 12. Pero yo pienso que lo voy a terminar rápido esa reunión.
+Yo: Ok. Va. ¿Alguna otra duda, pregunta, consulta, preocupación?
+
+---
+
+[Requerimiento nuevo — Conversión a furgones]
+
+David: Por el momento ya cuadramos con la información anterior. Lo que me interesa son las proyecciones que vamos a ver ahorita. Y... ¿cómo podemos mostrar cuántos furgones? O sea, yo ya entiendo que la proyección va a ser y me va a decir tantos miles de fardos son, pero... ¿cuántos furgones me representan?
+
+Yo: ¿Cuántos furgones?
+David: Sí.
+Yo: Ok. Entonces, estas tres columnas que ves ahorita en pantalla — ventas cantidad, compras ordenadas, compras recibidas — permanecen, pero además necesitamos convertir esto a furgones.
+David: Ajá.
+Yo: ¿Todos los furgones son del mismo tamaño?
+David: Sí.
+Yo: ¿De 44 pies?
+
+[Pausa — David buscando la medida]
+
+David: ¿Cuándo 53 pies? ¿Es este? Todos los furgones son de 53 pies.
+
+Yo: Copiado. Ahorita vamos a suponer eso. Por supuesto, y ¿cada cuánto tienen que entrar? Por ejemplo, me estás diciendo 40 mil fardos, pero cuándo... ¿cada cuánto? El lunes cuánto debe entrar, martes, miércoles... ¿qué pasa si el día lunes no entró? Entonces, ¿cómo se reajusta? Etcétera.
+
+Yo: Ok. Columnas actuales permanecen. Agregamos columnas para furgones de 53 pies. Y los furgones necesitan tiempos. Me quedo con eso y te pongo un mensajito antes de las 12 del mediodía para darle continuidad.
+
+David: Ok, perfecto. Así quedamos.
+Yo: Excelente. Muchas gracias, David. Que tengas buena semana.
+David: Gracias, igualmente.
+
+[Fin de llamada]
