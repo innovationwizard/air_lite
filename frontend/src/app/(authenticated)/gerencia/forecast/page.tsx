@@ -3,12 +3,18 @@
 import { useState, useEffect, useMemo } from 'react';
 import { TrendingUp, Sparkles } from 'lucide-react';
 
+// Furgón capacity used for m³/furgón calculations.
+// WARNING: exact unit type per supplier (Carvajal / Reyma) is NOT confirmed.
+// Using furgon_53 (53-foot trailer) as a demo approximation only.
+const FURGO_M3 = 122;
+
 interface ForecastRow {
   sku: string;
   product_name: string | null;
   supplier_class: string | null;
   movement_rank_within_class: number | null;
   stock_uom: string | null;
+  volume_m3: number | null;
   metric: string;
   forecast_month: string;
   yhat_sum: number;
@@ -24,6 +30,7 @@ type SkuRow = {
   supplier_class: string;
   movement_rank_within_class: number | null;
   stock_uom: string | null;
+  volume_m3: number | null;
   sales_feb: number | null;
   sales_mar: number | null;
   purchases_ordered_feb: number | null;
@@ -66,6 +73,7 @@ export default function ForecastPage() {
         supplier_class: r.supplier_class ?? '',
         movement_rank_within_class: r.movement_rank_within_class ?? null,
         stock_uom: r.stock_uom ?? null,
+        volume_m3: r.volume_m3 ?? null,
         sales_feb: null, sales_mar: null,
         purchases_ordered_feb: null, purchases_ordered_mar: null,
         purchases_received_feb: null, purchases_received_mar: null,
@@ -158,6 +166,8 @@ export default function ForecastPage() {
                   <th className="text-right px-2 py-2 font-medium text-emerald-700 bg-emerald-50" colSpan={2}>Ventas (cantidad)</th>
                   <th className="text-right px-2 py-2 font-medium text-blue-700 bg-blue-50" colSpan={2}>Compras Ordenadas</th>
                   <th className="text-right px-2 py-2 font-medium text-purple-700 bg-purple-50" colSpan={2}>Compras Recibidas</th>
+                  <th className="text-right px-2 py-2 font-medium text-gray-500 bg-gray-50">m³ / unidad</th>
+                  <th className="text-right px-2 py-2 font-medium text-gray-500 bg-gray-50">m³ / furgón</th>
                 </tr>
                 <tr className="border-b border-gray-200 text-xs text-gray-500">
                   <th className="sticky left-0 bg-gray-50 z-10"></th>
@@ -167,6 +177,8 @@ export default function ForecastPage() {
                   <th className="text-right px-2 py-1 bg-blue-50">Mar 26</th>
                   <th className="text-right px-2 py-1 bg-purple-50">Feb 26</th>
                   <th className="text-right px-2 py-1 bg-purple-50">Mar 26</th>
+                  <th className="bg-gray-50"></th>
+                  <th className="bg-gray-50"></th>
                 </tr>
               </thead>
               <tbody>
@@ -194,6 +206,12 @@ export default function ForecastPage() {
                       <td className="px-2 py-1.5 text-right font-mono text-blue-900 bg-blue-50/60">{fmt(r.purchases_ordered_mar)}</td>
                       <td className="px-2 py-1.5 text-right font-mono text-purple-900 bg-purple-50/60">{fmt(r.purchases_received_feb)}</td>
                       <td className="px-2 py-1.5 text-right font-mono text-purple-900 bg-purple-50/60">{fmt(r.purchases_received_mar)}</td>
+                      <td className="px-2 py-1.5 text-right font-mono text-gray-500 bg-gray-50/60 text-xs">
+                        {r.volume_m3 != null ? r.volume_m3.toFixed(4) : '—'}
+                      </td>
+                      <td className="px-2 py-1.5 text-right font-mono text-gray-500 bg-gray-50/60 text-xs">
+                        {r.volume_m3 != null ? (FURGO_M3 / r.volume_m3).toFixed(1) : '—'}
+                      </td>
                     </tr>
                   );
                 })}
@@ -207,6 +225,8 @@ export default function ForecastPage() {
                   <td className="px-2 py-2 text-right font-mono text-blue-900 bg-blue-50">{fmt(totals.po_ord_mar)}</td>
                   <td className="px-2 py-2 text-right font-mono text-purple-900 bg-purple-50">{fmt(totals.po_rcv_feb)}</td>
                   <td className="px-2 py-2 text-right font-mono text-purple-900 bg-purple-50">{fmt(totals.po_rcv_mar)}</td>
+                  <td className="bg-gray-50"></td>
+                  <td className="bg-gray-50"></td>
                 </tr>
               </tfoot>
             </table>
