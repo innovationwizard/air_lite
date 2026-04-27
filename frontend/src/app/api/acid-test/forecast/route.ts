@@ -70,6 +70,7 @@ export async function GET(req: NextRequest) {
       sku: productIdToSku.get(r.product_id) ?? null,
       product_name: skuMeta.get(productIdToSku.get(r.product_id) ?? '')?.representative_name ?? null,
       supplier_class: skuMeta.get(productIdToSku.get(r.product_id) ?? '')?.supplier_class ?? null,
+      movement_rank_within_class: skuMeta.get(productIdToSku.get(r.product_id) ?? '')?.movement_rank_within_class ?? null,
     }));
 
     return NextResponse.json({

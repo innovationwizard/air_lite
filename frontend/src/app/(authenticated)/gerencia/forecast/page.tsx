@@ -7,6 +7,7 @@ interface ForecastRow {
   sku: string;
   product_name: string | null;
   supplier_class: string | null;
+  movement_rank_within_class: number | null;
   metric: string;
   forecast_month: string;
   yhat_sum: number;
@@ -20,6 +21,7 @@ type SkuRow = {
   sku: string;
   name: string;
   supplier_class: string;
+  movement_rank_within_class: number | null;
   sales_feb: number | null;
   sales_mar: number | null;
   purchases_ordered_feb: number | null;
@@ -60,6 +62,7 @@ export default function ForecastPage() {
         sku: r.sku,
         name: r.product_name ?? '',
         supplier_class: r.supplier_class ?? '',
+        movement_rank_within_class: r.movement_rank_within_class ?? null,
         sales_feb: null, sales_mar: null,
         purchases_ordered_feb: null, purchases_ordered_mar: null,
         purchases_received_feb: null, purchases_received_mar: null,
@@ -77,7 +80,7 @@ export default function ForecastPage() {
     }
     return Array.from(m.values()).sort((a, b) => {
       if (a.supplier_class !== b.supplier_class) return a.supplier_class.localeCompare(b.supplier_class);
-      return a.sku.localeCompare(b.sku);
+      return (a.movement_rank_within_class ?? 999) - (b.movement_rank_within_class ?? 999);
     });
   }, [raw]);
 
