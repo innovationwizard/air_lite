@@ -19,10 +19,13 @@ const MONTH_LABELS_ES: Record<string, string> = {
   '09': 'Septiembre', '10': 'Octubre', '11': 'Noviembre', '12': 'Diciembre',
 };
 
+// Data is intentionally capped at Jan 2026 — Feb/Mar/Apr are blind-test months.
+const MAX_MONTH = '2026-01';
+
 const MONTH_NAV: Record<string, string[]> = {
   '2024': ['2024-01','2024-02','2024-03','2024-04','2024-05','2024-06','2024-07','2024-08','2024-09','2024-10','2024-11','2024-12'],
   '2025': ['2025-01','2025-02','2025-03','2025-04','2025-05','2025-06','2025-07','2025-08','2025-09','2025-10','2025-11','2025-12'],
-  '2026': ['2026-01','2026-02','2026-03','2026-04'],
+  '2026': ['2026-01'],
 };
 
 function fmtNum(n: number | null | undefined, digits = 0): string {
