@@ -273,10 +273,10 @@ export default function GapReportPage() {
               <tr className="border-b border-gray-200">
                 <th className="text-left px-3 py-2 font-medium text-gray-700 sticky left-0 bg-gray-50 z-20">SKU / Producto</th>
                 <th className="text-left px-2 py-2 font-medium text-gray-700">Mes</th>
-                <th className="text-right px-2 py-2 font-medium text-gray-700">Ventas (cant)</th>
-                <th className="text-right px-2 py-2 font-medium text-gray-700">Ventas GTQ</th>
-                <th className="text-right px-2 py-2 font-medium text-gray-700">Compras Ord</th>
-                <th className="text-right px-2 py-2 font-medium text-gray-700">Compras Rec</th>
+                <th className="text-right px-2 py-2 font-medium text-gray-700">Ventas (unidades)</th>
+                <th className="text-right px-2 py-2 font-medium text-gray-700">Ventas (GTQ)</th>
+                <th className="text-right px-2 py-2 font-medium text-gray-700">Compras (unidades)</th>
+                <th className="text-right px-2 py-2 font-medium text-gray-700">Recibido (unidades)</th>
                 <th className="text-left px-2 py-2 font-medium text-gray-700">Esperado (CEO)</th>
               </tr>
             </thead>

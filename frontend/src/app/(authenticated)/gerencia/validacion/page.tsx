@@ -98,10 +98,10 @@ export default function GerenciaValidacionPage() {
               <tr>
                 <th className="text-left px-3 py-3 font-medium text-gray-500 sticky left-0 bg-gray-50">Producto</th>
                 <th className="text-left px-3 py-3 font-medium text-gray-500">Proveedor</th>
-                <th className="text-right px-3 py-3 font-medium text-gray-500">Ventas (unid)</th>
-                <th className="text-right px-3 py-3 font-medium text-gray-500">Ventas GTQ</th>
-                <th className="text-right px-3 py-3 font-medium text-gray-500">Compras (unid)</th>
-                <th className="text-right px-3 py-3 font-medium text-gray-500">Recibido (unid)</th>
+                <th className="text-right px-3 py-3 font-medium text-gray-500">Ventas (unidades)</th>
+                <th className="text-right px-3 py-3 font-medium text-gray-500">Ventas (GTQ)</th>
+                <th className="text-right px-3 py-3 font-medium text-gray-500">Compras (unidades)</th>
+                <th className="text-right px-3 py-3 font-medium text-gray-500">Recibido (unidades)</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
