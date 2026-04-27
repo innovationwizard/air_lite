@@ -55,17 +55,12 @@ function fmtGtq(n: number | null | undefined): string {
 // Scope is locked to the same 23 SKUs used by /gerencia/forecast.
 const SCOPE = 'top';
 
-function parseYearParam(): '2024' | '2025' | null {
-  if (typeof window === 'undefined') return null;
-  const y = new URLSearchParams(window.location.search).get('year');
-  return y === '2024' || y === '2025' ? y : null;
-}
-
-function yearBounds(year: '2024' | '2025' | null): { from: string; to: string } {
-  if (year === '2024') return { from: '2024-01', to: '2024-12' };
-  if (year === '2025') return { from: '2025-01', to: '2025-12' };
-  return { from: '2024-09', to: '' };
-}
+// All months with potential data, grouped by year.
+const MONTH_NAV: Record<string, string[]> = {
+  '2024': ['2024-09', '2024-10', '2024-11', '2024-12'],
+  '2025': ['2025-01', '2025-02', '2025-03', '2025-04', '2025-05', '2025-06', '2025-07', '2025-08', '2025-09', '2025-10', '2025-11', '2025-12'],
+  '2026': ['2026-01', '2026-02', '2026-03', '2026-04'],
+};
 
 export default function GapReportPage() {
   const [skus, setSkus] = useState<SkuMeta[]>([]);
@@ -77,21 +72,11 @@ export default function GapReportPage() {
   // Filters
   const [supplierClass, setSupplierClass] = useState<'' | 'REYMA' | 'CARVAJAL'>('');
   const [skuFilter, setSkuFilter] = useState<string>('');
-  const initialYear = typeof window !== 'undefined' ? parseYearParam() : null;
-  const initialBounds = yearBounds(initialYear);
-  const [yearPreset, setYearPreset] = useState<'' | '2024' | '2025'>(initialYear ?? '');
-  const [fromMonth, setFromMonth] = useState<string>(initialBounds.from);
-  const [toMonth, setToMonth] = useState<string>(initialBounds.to);
+  // null = show all months; a YYYY-MM string = single-month view
+  const [selectedMonth, setSelectedMonth] = useState<string | null>(null);
 
   // User's "expected" overlay — keyed by `${sku}|${month}|${metric}`
   const [expected, setExpected] = useState<Record<string, string>>({});
-
-  function applyYear(year: '' | '2024' | '2025') {
-    setYearPreset(year);
-    const b = yearBounds(year || null);
-    setFromMonth(b.from);
-    setToMonth(b.to);
-  }
 
   useEffect(() => {
     setLoadingSkus(true);
@@ -107,14 +92,18 @@ export default function GapReportPage() {
     const params = new URLSearchParams({ action: 'report', scope: SCOPE });
     if (skuFilter) params.set('sku', skuFilter);
     if (supplierClass) params.set('class', supplierClass);
-    if (fromMonth) params.set('from', fromMonth);
-    if (toMonth) params.set('to', toMonth);
+    if (selectedMonth) {
+      params.set('from', selectedMonth);
+      params.set('to', selectedMonth);
+    } else {
+      params.set('from', '2024-09');
+    }
 
     fetch(`/api/acid-test/gap-report?${params.toString()}`)
       .then((res) => { if (!res.ok) throw new Error('HTTP ' + res.status); return res.json(); })
       .then((data) => { setRows(data.rows ?? []); setLoadingRows(false); })
       .catch((err) => { setError(String(err)); setLoadingRows(false); });
-  }, [skuFilter, supplierClass, fromMonth, toMonth]);
+  }, [skuFilter, supplierClass, selectedMonth]);
 
   // Group rows by SKU for the table
   const grouped = useMemo(() => {
@@ -179,6 +168,46 @@ export default function GapReportPage() {
         </p>
       </div>
 
+      {/* Month navigation */}
+      <div className="space-y-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs font-semibold text-gray-400 w-8 shrink-0" />
+          <button
+            onClick={() => setSelectedMonth(null)}
+            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+              selectedMonth === null
+                ? 'bg-emerald-600 text-white shadow-sm'
+                : 'bg-white border border-gray-200 text-gray-500 hover:bg-gray-50'
+            }`}
+          >
+            Todo
+          </button>
+        </div>
+        {Object.entries(MONTH_NAV).map(([year, months]) => (
+          <div key={year} className="flex flex-wrap items-center gap-2">
+            <span className="text-xs font-semibold text-gray-400 w-8 shrink-0">{year}</span>
+            {months.map((ym) => {
+              const [, mm] = ym.split('-');
+              const isActive = selectedMonth === ym;
+              return (
+                <button
+                  key={ym}
+                  onClick={() => setSelectedMonth(isActive ? null : ym)}
+                  className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                    isActive
+                      ? 'bg-emerald-600 text-white shadow-sm'
+                      : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-50'
+                  }`}
+                >
+                  {MONTH_LABELS_ES[mm]}
+                </button>
+              );
+            })}
+          </div>
+        ))}
+      </div>
+
+      {/* SKU + class filters */}
       <div className="bg-white border border-gray-200 rounded-xl p-4 space-y-3">
         <div className="flex items-center gap-2 text-sm font-semibold text-gray-700">
           <Filter className="w-4 h-4" /> Filtros
@@ -209,30 +238,6 @@ export default function GapReportPage() {
             </div>
           </div>
 
-          <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Año</label>
-            <div className="inline-flex rounded-lg border border-gray-300 overflow-hidden">
-              {([
-                { v: '', label: 'Todo' },
-                { v: '2024', label: '2024' },
-                { v: '2025', label: '2025' },
-              ] as const).map((opt, i) => (
-                <button
-                  key={opt.v}
-                  type="button"
-                  onClick={() => applyYear(opt.v)}
-                  className={`px-3 py-2 text-sm ${i > 0 ? 'border-l border-gray-300' : ''} ${
-                    yearPreset === opt.v
-                      ? 'bg-emerald-600 text-white font-medium'
-                      : 'bg-white text-gray-700 hover:bg-gray-50'
-                  }`}
-                >
-                  {opt.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
           <div className="flex-1 min-w-[12rem]">
             <label className="block text-xs font-medium text-gray-600 mb-1">SKU</label>
             <select className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
@@ -245,18 +250,6 @@ export default function GapReportPage() {
                 </option>
               ))}
             </select>
-          </div>
-
-          <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Desde mes</label>
-            <input type="month" className="border border-gray-300 rounded-lg px-3 py-2 text-sm"
-                   value={fromMonth} onChange={(e) => { setFromMonth(e.target.value); setYearPreset(''); }} />
-          </div>
-
-          <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Hasta mes</label>
-            <input type="month" className="border border-gray-300 rounded-lg px-3 py-2 text-sm"
-                   value={toMonth} onChange={(e) => { setToMonth(e.target.value); setYearPreset(''); }} />
           </div>
         </div>
 
