@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { TrendingUp, Sparkles } from 'lucide-react';
+import { TrendingUp, Sparkles, Download } from 'lucide-react';
 
 // Furgón capacity used for m³/furgón calculations.
 // WARNING: exact unit type per supplier (Carvajal / Reyma) is NOT confirmed.
@@ -48,6 +48,71 @@ function fmt(n: number | null | undefined): string {
 function fmtFurgo(units: number | null | undefined, volume_m3: number | null | undefined): string {
   if (units == null || volume_m3 == null || volume_m3 === 0) return '—';
   return ((units * volume_m3) / FURGO_M3).toFixed(1);
+}
+
+function furgoVal(units: number | null, volume_m3: number | null): string {
+  if (units == null || volume_m3 == null || volume_m3 === 0) return '';
+  return ((units * volume_m3) / FURGO_M3).toFixed(1);
+}
+
+function downloadCsv(rows: SkuRow[], filterLabel: string) {
+  const headers = [
+    'SKU',
+    'Producto',
+    'Proveedor',
+    'Unidad de Medida',
+    'Ventas Feb 2026 (unidades)',
+    'Ventas Mar 2026 (unidades)',
+    'Compras Ordenadas Feb 2026 (unidades)',
+    'Compras Ordenadas Mar 2026 (unidades)',
+    'Compras Recibidas Feb 2026 (unidades)',
+    'Compras Recibidas Mar 2026 (unidades)',
+    'Furgones Ventas Feb 2026',
+    'Furgones Ventas Mar 2026',
+    'Furgones Compras Ordenadas Feb 2026',
+    'Furgones Compras Ordenadas Mar 2026',
+    'Furgones Compras Recibidas Feb 2026',
+    'Furgones Compras Recibidas Mar 2026',
+    'm3 por unidad',
+    'unidades por furgon (aprox)',
+  ];
+
+  const escape = (v: string | number | null | undefined) => {
+    const s = v == null ? '' : String(v);
+    return s.includes(',') || s.includes('"') || s.includes('\n')
+      ? `"${s.replace(/"/g, '""')}"`
+      : s;
+  };
+
+  const dataRows = rows.map((r) => [
+    r.sku,
+    r.name,
+    r.supplier_class,
+    r.stock_uom ?? '',
+    r.sales_feb ?? '',
+    r.sales_mar ?? '',
+    r.purchases_ordered_feb ?? '',
+    r.purchases_ordered_mar ?? '',
+    r.purchases_received_feb ?? '',
+    r.purchases_received_mar ?? '',
+    furgoVal(r.sales_feb, r.volume_m3),
+    furgoVal(r.sales_mar, r.volume_m3),
+    furgoVal(r.purchases_ordered_feb, r.volume_m3),
+    furgoVal(r.purchases_ordered_mar, r.volume_m3),
+    furgoVal(r.purchases_received_feb, r.volume_m3),
+    furgoVal(r.purchases_received_mar, r.volume_m3),
+    r.volume_m3 != null ? r.volume_m3.toFixed(4) : '',
+    r.volume_m3 != null ? (FURGO_M3 / r.volume_m3).toFixed(1) : '',
+  ].map(escape).join(','));
+
+  const csv = [headers.map(escape).join(','), ...dataRows].join('\n');
+  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `forecast-a-ciegas_feb-mar-2026${filterLabel ? '_' + filterLabel : ''}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
 export default function ForecastPage() {
@@ -151,7 +216,7 @@ export default function ForecastPage() {
         </p>
       </div>
 
-      <div className="flex gap-2 items-center">
+      <div className="flex gap-2 items-center flex-wrap">
         <span className="text-sm text-gray-600">Proveedor:</span>
         <button onClick={() => setClassFilter('')}
           className={`px-3 py-1 text-sm rounded-lg ${classFilter === '' ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-700'}`}>
@@ -165,6 +230,15 @@ export default function ForecastPage() {
           className={`px-3 py-1 text-sm rounded-lg ${classFilter === 'CARVAJAL' ? 'bg-sky-600 text-white' : 'bg-sky-50 text-sky-700'}`}>
           CARVAJAL ({rows.filter((r) => r.supplier_class === 'CARVAJAL').length})
         </button>
+        <div className="ml-auto">
+          <button
+            onClick={() => downloadCsv(visible, classFilter)}
+            className="flex items-center gap-1.5 px-3 py-1 text-sm rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors"
+          >
+            <Download className="w-3.5 h-3.5" />
+            Descargar CSV
+          </button>
+        </div>
       </div>
 
       {err && (
