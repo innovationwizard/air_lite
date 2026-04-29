@@ -178,11 +178,23 @@ loc_oid_to_id = {str(l['odoo_id']): l['id'] for l in supa_locations if l.get('od
 print(f"  stock_locations: {len(loc_oid_to_id)}")
 
 # State mappings (Odoo English → Supabase normalized)
+# PO states confirmed present in production (2026-04-28 query, 3,253 POs):
+#   draft, solicitud de cotización (=sent in Spanish Odoo), purchase, locked, done, cancel
+#
+# DEMO scope definition (confirmed 2026-04-28):
+#   A Purchase Order is: state IN ('purchase', 'locked', 'done')
+#   Excluded:
+#     - 'draft'                    : not yet sent to supplier
+#     - 'solicitud de cotización'  : RFQ sent, not yet confirmed as PO
+#     - 'sent'                     : English equivalent of solicitud de cotización (not present in prod)
+#     - 'cancel'                   : cancelled
+#     - 'to approve'               : never used in DEMO or PROD; no plans to use it
 SO_STATE_MAP = {'sale': 'sale', 'done': 'done', 'cancel': 'cancel',
                 'draft': 'draft', 'sent': 'draft', 'waiting_for_approval': 'draft'}
-PO_STATE_MAP = {'draft': 'draft', 'sent': 'sent', 'to approve': 'draft',
-                'purchase': 'purchase', 'done': 'done', 'cancel': 'cancel',
-                'waiting_for_approval': 'draft'}
+PO_STATE_MAP = {'purchase': 'purchase', 'locked': 'locked', 'done': 'done',
+                'draft': 'draft', 'sent': 'sent',
+                'solicitud de cotización': 'solicitud de cotización',
+                'cancel': 'cancel'}
 MOVE_STATE_MAP = {'done': 'done', 'cancel': 'cancel', 'confirmed': 'confirmed',
                   'assigned': 'assigned', 'waiting': 'waiting', 'draft': 'draft',
                   'partially_available': 'assigned'}

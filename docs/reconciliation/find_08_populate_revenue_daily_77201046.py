@@ -13,7 +13,10 @@ winning triplet:
 
   - PURCHASES_ORDERED:
       source = purchase.order.line
-      filter = state IN ('draft','sent','to approve','purchase','done','cancel')  -- ALL states
+      filter = state IN ('purchase','locked','done')  -- DEMO scope confirmed 2026-04-28
+      -- Excluded: draft (not sent), solicitud de cotización/sent (RFQ not yet confirmed),
+      --           cancel (not a PO), to approve (never used in DEMO or PROD).
+      -- revenue_daily must be re-populated with this filter before re-running ML training.
       qty   = product_qty, normalized to CAJA40
       group by purchase.order.date_planned (day)
       ssot_label = 'pol_all_states_date_planned_product_qty_c40'

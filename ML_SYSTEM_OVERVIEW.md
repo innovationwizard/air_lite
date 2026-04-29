@@ -112,7 +112,7 @@ Each pillar is calculated independently and surfaced as a GTQ savings figure per
 - Local suppliers (Carvajal / Reyma): ~5-day lead time
 - Imports (Colombia / Mexico / China): ~90-day lead time — fundamentally different reorder dynamics
 - `date_planned` used (not `date_order`) because David's dashboard tracks expected arrival, not PO submission date
-- All PO states (draft, sent, to_approve, purchase, done, cancel) counted in "ordered" — empirically matches the business view
+- PO states counted as "ordered" (DEMO scope, confirmed 2026-04-28): `purchase`, `locked`, `done` only. Excluded: `draft` (not sent), `solicitud de cotización` / `sent` (RFQ not yet confirmed), `cancel` (not a PO), `to_approve` (never used in DEMO or PROD, no plans to use). `revenue_daily` must be re-populated and ML re-trained with this corrected filter.
 
 ### Data Quality Trade-offs
 - The 80% stockout-prevention rate is a conservative haircut acknowledging that not all censored demand would have converted to sales

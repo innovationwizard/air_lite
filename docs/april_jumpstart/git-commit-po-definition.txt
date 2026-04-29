@@ -1,0 +1,45 @@
+Correct purchases_ordered SSOT: exclude unconfirmed and cancelled POs
+
+Establishes the DEMO-scope definition of a Purchase Order (confirmed
+2026-04-28): state IN ('purchase', 'locked', 'done') only.
+
+Excluded states and reasons:
+  - draft: not yet sent to supplier
+  - solicitud de cotización / sent: RFQ submitted to supplier but not
+    yet confirmed as a purchase order
+  - cancel: not a purchase order; no goods ever committed or received
+  - to approve: never used by the company in DEMO or PROD; no plans to
+    use it in the future; absent from the production purchase_orders table
+
+Root cause this fixes: the original SSOT label pol_all_states_* included
+cancelled POs (319 records, 300,823 units, 0 received) and unconfirmed
+RFQs (29 records, 7,987 units, 0 received) in the purchases_ordered
+training data. The ML model learned purchase patterns from volume that
+was never committed and never arrived, directly inflating yhat_sum
+predictions. This is a confirmed root cause of the impossibly large
+Compras Ordenadas values reported by the insider on 2026-04-28.
+
+Changes:
+  - SSOT label renamed from pol_all_states_date_planned_product_qty_c40
+    to pol_confirmed_date_planned_product_qty_c40
+  - SSOT_WINNING_FORMULAS.md: Formula 2 filter and label updated;
+    original "why all states" rationale replaced with the corrected
+    definition and a note that revenue_daily must be re-populated
+  - ML_SYSTEM_OVERVIEW.md: Supplier Constraints section updated with
+    correct state list and re-population requirement
+  - replace_06_replace_prod_data.py: PO_STATE_MAP comment block
+    updated with full DEMO scope definition and exclusion reasons
+  - find_08_populate_revenue_daily_77201046.py: filter comment updated
+    to state IN ('purchase', 'locked', 'done')
+
+New file:
+  - ML_TRAINING_DATA_FINDINGS_2026-04-28.md: full analysis of training
+    data structure — sales density validation (confirmed stochastic,
+    no issue), purchase density analysis (4.7–16.8% nonzero, Prophet
+    structurally incompatible), confidence interval evidence (lower
+    bound = 0 for all purchase metrics), PO state lifecycle from
+    production data (3,253 POs, 16,159 lines), and all decisions made
+
+Note: revenue_daily must be re-populated and ML training re-run for
+all 23 demo SKUs using the corrected state filter before the corrected
+predictions are reflected in Forecast a Ciegas.

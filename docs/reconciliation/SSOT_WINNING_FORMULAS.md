@@ -57,13 +57,18 @@ GROUP BY product_id, invoice_date;
 
 ## Formula 2 — PURCHASES_ORDERED
 
-**SSOT label:** `pol_all_states_date_planned_product_qty_c40`
+**SSOT label:** `pol_confirmed_date_planned_product_qty_c40` *(updated 2026-04-28 — formerly `pol_all_states_date_planned_product_qty_c40`)*
 
 **Source table:** `purchase.order.line`
 
-**Filters:**
-- **No state filter** — `draft`, `sent`, `to approve`, `purchase`, `done`, `cancel` ALL counted
+**Filters (DEMO scope — confirmed 2026-04-28):**
+- `purchase.order.state IN ('purchase', 'locked', 'done')`
 - `purchase.order.line.product_id IN (variant_ids)`
+- **Excluded states and reasons:**
+  - `draft` — not a purchase order; not yet sent to supplier
+  - `solicitud de cotización` (Odoo Spanish for `sent`) — RFQ submitted to supplier but not yet confirmed as a purchase order. Excluded from DEMO scope. PROD scope decision pending.
+  - `cancel` — not a purchase order; cancelled
+  - `to approve` — never used by the company in DEMO or PROD; no plans to use it in the future
 
 **Date field for grouping:** `purchase.order.date_planned` (when delivery is expected — NOT `date_order`)
 
@@ -84,7 +89,7 @@ GROUP BY product_id, day;
 
 **Why `date_planned` not `date_order`:** verified empirically. Nov 2024 by `date_order` gives 8,395 (wrong); by `date_planned` gives 5,917 (matches David's 5,917 exactly). Operationally this makes sense — David tracks "what should arrive in November," not "what we placed orders for in November."
 
-**Why all states (including draft and cancel):** verified empirically. Filtering to `purchase` + `done` only loses 62 units in Nov 2024 (5,855 vs target 5,917). This is counterintuitive — likely David's dashboard counts cancelled-but-once-planned POs as "ordered". Worth confirming with David before scaling.
+**Note on the original `pol_all_states` label:** the original formula used no state filter and matched David's dashboard at 5,917 units for Nov 2024. Filtering to `purchase + done` only gave 5,855 (gap of 62 units). The gap is now attributed to `solicitud de cotización` and/or `draft` records that were included under all-states. Per the business rule confirmed 2026-04-28, those states are excluded from the DEMO scope. The SSOT label has been renamed from `pol_all_states_*` to `pol_confirmed_*` to reflect this. `revenue_daily` must be re-populated with the corrected filter before re-running ML training.
 
 ---
 
@@ -122,7 +127,7 @@ GROUP BY product_id, day;
 
 1. **Purchases all-time total of 8,203** — gap of 79 units (~1%). Hypothesis: 1–2 PO lines in prod-Odoo not in test-Odoo. Cannot verify without prod credentials.
 2. **Generalization to other 19 SKUs** — formulas are derived from SKU 77201046 only. Top-20 movers are next on plan to validate.
-3. **The "all states" finding for purchases_ordered** — feels wrong; want David's confirmation that cancelled POs really are counted in "ordered". Could also be coincidence of the Nov 2024 dataset (no cancelled POs in Nov for this SKU happen to be excluded from his number).
+3. **The "all states" finding for purchases_ordered** — feels wrong; want David's confirmation that cancelled POs really are counted in "ordered". Could also be coincidence of the Nov 2024 dataset (no cancelled POs in Nov for this SKU happen to be excluded from his number). Note: `to approve` has been confirmed as never used in DEMO or PROD and can be permanently excluded from all state lists.
 4. **Refund handling on purchases** — David didn't mention `in_refund`. Current Formula 2/3 don't subtract returns to vendors. May need to add later.
 
 ---
