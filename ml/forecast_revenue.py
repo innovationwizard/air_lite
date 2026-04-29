@@ -1,20 +1,30 @@
 """
-Forecast engine for the revenue_daily table (the NEW winning SSOT).
+Forecast engine — reads from revenue_daily_for_ml (ML-training clone of revenue_daily).
 
 Distinct from backtest_engine.py, which trains on demand_daily (the old
 operational SSOT: sale.order.line + effective_date + delivered_qty).
 
 This module powers /forecast/revenue-daily on the ML service. It reads
-revenue_daily — per-product, per-ssot_label, per-metric daily aggregates
-computed from the CEO-dashboard-matching formulas:
+revenue_daily_for_ml — identical schema to revenue_daily, but with the October
+2024 purchase anomaly smoothed out (onboarding artifact, 5–12 POs/SKU/day).
+Sales rows are copied verbatim; October 2024 purchase rows are replaced with
+one synthetic row per SKU whose quantity equals the median of the other 15
+training-window months. See ML_PURCHASE_HYPOTHESIS_REVALIDATION_2026-04-28.md.
 
-  - sales:              aml + income + posted + out_invoice|out_refund
-  - purchases_ordered:  pol + all states + date_planned + product_qty
-  - purchases_received: pol + purchase|done + date_planned + qty_received
+revenue_daily (the source of truth) is NEVER read or written by this module.
+Acid Test 1 data lives there and must remain intact.
+
+Populated by: docs/reconciliation/smooth_oct2024_purchase_anomaly.py
+Re-run that script before re-training whenever revenue_daily changes.
+
+Formulas (SSOT labels):
+  - sales:              aml_income_posted_invoice_refund_neg_invoice_date_c40
+  - purchases_ordered:  pol_confirmed_date_planned_product_qty_c40
+  - purchases_received: pol_purchase_done_date_planned_qty_received_c40
 
 Reference:
   docs/reconciliation/SSOT_WINNING_FORMULAS.md
-  docs/reconciliation/PLAN_ACID_TEST_SSOT_DISCOVERY.md §Step 8
+  ML_PURCHASE_HYPOTHESIS_REVALIDATION_2026-04-28.md
 """
 import logging
 from datetime import date, timedelta
@@ -59,7 +69,7 @@ def load_revenue_for_product(
 ) -> pd.DataFrame:
     """Load revenue_daily for a single (product_id, ssot_label, metric) in
     a date range. Returns DataFrame ready for Prophet: columns [ds, y]."""
-    result = supabase.table('revenue_daily').select(
+    result = supabase.table('revenue_daily_for_ml').select(
         'observation_date, quantity'
     ).eq(
         'product_id', product_id
@@ -82,8 +92,8 @@ def load_revenue_for_product(
     df['y'] = df['y'].astype(float)
 
     # Reindex to a complete date range so Prophet sees zero-days as zeros
-    # (revenue_daily only INSERTs rows where there was activity; missing days
-    # are implicit zeros for the SSOT formulas we use).
+    # (revenue_daily_for_ml only INSERTs rows where there was activity; missing
+    # days are implicit zeros for the SSOT formulas we use).
     full_range = pd.date_range(start=start_date, end=end_date, freq='D')
     df = df.set_index('ds').reindex(full_range, fill_value=0).rename_axis('ds').reset_index()
 

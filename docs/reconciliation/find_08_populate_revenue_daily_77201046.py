@@ -55,7 +55,7 @@ VARIANT_IDS = {7090, 1541, 2371}
 
 # SSOT labels (kept short but unambiguous)
 SSOT_SALES = 'aml_income_posted_invoice_refund_neg_invoice_date_c40'
-SSOT_PO_ORD = 'pol_all_states_date_planned_product_qty_c40'
+SSOT_PO_ORD = 'pol_confirmed_date_planned_product_qty_c40'
 SSOT_PO_RCV = 'pol_purchase_done_date_planned_qty_received_c40'
 
 def load_env():
@@ -168,7 +168,8 @@ for l in ops['purchase_order_line']:
     o = po_by_id.get(l['order_id'][0]) if l.get('order_id') else None
     if not o:
         continue
-    # ALL states accepted
+    if o.get('state') not in ('purchase', 'locked', 'done'):
+        continue
     day = o.get('date_planned')
     if not day:
         continue

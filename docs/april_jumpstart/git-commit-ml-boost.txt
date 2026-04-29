@@ -1,0 +1,103 @@
+ML pipeline: fix ID mismatch, locked PO gap, SSOT label, derived purchase forecast
+
+Three independent root causes blocking Acid Test 2 are resolved in this commit.
+All 23 demo SKUs now have complete, correctly-keyed training data in
+revenue_daily_for_ml (10,719 rows). The ML service has a new endpoint for
+derived purchase forecasting that replaces Prophet on purchase metrics.
+
+─── Root cause 1: products_acid_test_active.id used as product_id FK ───────
+
+products_acid_test_active.id is a standalone BIGSERIAL with no relation to
+products.id. smooth_oct2024_purchase_anomaly.py was using it as a product_id
+filter on revenue_daily reads and revenue_daily_for_ml deletes. Only 2 of 23
+SKUs were processed correctly (coincidental ID overlap). 13 SKUs were absent
+from the ML table entirely; 8 survived an incorrect DELETE unsmoothed.
+
+Fix: migration 20260428000002 adds products_id INT REFERENCES products(id) to
+products_acid_test_active, backfilled by matching default_code to products.sku.
+smooth_oct2024_purchase_anomaly.py corrected to resolve products.id via the
+products table, with a hard assertion on exactly 23 IDs before any writes.
+
+─── Root cause 2: 74.5% of confirmed POs missing from training data ─────────
+
+All prior Odoo extracts had zero locked-state purchase orders. Production has
+2,477 locked POs out of 3,253 confirmed orders (74.5%). Revenue_daily purchase
+quantities were massively understated; Prophet was fitting to an incomplete
+signal.
+
+Fix: find_15_populate_revenue_daily_purchases_from_supabase.py reads directly
+from the Supabase purchase_orders + purchase_order_lines tables, which contain
+complete production data. Acid test anchor verified before write: SKU 77201046
+Nov 2024 purchases_ordered = 5,855.00 CAJA40, purchases_received = 5,500.00
+CAJA40 (exact). 683 rows inserted into revenue_daily (376 ordered + 307
+received). All scripts and the forecast/run route updated to use the correct
+SSOT label pol_confirmed_date_planned_product_qty_c40 (was
+pol_all_states_date_planned_product_qty_c40, which included draft/cancel/RFQ).
+
+─── Root cause 3: 6 CARVAJAL SKUs had purchases only in October 2024 ────────
+
+77205003, 77205034, 77205208, 77205190, 77205035, 77205005 had no purchase
+orders in production outside the October 2024 onboarding anomaly. After
+smoothing, these SKUs had zero usable purchase history, causing
+forecast_purchases_derived to return insufficient_ratio_data and write
+yhat_sum=0 to every purchase cell.
+
+Fix: find_16_carvajal_tier3_fallback_purchases_for_ml.py inserts synthetic
+purchase rows for these 6 SKUs into revenue_daily_for_ml (not revenue_daily)
+using the Tukey-cleaned CARVAJAL class median ratio: R_ORD=0.4969,
+R_RCV=0.5687. 180 rows inserted. Must run after smooth_oct2024_purchase_anomaly
+each time (smooth clears and rebuilds the ML table from source of truth).
+
+─── New: derived purchase forecast module and ML service endpoint ────────────
+
+forecast_purchases_derived.py implements purchases as a function of the
+persisted sales forecast. Prophet is structurally misspecified for purchase
+data with 4.7–16.8% nonzero daily density (Gaussian likelihood, intermittent
+demand — see ASSESSMENT_ML_REFACTOR_2026-04-28.md and 30+ cited sources).
+The derived method: purchase_forecast = sales_forecast × median(PO/Sales ratio)
+with Tukey IQR×1.5 outlier exclusion per SKU.
+
+ml/api.py: added POST /forecast/purchases-derived route and
+_enumerate_forecast_months helper. The updated route.ts (in
+docs/april_ml_refactor/) orchestrates two passes: Prophet for sales (Pass 1),
+derived ratio for purchases (Pass 2), ensuring sales forecasts are persisted
+before purchase derivation reads them.
+
+forecast_revenue.py corrected to read from revenue_daily_for_ml (not
+revenue_daily). revenue_daily is the acid-test source of truth and must never
+be read by the ML training pipeline.
+
+─── Pipeline run order ───────────────────────────────────────────────────────
+
+1. find_15 → revenue_daily (purchases from Supabase production tables)
+2. smooth_oct2024_purchase_anomaly → revenue_daily_for_ml (Oct anomaly smoothed)
+3. find_16 → revenue_daily_for_ml (Tier 3 CARVAJAL fallback rows appended)
+4. Deploy ML service (this commit)
+5. POST /api/acid-test/forecast/run (scope=top, training 2024-10-01→2026-01-31,
+   prediction through 2026-03-31)
+
+─── Files ────────────────────────────────────────────────────────────────────
+
+Modified:
+  ml/api.py                                   — /forecast/purchases-derived endpoint
+  ml/forecast_revenue.py                      — read from revenue_daily_for_ml
+  frontend/src/app/api/acid-test/forecast/run/route.ts — corrected SSOT label
+  docs/reconciliation/find_08_populate_revenue_daily_77201046.py — SSOT + state filter
+  docs/reconciliation/find_12_populate_revenue_daily_top20.py    — SSOT + state filter
+
+New:
+  ml/forecast_purchases_derived.py
+  supabase/migrations/20260428000001_revenue_daily_ml.sql
+  supabase/migrations/20260428000002_products_acid_test_add_products_id.sql
+  docs/reconciliation/smooth_oct2024_purchase_anomaly.py
+  docs/reconciliation/find_15_populate_revenue_daily_purchases_from_supabase.py
+  docs/reconciliation/find_16_carvajal_tier3_fallback_purchases_for_ml.py
+  docs/reconciliation/FIX_PLAN_PRODUCTS_ID_MISMATCH_2026-04-28.md
+  docs/reconciliation/revenue_daily_monthly_sales_vs_po_2026-04-28.md
+  docs/april_ml_refactor/forecast_purchases_derived.py
+  docs/april_ml_refactor/route.ts
+  docs/april_ml_refactor/api_endpoint_addition.py
+  docs/april_ml_refactor/ML_REFACTOR_README.TXT
+  docs/april_ml_refactor/ASSESSMENT_ML_REFACTOR_2026-04-28.md
+  ML_PURCHASE_HYPOTHESIS_REVALIDATION_2026-04-28.md
+  changelogs/2026-04-28-29_ml-data-pipeline-complete-repair.md

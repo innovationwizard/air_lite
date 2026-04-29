@@ -14,6 +14,7 @@ from supabase import create_client
 from backtest_engine import run_backtest_cycle
 from purchase_scheduler import run_purchase_schedule_cycle
 from forecast_revenue import forecast_product as forecast_product_revenue
+from forecast_purchases_derived import forecast_purchases_derived
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
 logger = logging.getLogger(__name__)
@@ -258,10 +259,11 @@ def backtest_status(run_id: int):
 @app.route('/forecast/revenue-daily', methods=['POST'])
 def forecast_revenue_daily():
     """
-    Train Prophet on revenue_daily history and predict a custom window.
+    Train Prophet on revenue_daily_for_ml and predict a custom window.
 
     Distinct from /backtest/run which trains on demand_daily (old SSOT).
-    This endpoint trains on revenue_daily (new SSOT, CEO-dashboard match).
+    Reads revenue_daily_for_ml (October 2024 purchase anomaly smoothed out).
+    revenue_daily is never read here — it holds acid-test data only.
 
     Body:
       {
@@ -319,6 +321,95 @@ def forecast_revenue_daily():
         'prediction_end': prediction_end.isoformat(),
     }
     return jsonify(result)
+
+
+@app.route('/forecast/purchases-derived', methods=['POST'])
+def forecast_purchases_derived_endpoint():
+    """
+    Derive purchase forecast from persisted sales forecast × per-SKU ratio.
+
+    Must be called AFTER /forecast/revenue-daily has persisted a sales forecast
+    for the same product_id and training_end_date into forecast_results.
+    The two-pass orchestration in route.ts guarantees this order.
+
+    Body (same fields as /forecast/revenue-daily):
+      {
+        "product_id":     int,          # Supabase products.id
+        "ssot_label":     str,          # purchase SSOT label
+        "metric":         str,          # "purchases_ordered" | "purchases_received"
+        "training_start": "YYYY-MM-DD", # defaults to 2024-10-01
+        "training_end":   "YYYY-MM-DD",
+        "prediction_end": "YYYY-MM-DD"
+      }
+
+    Returns:
+      status        "ok_derived" | "insufficient_ratio_data" | "no_sales_forecast"
+      monthly       [{month, yhat_sum, yhat_lower_sum, yhat_upper_sum}, ...]
+      ratio_detail  Audit trail: R, months_used, months_excluded, ratios_used/excluded
+    """
+    from datetime import date as date_cls
+    data = request.get_json() or {}
+
+    required = ('product_id', 'ssot_label', 'metric', 'training_end', 'prediction_end')
+    missing = [k for k in required if k not in data]
+    if missing:
+        return jsonify({'error': f'missing required fields: {missing}'}), 400
+
+    try:
+        product_id     = int(data['product_id'])
+        ssot_label     = str(data['ssot_label'])
+        metric         = str(data['metric'])
+        training_start = date_cls.fromisoformat(data.get('training_start', '2024-10-01'))
+        training_end   = date_cls.fromisoformat(data['training_end'])
+        prediction_end = date_cls.fromisoformat(data['prediction_end'])
+    except (ValueError, TypeError) as e:
+        return jsonify({'error': f'invalid input: {e}'}), 400
+
+    if training_end < training_start:
+        return jsonify({'error': 'training_end must be >= training_start'}), 400
+    if prediction_end <= training_end:
+        return jsonify({'error': 'prediction_end must be after training_end'}), 400
+
+    forecast_months = _enumerate_forecast_months(training_end, prediction_end)
+
+    supabase = get_supabase()
+    result = forecast_purchases_derived(
+        supabase=supabase,
+        product_id=product_id,
+        metric=metric,
+        ssot_label=ssot_label,
+        training_start=training_start,
+        training_end=training_end,
+        forecast_months=forecast_months,
+    )
+    result['request'] = {
+        'product_id':     product_id,
+        'ssot_label':     ssot_label,
+        'metric':         metric,
+        'training_start': training_start.isoformat(),
+        'training_end':   training_end.isoformat(),
+        'prediction_end': prediction_end.isoformat(),
+    }
+    return jsonify(result)
+
+
+def _enumerate_forecast_months(training_end, prediction_end):
+    """Return ['2026-02', '2026-03', ...] for every full month after training_end
+    up to and including the month containing prediction_end."""
+    from datetime import date as date_cls
+    months = []
+    year  = training_end.year
+    month = training_end.month + 1
+    if month > 12:
+        month = 1
+        year += 1
+    while date_cls(year, month, 1) <= prediction_end:
+        months.append(f'{year:04d}-{month:02d}')
+        month += 1
+        if month > 12:
+            month = 1
+            year += 1
+    return months
 
 
 if __name__ == '__main__':

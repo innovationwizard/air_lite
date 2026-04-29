@@ -1,0 +1,33 @@
+CORE PIPELINE ML FILES
+
+Core ML pipeline — ml/
+
+File	What it does
+ml/forecast_revenue.py	Prophet training on revenue_daily_for_ml — data loading, model fit, prediction
+ml/backtest_engine.py	Orchestrates Prophet training on demand_daily, month-ahead predictions, persists results
+ml/purchase_scheduler.py	Trains Prophet per supplier to forecast weekly demand and size purchase orders
+ml/product_selector.py	Ranks products by revenue, filters to those with enough non-zero observations
+ml/census_filter.py	Identifies stockout days and excludes them from Prophet training
+ml/api.py	Flask API — exposes training endpoints, runs pipeline async in background threads
+Savings calculators — ml/savings/
+
+File	What it does
+ml/savings/storage_cost.py	Storage cost delta predicted vs actual
+ml/savings/unnecessary_purchases.py	Purchase avoidance savings
+ml/savings/lost_sales.py	Stockout risk reduction
+ml/savings/inventory_rotation.py	Inventory turnover improvement
+ml/savings/summary_generator.py	Spanish-language savings summary
+Frontend orchestration — frontend/src/app/api/
+
+File	What it does
+frontend/src/app/api/backtest/run/route.ts	Forwards backtest trigger to Railway ML service
+frontend/src/app/api/backtest/runs/route.ts	Lists completed backtest runs
+frontend/src/app/api/backtest/[runId]/route.ts	Status and results for a specific run
+frontend/src/app/api/acid-test/forecast/route.ts	Reads forecast_results for the 23 demo SKUs
+frontend/src/app/api/acid-test/forecast/run/route.ts	Batch-trains Prophet for all 23 demo SKUs × 3 metrics, persists to forecast_results
+frontend/src/app/api/superuser/forecast-diagnostic/route.ts	Diagnostic — aggregates history + forecasts, computes ratios and model status
+Data preparation
+
+File	What it does
+docs/reconciliation/smooth_oct2024_purchase_anomaly.py	Builds revenue_daily_for_ml with October 2024 purchase anomaly replaced by median
+The entry point for the demo forecast is frontend/src/app/api/acid-test/forecast/run/route.ts — that is the file that needs updating to confirm it calls forecast_revenue.py (already pointing at revenue_daily_for_ml) rather than touching revenue_daily directly.

@@ -4,7 +4,7 @@ Step 6 — Populate revenue_daily for the top 20 SKUs across ALL months with dat
 Reads odoo_extract_top20_latest.json and applies the THREE winning formulas:
 
   SSOT_SALES   = aml_income_posted_invoice_refund_neg_invoice_date_c40
-  SSOT_PO_ORD  = pol_all_states_date_planned_product_qty_c40
+  SSOT_PO_ORD  = pol_confirmed_date_planned_product_qty_c40
   SSOT_PO_RCV  = pol_purchase_done_date_planned_qty_received_c40
 
 For each (Supabase product_id, ssot_label, metric, day):
@@ -17,23 +17,19 @@ Pre-flight checks that all 20 SKUs exist in Supabase prod's products table.
 If any missing, prints which and aborts (we'd need to backfill those SKUs in
 prod's products table first — separate task).
 
-Re-fetches account.account chart fresh from Odoo (was truncated in earlier
-extract because it was filtered to only accounts seen in the truncated AML
-set).
+Reads account.account data from the extract (no live Odoo connection needed).
 """
 import os
 import json
-import xmlrpc.client
 import urllib.request
 import urllib.error
 from collections import defaultdict
-from datetime import datetime
 from pathlib import Path
 
 EXTRACT = Path('/Users/jorgeluiscontrerasherrera/Documents/_git/air_lite/docs/reconciliation/odoo_extract_top20_latest.json')
 
 SSOT_SALES = 'aml_income_posted_invoice_refund_neg_invoice_date_c40'
-SSOT_PO_ORD = 'pol_all_states_date_planned_product_qty_c40'
+SSOT_PO_ORD = 'pol_confirmed_date_planned_product_qty_c40'
 SSOT_PO_RCV = 'pol_purchase_done_date_planned_qty_received_c40'
 
 def load_env():
@@ -51,19 +47,8 @@ def load_env():
                     os.environ[k] = v
 load_env()
 
-URL = os.environ['ODOO_URL']
-DB = os.environ['ODOO_DB']
-USER = os.environ['ODOO_USERNAME']
-KEY = os.environ['ODOO_API_KEY']
 SUPA = os.environ['NEXT_PUBLIC_SUPABASE_URL']
 SUPA_KEY = os.environ['SUPABASE_SERVICE_ROLE_KEY']
-
-print("Authenticating to Odoo...")
-common = xmlrpc.client.ServerProxy(f'{URL}/xmlrpc/2/common', allow_none=True)
-uid = common.authenticate(DB, USER, KEY, {})
-models = xmlrpc.client.ServerProxy(f'{URL}/xmlrpc/2/object', allow_none=True)
-def call(method, model, *args, **kwargs):
-    return models.execute_kw(DB, uid, KEY, model, method, list(args), kwargs)
 
 def supa(method, path, body=None, prefer=None):
     data = json.dumps(body).encode() if body is not None else None
@@ -85,23 +70,11 @@ print(f"  purch_aml: {len(extract['account_move_line_purchases']):,}")
 print(f"  sale_order_line: {len(extract['sale_order_line']):,}")
 print(f"  purchase_order_line: {len(extract['purchase_order_line']):,}")
 
-# ─── 1. Refetch account.account chart (fresh, includes all referenced) ──
-all_acct_ids = sorted({l['account_id'][0] for l in
-                        (extract['account_move_line_sales'] + extract['account_move_line_purchases'])
-                        if l.get('account_id')})
-print(f"\nDistinct account IDs in AML: {len(all_acct_ids)}")
-acct_fields = ['id', 'name', 'code', 'account_type']
-print("Fetching all referenced accounts from Odoo...")
-accounts = []
-for i in range(0, len(all_acct_ids), 200):
-    sub = call('search_read', 'account.account',
-                [['id', 'in', all_acct_ids[i:i+200]]], fields=acct_fields)
-    accounts.extend(sub)
-print(f"  accounts: {len(accounts)}")
+# ─── 1. Build account lookup from extract (no live Odoo call needed) ────
+accounts = extract['account_account']
 acct_by_id = {a['id']: a for a in accounts}
-
 income_acct_ids = {a['id'] for a in accounts if a.get('account_type') == 'income'}
-print(f"  income account IDs: {len(income_acct_ids)}")
+print(f"\nAccounts loaded from extract: {len(accounts)}, income accounts: {len(income_acct_ids)}")
 
 # ─── 2. UoM machinery ──────────────────────────────────────────────────
 uom_by_id = {u['id']: u for u in extract['uom_uom']}
@@ -228,13 +201,15 @@ for l in extract['purchase_order_line']:
     tgt_uom = product_stock_uom.get(pid)
     factor = uom_factor_to_target(src_uom, tgt_uom)
 
-    # Ordered: ALL states
+    # Ordered: confirmed POs only (DEMO scope confirmed 2026-04-28)
+    if o.get('state') not in ('purchase', 'locked', 'done'):
+        continue
     qord = float(l.get('product_qty') or 0) * factor
     po_ordered_agg[(pp_to_supa[pid], day)]['qty'] += qord
     po_ordered_agg[(pp_to_supa[pid], day)]['docs'].add(o['id'])
 
-    # Received: state in (purchase, done)
-    if o.get('state') in ('purchase', 'done'):
+    # Received: confirmed POs only (locked has qty_received; purchase+done+locked all valid)
+    if o.get('state') in ('purchase', 'locked', 'done'):
         qrcv = float(l.get('qty_received') or 0) * factor
         po_received_agg[(pp_to_supa[pid], day)]['qty'] += qrcv
         po_received_agg[(pp_to_supa[pid], day)]['docs'].add(o['id'])

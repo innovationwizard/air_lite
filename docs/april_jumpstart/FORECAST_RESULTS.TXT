@@ -1,0 +1,33 @@
+FORECAST_RESULTS.TXT
+
+
+Here is the authoritative forecast_results schema from 20260423000007_forecast_results.sql:
+
+
+CREATE TABLE forecast_results (
+  id                  BIGSERIAL PRIMARY KEY,
+  product_id          INT NOT NULL REFERENCES products(id),
+  ssot_label          VARCHAR(100) NOT NULL,
+  metric              VARCHAR(30) NOT NULL,       -- 'sales' | 'purchases_ordered' | 'purchases_received'
+  forecast_month      DATE NOT NULL,              -- first day of predicted month, e.g. 2026-02-01
+  training_start_date DATE NOT NULL,
+  training_end_date   DATE NOT NULL,
+  yhat_sum            NUMERIC(15,4) NOT NULL,     -- monthly aggregate of Prophet yhat
+  yhat_lower_sum      NUMERIC(15,4),              -- 80% interval lower bound aggregate
+  yhat_upper_sum      NUMERIC(15,4),              -- 80% interval upper bound aggregate
+  training_points     INT,                        -- rows used to train (audit)
+  nonzero_points      INT,                        -- non-zero training rows (sparsity check)
+  model_status        VARCHAR(30) NOT NULL,       -- 'ok' | 'insufficient_history' | 'training_failed'
+  computed_at         TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE(product_id, ssot_label, metric, forecast_month, training_end_date)
+);
+
+-- Indexes
+CREATE INDEX idx_fr_product_metric ON forecast_results(product_id, metric);
+CREATE INDEX idx_fr_month          ON forecast_results(forecast_month);
+CREATE INDEX idx_fr_training_end   ON forecast_results(training_end_date);
+
+-- RLS
+ALTER TABLE forecast_results ENABLE ROW LEVEL SECURITY;
+-- SELECT: any authenticated role
+-- ALL: service_role only

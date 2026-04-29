@@ -9,7 +9,7 @@ const ML_KEY = process.env.ML_SERVICE_API_KEY!;
 
 const SSOT_TRIPLET = [
   { label: 'aml_income_posted_invoice_refund_neg_invoice_date_c40', metric: 'sales' },
-  { label: 'pol_all_states_date_planned_product_qty_c40',            metric: 'purchases_ordered' },
+  { label: 'pol_confirmed_date_planned_product_qty_c40',             metric: 'purchases_ordered' },
   { label: 'pol_purchase_done_date_planned_qty_received_c40',        metric: 'purchases_received' },
 ];
 
