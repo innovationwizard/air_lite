@@ -15,6 +15,7 @@ interface ForecastRow {
   movement_rank_within_class: number | null;
   stock_uom: string | null;
   volume_m3: number | null;
+  po_history_real_months: number | null;
   metric: string;
   forecast_month: string;
   yhat_sum: number;
@@ -31,6 +32,7 @@ type SkuRow = {
   movement_rank_within_class: number | null;
   stock_uom: string | null;
   volume_m3: number | null;
+  po_history_real_months: number | null;
   sales_feb: number | null;
   sales_mar: number | null;
   purchases_ordered_feb: number | null;
@@ -38,6 +40,36 @@ type SkuRow = {
   purchases_received_feb: number | null;
   purchases_received_mar: number | null;
   training_end_date: string | null;
+};
+
+type CompletenessTier = 'green' | 'amber' | 'red';
+
+function getCompletenessTier(months: number | null): CompletenessTier {
+  if (months === null) return 'red';
+  if (months === 16) return 'green';
+  if (months >= 3) return 'amber';
+  return 'red';
+}
+
+const TIER_STYLES: Record<CompletenessTier, { skuBg: string; pill: string; pillText: string; label: string }> = {
+  green: {
+    skuBg: 'bg-green-50',
+    pill: 'bg-green-100 text-green-700 border border-green-200',
+    pillText: 'Datos completos',
+    label: 'Datos completos',
+  },
+  amber: {
+    skuBg: 'bg-amber-50',
+    pill: 'bg-amber-100 text-amber-700 border border-amber-200',
+    pillText: 'Datos parciales',
+    label: 'Datos parciales',
+  },
+  red: {
+    skuBg: 'bg-red-50',
+    pill: 'bg-red-100 text-red-700 border border-red-200',
+    pillText: 'Datos insuficientes',
+    label: 'Datos insuficientes',
+  },
 };
 
 function fmt(n: number | null | undefined): string {
@@ -120,6 +152,7 @@ export default function ForecastPage() {
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
   const [classFilter, setClassFilter] = useState<'' | 'REYMA' | 'CARVAJAL'>('');
+  const [tierFilter, setTierFilter] = useState<Set<CompletenessTier>>(new Set(['green', 'amber', 'red']));
 
   useEffect(() => {
     Promise.all([
@@ -144,6 +177,7 @@ export default function ForecastPage() {
         movement_rank_within_class: r.movement_rank_within_class ?? null,
         stock_uom: r.stock_uom ?? null,
         volume_m3: r.volume_m3 ?? null,
+        po_history_real_months: r.po_history_real_months ?? null,
         sales_feb: null, sales_mar: null,
         purchases_ordered_feb: null, purchases_ordered_mar: null,
         purchases_received_feb: null, purchases_received_mar: null,
@@ -165,7 +199,10 @@ export default function ForecastPage() {
     });
   }, [raw]);
 
-  const visible = rows.filter((r) => !classFilter || r.supplier_class === classFilter);
+  const visible = rows.filter((r) => {
+    if (classFilter && r.supplier_class !== classFilter) return false;
+    return tierFilter.has(getCompletenessTier(r.po_history_real_months));
+  });
 
   const totals = useMemo(() => {
     const sum = (key: keyof SkuRow) => visible.reduce((a, r) => a + Number(r[key] ?? 0), 0);
@@ -241,6 +278,42 @@ export default function ForecastPage() {
         </div>
       </div>
 
+      <div className="flex gap-2 items-center flex-wrap">
+        <span className="text-sm text-gray-600">Historial OC:</span>
+        {(['green', 'amber', 'red'] as CompletenessTier[]).map((tier) => {
+          const active = tierFilter.has(tier);
+          const count = rows.filter((r) => getCompletenessTier(r.po_history_real_months) === tier).length;
+          const toggleTier = () => {
+            setTierFilter((prev) => {
+              const next = new Set(prev);
+              if (next.has(tier)) {
+                if (next.size === 1) return next; // keep at least one active
+                next.delete(tier);
+              } else {
+                next.add(tier);
+              }
+              return next;
+            });
+          };
+          const baseStyles: Record<CompletenessTier, { on: string; off: string }> = {
+            green: { on: 'bg-green-600 text-white', off: 'bg-green-50 text-green-700 border border-green-200' },
+            amber: { on: 'bg-amber-500 text-white', off: 'bg-amber-50 text-amber-700 border border-amber-200' },
+            red:   { on: 'bg-red-500 text-white',   off: 'bg-red-50 text-red-700 border border-red-200' },
+          };
+          const label: Record<CompletenessTier, string> = {
+            green: 'Datos completos',
+            amber: 'Datos parciales',
+            red:   'Datos insuficientes',
+          };
+          return (
+            <button key={tier} onClick={toggleTier}
+              className={`px-3 py-1 text-sm rounded-lg transition-colors ${active ? baseStyles[tier].on : baseStyles[tier].off}`}>
+              {label[tier]} ({count})
+            </button>
+          );
+        })}
+      </div>
+
       {err && (
         <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-sm text-red-700">{err}</div>
       )}
@@ -284,13 +357,15 @@ export default function ForecastPage() {
               </thead>
               <tbody>
                 {visible.map((r) => {
-                  const bg = r.supplier_class === 'REYMA' ? 'bg-emerald-50/30' : 'bg-sky-50/30';
+                  const rowBg = r.supplier_class === 'REYMA' ? 'bg-emerald-50/30' : 'bg-sky-50/30';
+                  const tier = getCompletenessTier(r.po_history_real_months);
+                  const tierStyle = TIER_STYLES[tier];
                   return (
-                    <tr key={r.sku} className={`border-b border-gray-100 ${bg}`}>
-                      <td className="px-3 py-2 sticky left-0 bg-white z-10">
+                    <tr key={r.sku} className={`border-b border-gray-100 ${rowBg}`}>
+                      <td className={`px-3 py-2 sticky left-0 z-10 ${tierStyle.skuBg}`}>
                         <div className="font-mono text-xs text-gray-600">{r.sku}</div>
                         <div className="text-sm font-medium text-gray-900 max-w-xs truncate">{r.name}</div>
-                        <div className="flex items-center gap-1 mt-0.5">
+                        <div className="flex items-center gap-1 mt-0.5 flex-wrap">
                           <span className={`text-[10px] px-1.5 py-0.5 rounded ${r.supplier_class === 'REYMA' ? 'bg-emerald-100 text-emerald-800' : 'bg-sky-100 text-sky-800'}`}>
                             {r.supplier_class}
                           </span>
@@ -299,6 +374,12 @@ export default function ForecastPage() {
                               {r.stock_uom}
                             </span>
                           )}
+                          <span className={`text-[10px] px-1.5 py-0.5 rounded ${tierStyle.pill}`}>
+                            {tierStyle.pillText}
+                            {r.po_history_real_months !== null && r.po_history_real_months < 16
+                              ? ` (${r.po_history_real_months}/16)`
+                              : ''}
+                          </span>
                         </div>
                       </td>
                       <td className="px-2 py-1.5 text-right font-mono text-emerald-900 bg-emerald-50/60">{fmt(r.sales_feb)}</td>

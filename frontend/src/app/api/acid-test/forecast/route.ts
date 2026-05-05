@@ -21,7 +21,7 @@ export async function GET(req: NextRequest) {
     // Build list of in-scope products
     let prodQuery = supabase
       .from('products_acid_test_active')
-      .select('default_code, representative_name, supplier_class, source_indicator, movement_rank_within_class, is_top_10_in_class');
+      .select('default_code, representative_name, supplier_class, source_indicator, movement_rank_within_class, is_top_10_in_class, po_history_real_months');
     if (scope === 'top') prodQuery = prodQuery.eq('is_top_10_in_class', true);
     if (sku) prodQuery = prodQuery.eq('default_code', sku);
     const { data: products, error: pErr } = await prodQuery;
@@ -73,6 +73,7 @@ export async function GET(req: NextRequest) {
       product_name: skuMeta.get(productIdToSku.get(r.product_id) ?? '')?.representative_name ?? null,
       supplier_class: skuMeta.get(productIdToSku.get(r.product_id) ?? '')?.supplier_class ?? null,
       movement_rank_within_class: skuMeta.get(productIdToSku.get(r.product_id) ?? '')?.movement_rank_within_class ?? null,
+      po_history_real_months: skuMeta.get(productIdToSku.get(r.product_id) ?? '')?.po_history_real_months ?? null,
       stock_uom: skuToUom.get(productIdToSku.get(r.product_id) ?? '') ?? null,
       volume_m3: skuToVolume.get(productIdToSku.get(r.product_id) ?? '') ?? null,
     }));
