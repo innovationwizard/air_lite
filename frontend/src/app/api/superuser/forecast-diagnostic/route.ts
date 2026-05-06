@@ -186,13 +186,19 @@ export async function GET(req: NextRequest) {
     // 4. Fetch forecast_results (we keep latest training_end_date per cell, ok-only).
     const forecastRows = await readForecastResults(supabase, productIds);
 
-    // Latest snapshot per (product_id, metric, forecast_month).
+    // Two maps keyed by product_id|metric|forecast_month:
+    //   latestForecast  — forward predictions  (model_status: ok / ok_derived)
+    //   latestInSample  — in-sample model fit  (model_status: ok_in_sample)
     const latestForecast = new Map<string, ForecastResultRow>();
+    const latestInSample = new Map<string, ForecastResultRow>();
     for (const r of forecastRows) {
       const k = `${r.product_id}|${r.metric}|${r.forecast_month}`;
-      const prior = latestForecast.get(k);
-      if (!prior || r.training_end_date > prior.training_end_date) {
-        latestForecast.set(k, r);
+      if (r.model_status === 'ok_in_sample') {
+        const prior = latestInSample.get(k);
+        if (!prior || r.training_end_date > prior.training_end_date) latestInSample.set(k, r);
+      } else {
+        const prior = latestForecast.get(k);
+        if (!prior || r.training_end_date > prior.training_end_date) latestForecast.set(k, r);
       }
     }
 
@@ -219,6 +225,14 @@ export async function GET(req: NextRequest) {
       purchases_received_upper: number | null;
       purchases_received_model_status: string;
     }
+    // Prophet in-sample fit for each training-period month (sales only).
+    // Lets the user compare actual vs model-predicted for the same month.
+    interface InSampleMonth {
+      month: string;
+      sales_fit: number;
+      sales_fit_lower: number | null;
+      sales_fit_upper: number | null;
+    }
     interface PerSku {
       sku: string;
       product_id: number;
@@ -228,6 +242,7 @@ export async function GET(req: NextRequest) {
       movement_rank_within_class: number;
       history: MonthlyAgg[];
       forecast: ForecastMonth[];
+      in_sample_fit: InSampleMonth[];
       history_12m_mean: Record<Metric, number>;
       forecast_mean: Record<Metric, number>;
       ratio: Record<Metric, number | null>;
@@ -298,6 +313,7 @@ export async function GET(req: NextRequest) {
       if (!scope) continue;
       const monthMap = histAgg.get(product.id) ?? new Map();
       const history: MonthlyAgg[] = [];
+      const in_sample_fit: InSampleMonth[] = [];
       // Only include history months <= 2026-01 (training cutoff). Forecast months go in `forecast`.
       for (const m of allMonths) {
         if (m > '2026-01') break;
@@ -308,6 +324,15 @@ export async function GET(req: NextRequest) {
           purchases_ordered: cell?.purchases_ordered ?? 0,
           purchases_received: cell?.purchases_received ?? 0,
           sales_gtq: cell ? cell.sales_gtq : 0,
+        });
+        // In-sample sales fit from Prophet (stored with model_status='ok_in_sample').
+        const fkey = `${m}-01`;
+        const isr = latestInSample.get(`${product.id}|sales|${fkey}`);
+        in_sample_fit.push({
+          month: m,
+          sales_fit: isr ? num(isr.yhat_sum) : 0,
+          sales_fit_lower: isr?.yhat_lower_sum !== null && isr?.yhat_lower_sum !== undefined ? num(isr.yhat_lower_sum) : null,
+          sales_fit_upper: isr?.yhat_upper_sum !== null && isr?.yhat_upper_sum !== undefined ? num(isr.yhat_upper_sum) : null,
         });
       }
 
@@ -369,6 +394,7 @@ export async function GET(req: NextRequest) {
         movement_rank_within_class: scope.movement_rank_within_class,
         history,
         forecast,
+        in_sample_fit,
         history_12m_mean: history12m,
         forecast_mean: forecastMean,
         ratio,
@@ -407,6 +433,10 @@ export async function GET(req: NextRequest) {
       po_upper: number | null;
       pr_lower: number | null;
       pr_upper: number | null;
+      // Prophet in-sample fit for the training period (sales only; null when not yet populated).
+      in_sample_fit_sales: number | null;
+      in_sample_fit_sales_lower: number | null;
+      in_sample_fit_sales_upper: number | null;
       // Bookkeeping flags so the chart can mark non-ok cells.
       any_status_not_ok: boolean;
       is_forecast: boolean;
@@ -421,6 +451,8 @@ export async function GET(req: NextRequest) {
         let salesLower = 0, salesUpper = 0, poLower = 0, poUpper = 0, prLower = 0, prUpper = 0;
         let anyLower = false, anyUpper = false, anyPoLower = false, anyPoUpper = false;
         let anyPrLower = false, anyPrUpper = false, anyNotOk = false;
+        let isFitSales = 0, isFitSalesLower = 0, isFitSalesUpper = 0;
+        let anyFitSales = false, anyFitSalesLower = false, anyFitSalesUpper = false;
         for (const s of skuObjs) {
           if (!isForecast) {
             const h = s.history.find((x) => x.month === m);
@@ -429,6 +461,13 @@ export async function GET(req: NextRequest) {
               po += h.purchases_ordered;
               pr += h.purchases_received;
               salesGtq += h.sales_gtq ?? 0;
+            }
+            const is = s.in_sample_fit.find((x) => x.month === m);
+            if (is && is.sales_fit > 0) {
+              isFitSales += is.sales_fit;
+              anyFitSales = true;
+              if (is.sales_fit_lower !== null) { isFitSalesLower += is.sales_fit_lower; anyFitSalesLower = true; }
+              if (is.sales_fit_upper !== null) { isFitSalesUpper += is.sales_fit_upper; anyFitSalesUpper = true; }
             }
           } else {
             const f = s.forecast.find((x) => x.month === m);
@@ -464,6 +503,9 @@ export async function GET(req: NextRequest) {
           po_upper: anyPoUpper ? poUpper : null,
           pr_lower: anyPrLower ? prLower : null,
           pr_upper: anyPrUpper ? prUpper : null,
+          in_sample_fit_sales: !isForecast && anyFitSales ? isFitSales : null,
+          in_sample_fit_sales_lower: !isForecast && anyFitSalesLower ? isFitSalesLower : null,
+          in_sample_fit_sales_upper: !isForecast && anyFitSalesUpper ? isFitSalesUpper : null,
           any_status_not_ok: anyNotOk,
           is_forecast: isForecast,
         });

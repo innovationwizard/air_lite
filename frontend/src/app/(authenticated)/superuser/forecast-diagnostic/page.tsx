@@ -36,6 +36,13 @@ interface ForecastMonth {
   purchases_received_model_status: string;
 }
 
+interface InSampleMonth {
+  month: string;
+  sales_fit: number;
+  sales_fit_lower: number | null;
+  sales_fit_upper: number | null;
+}
+
 interface PerSku {
   sku: string;
   product_id: number;
@@ -45,6 +52,7 @@ interface PerSku {
   movement_rank_within_class: number;
   history: MonthlyAgg[];
   forecast: ForecastMonth[];
+  in_sample_fit: InSampleMonth[];
   history_12m_mean: Record<Metric, number>;
   forecast_mean: Record<Metric, number>;
   ratio: Record<Metric, number | null>;
@@ -63,6 +71,9 @@ interface PerUomMonth {
   po_upper: number | null;
   pr_lower: number | null;
   pr_upper: number | null;
+  in_sample_fit_sales: number | null;
+  in_sample_fit_sales_lower: number | null;
+  in_sample_fit_sales_upper: number | null;
   any_status_not_ok: boolean;
   is_forecast: boolean;
 }
@@ -315,6 +326,19 @@ export default function ForecastDiagnosticPage() {
             symbol: 'diamond',
             symbolSize: 7,
           },
+          // 5. In-sample model fit (sales only) — dashed, training period only.
+          //    Shows what Prophet predicted for each month it was trained on.
+          //    Null until run_in_sample_training script is executed.
+          ...(metric === 'sales' ? [{
+            name: 'Ventas (ajuste modelo)',
+            type: 'line',
+            data: series.map((p) => (!p.is_forecast ? p.in_sample_fit_sales : null)),
+            smooth: false,
+            connectNulls: false,
+            itemStyle: { color: '#f59e0b' },
+            lineStyle: { color: '#f59e0b', width: 1.5, type: 'dotted' },
+            symbol: 'none',
+          }] : []),
         ];
       };
 
@@ -350,10 +374,13 @@ export default function ForecastDiagnosticPage() {
           legend: {
             top: 24,
             type: 'scroll',
-            data: (['sales', 'purchases_ordered', 'purchases_received'] as Metric[]).flatMap((m) => [
-              `${METRIC_LABEL[m]} (histórico)`,
-              `${METRIC_LABEL[m]} (forecast)`,
-            ]),
+            data: [
+              ...(['sales', 'purchases_ordered', 'purchases_received'] as Metric[]).flatMap((m) => [
+                `${METRIC_LABEL[m]} (histórico)`,
+                `${METRIC_LABEL[m]} (forecast)`,
+              ]),
+              'Ventas (ajuste modelo)',
+            ],
           },
           grid: { left: 70, right: 30, top: 90, bottom: 50 },
           xAxis: { type: 'category', data: months, axisLabel: { fontSize: 10, rotate: 45 } },
@@ -446,6 +473,18 @@ export default function ForecastDiagnosticPage() {
           symbol: isError ? 'triangle' : 'diamond',
           symbolSize: isError ? 12 : 7,
         },
+        // 5. In-sample model fit (sales only) — dotted amber, training period.
+        ...(metric === 'sales' ? [{
+          name: 'Ventas (ajuste modelo)',
+          type: 'line',
+          data: [
+            ...sku.in_sample_fit.map((s) => s.sales_fit > 0 ? s.sales_fit : null),
+            ...sku.forecast.map(() => null),
+          ],
+          itemStyle: { color: '#f59e0b' },
+          lineStyle: { color: '#f59e0b', width: 1.5, type: 'dotted' },
+          symbol: 'none',
+        }] : []),
       ];
     };
 
@@ -478,10 +517,13 @@ export default function ForecastDiagnosticPage() {
       legend: {
         top: 50,
         type: 'scroll',
-        data: (['sales', 'purchases_ordered', 'purchases_received'] as Metric[]).flatMap((m) => [
-          `${METRIC_LABEL[m]} (histórico)`,
-          `${METRIC_LABEL[m]} (forecast)`,
-        ]),
+        data: [
+          ...(['sales', 'purchases_ordered', 'purchases_received'] as Metric[]).flatMap((m) => [
+            `${METRIC_LABEL[m]} (histórico)`,
+            `${METRIC_LABEL[m]} (forecast)`,
+          ]),
+          'Ventas (ajuste modelo)',
+        ],
       },
       grid: { left: 70, right: 30, top: 100, bottom: 50 },
       xAxis: { type: 'category', data: months, axisLabel: { fontSize: 10, rotate: 45 } },

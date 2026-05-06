@@ -28,7 +28,7 @@ Reference:
 """
 import logging
 from datetime import date, timedelta
-from typing import Optional
+from typing import Optional, Tuple
 
 import pandas as pd
 from prophet import Prophet
@@ -105,12 +105,20 @@ def train_and_predict_revenue(
     prediction_start: date,
     prediction_end: date,
     prophet_config: dict,
-) -> Optional[pd.DataFrame]:
+) -> Optional[Tuple[pd.DataFrame, pd.DataFrame]]:
     """Train Prophet on history, predict a custom range.
 
     history_df columns: [ds, y] (ds dtype datetime64, y float).
-    Returns predictions DataFrame [ds, yhat, yhat_lower, yhat_upper] or
-    None if training fails or data is too sparse.
+
+    Returns (forward_prediction, in_sample) tuple of DataFrames
+    [ds, yhat, yhat_lower, yhat_upper], or None if training fails or data is
+    too sparse.
+
+    forward_prediction: post-training days (prediction_start → prediction_end).
+    in_sample:          training-period days (history start → history_end).
+                        Prophet computes these as a by-product of
+                        make_future_dataframe; returning them enables the
+                        comparison chart (actual vs model fit on training data).
     """
     if len(history_df) < 30:
         logger.warning('Insufficient history: %d rows', len(history_df))
@@ -120,8 +128,8 @@ def train_and_predict_revenue(
         model = Prophet(**prophet_config)
         model.fit(history_df[['ds', 'y']])
 
-        # Build future dataframe that spans from day after history ends
-        # through prediction_end.
+        # make_future_dataframe includes all historical dates + future periods.
+        # model.predict returns yhat for the full range in one shot.
         history_end = history_df['ds'].max().date()
         periods = (prediction_end - history_end).days
         if periods <= 0:
@@ -132,16 +140,22 @@ def train_and_predict_revenue(
         future = model.make_future_dataframe(periods=periods, freq='D')
         forecast = model.predict(future)
 
-        # Filter to the requested prediction window
-        mask = (forecast['ds'].dt.date >= prediction_start) & \
-               (forecast['ds'].dt.date <= prediction_end)
-        prediction = forecast.loc[mask, ['ds', 'yhat', 'yhat_lower', 'yhat_upper']].copy()
+        # In-sample: days within the training period (used for accuracy chart).
+        in_sample = forecast.loc[
+            forecast['ds'].dt.date <= history_end,
+            ['ds', 'yhat', 'yhat_lower', 'yhat_upper'],
+        ].copy()
+        for col in ('yhat', 'yhat_lower', 'yhat_upper'):
+            in_sample[col] = in_sample[col].clip(lower=0)
 
-        # Quantity cannot be negative
+        # Forward prediction: post-training days only.
+        fwd_mask = (forecast['ds'].dt.date >= prediction_start) & \
+                   (forecast['ds'].dt.date <= prediction_end)
+        prediction = forecast.loc[fwd_mask, ['ds', 'yhat', 'yhat_lower', 'yhat_upper']].copy()
         for col in ('yhat', 'yhat_lower', 'yhat_upper'):
             prediction[col] = prediction[col].clip(lower=0)
 
-        return prediction
+        return prediction, in_sample
     except Exception as e:
         logger.error('Prophet training failed: %s', e)
         return None
@@ -184,27 +198,39 @@ def forecast_product(
             'nonzero_points': nonzero,
             'daily': [],
             'monthly': [],
+            'in_sample_monthly': [],
             'training_end_date': training_end.isoformat(),
             'prediction_start': prediction_start.isoformat(),
             'prediction_end': prediction_end.isoformat(),
         }
 
-    prediction = train_and_predict_revenue(history, prediction_start, prediction_end, config)
-    if prediction is None:
+    result = train_and_predict_revenue(history, prediction_start, prediction_end, config)
+    if result is None:
         return {
             'status': 'training_failed',
             'training_points': len(history),
             'nonzero_points': nonzero,
             'daily': [],
             'monthly': [],
+            'in_sample_monthly': [],
             'training_end_date': training_end.isoformat(),
             'prediction_start': prediction_start.isoformat(),
             'prediction_end': prediction_end.isoformat(),
         }
 
-    # Monthly aggregation for reporting
+    prediction, in_sample = result
+
+    # Monthly aggregation — forward predictions.
     prediction['month'] = prediction['ds'].dt.strftime('%Y-%m')
     monthly = prediction.groupby('month').agg(
+        yhat_sum=('yhat', 'sum'),
+        yhat_lower_sum=('yhat_lower', 'sum'),
+        yhat_upper_sum=('yhat_upper', 'sum'),
+    ).reset_index()
+
+    # Monthly aggregation — in-sample (training period) fit.
+    in_sample['month'] = in_sample['ds'].dt.strftime('%Y-%m')
+    in_sample_monthly = in_sample.groupby('month').agg(
         yhat_sum=('yhat', 'sum'),
         yhat_lower_sum=('yhat_lower', 'sum'),
         yhat_upper_sum=('yhat_upper', 'sum'),
@@ -231,6 +257,15 @@ def forecast_product(
                 'yhat_upper_sum': round(float(row['yhat_upper_sum']), 4),
             }
             for _, row in monthly.iterrows()
+        ],
+        'in_sample_monthly': [
+            {
+                'month': row['month'],
+                'yhat_sum': round(float(row['yhat_sum']), 4),
+                'yhat_lower_sum': round(float(row['yhat_lower_sum']), 4),
+                'yhat_upper_sum': round(float(row['yhat_upper_sum']), 4),
+            }
+            for _, row in in_sample_monthly.iterrows()
         ],
         'training_end_date': training_end.isoformat(),
         'prediction_start': prediction_start.isoformat(),
