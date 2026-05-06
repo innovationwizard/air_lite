@@ -1,0 +1,66 @@
+forecast-diagnostic: expose Prophet in-sample fit for accuracy comparison
+
+PROBLEM
+-------
+The comparison chart showed "Ventas (histórico)" OR "Ventas (forecast)" for
+any given month, never both. A decision-maker cannot assess forecast accuracy
+without seeing what the model predicted alongside what actually happened for
+the same month. This was identified as a deal-breaker by the client.
+
+SOLUTION
+--------
+Prophet's make_future_dataframe / predict already computes yhat for the full
+training period (Oct 2024 – Jan 2026) as a by-product of training — it was
+being discarded at the filter step. We now capture it and expose it as a
+distinct series: "Ventas (ajuste modelo)" — a dotted amber line that runs
+through the same training period months as the actual historical data.
+
+The user can now pick any month in the training window, see actual Ventas and
+model-predicted Ventas side by side, and judge model accuracy before deciding
+whether to trust the Feb–Mar 2026 forward forecast.
+
+In-sample fit applies to sales only. Purchases use a ratio-derived method
+(not a direct Prophet prediction), so no equivalent in-sample fit exists.
+
+ML SERVICE (forecast_revenue.py)
+---------------------------------
+- train_and_predict_revenue now returns (forward_prediction, in_sample) tuple
+  instead of a single DataFrame.
+- forecast_product unpacks the tuple, aggregates in_sample monthly, and
+  returns in_sample_monthly alongside the existing monthly field.
+- All three early-return paths (insufficient_history, training_failed) include
+  in_sample_monthly: [] for a consistent response shape.
+
+API ROUTE (forecast-diagnostic/route.ts)
+-----------------------------------------
+- latestForecast map now split into two: latestForecast (ok / ok_derived rows)
+  and latestInSample (ok_in_sample rows). Previously a single map mixed both.
+- InSampleMonth interface added; PerSku gains in_sample_fit: InSampleMonth[].
+- PerUomMonth gains in_sample_fit_sales / _lower / _upper for UoM aggregation.
+- Per-SKU loop extracts in-sample fit from latestInSample for each training
+  period month alongside the existing history extraction.
+- UoM aggregation loop collects and sums in_sample_fit_sales per UoM group.
+
+FRONTEND (forecast-diagnostic/page.tsx)
+----------------------------------------
+- InSampleMonth interface mirrors the API shape.
+- Panel B buildSeries adds series 5 ("Ventas (ajuste modelo)"): dotted amber
+  line, training period only, symbol: none. Shown only for metric === 'sales'.
+- Panel C buildSeries adds the same series using sku.in_sample_fit directly.
+- Both panel legends updated to include "Ventas (ajuste modelo)".
+
+TRAINING SCRIPT
+---------------
+docs/reconciliation/run_in_sample_training_2026-05-06.py — NEW.
+After Railway deploys the updated ML service, run this script once:
+  python3 docs/reconciliation/run_in_sample_training_2026-05-06.py
+It calls /forecast/revenue-daily for all 23 PIDs, reads in_sample_monthly
+from each response, and upserts 23 × 16 = 368 rows into forecast_results
+with model_status = 'ok_in_sample'. Idempotent — safe to re-run.
+
+DEPLOYMENT ORDER
+----------------
+1. Push this commit → Railway auto-deploys ML service.
+2. Verify Railway is live (in_sample_monthly present in response).
+3. Run run_in_sample_training_2026-05-06.py → 368 rows in forecast_results.
+4. Vercel deploys frontend → amber dotted line appears on page.

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { TrendingUp, Sparkles, Download } from 'lucide-react';
+import { TrendingUp, Sparkles, Download, Info } from 'lucide-react';
 
 // Furgón capacity used for m³/furgón calculations.
 // WARNING: exact unit type per supplier (Carvajal / Reyma) is NOT confirmed.
@@ -153,6 +153,7 @@ export default function ForecastPage() {
   const [err, setErr] = useState<string | null>(null);
   const [classFilter, setClassFilter] = useState<'' | 'REYMA' | 'CARVAJAL'>('');
   const [tierFilter, setTierFilter] = useState<Set<CompletenessTier>>(new Set(['green', 'amber', 'red']));
+  const [openTip, setOpenTip] = useState<CompletenessTier | null>(null);
 
   useEffect(() => {
     Promise.all([
@@ -305,11 +306,38 @@ export default function ForecastPage() {
             amber: 'Datos parciales',
             red:   'Datos insuficientes',
           };
+          const tipText: Record<CompletenessTier, string> = {
+            green: '16/16 meses del período de entrenamiento (oct 2024 – ene 2026) tienen al menos una OC confirmada (estado: compra / bloqueado / hecho). Datos sintéticos no cuentan. Máxima calidad de datos para el forecast de compras.',
+            amber: 'Entre 3 y 15 meses tienen OC confirmadas. Historial parcial; la precisión del forecast de compras está pendiente de validación empírica. El umbral de 3 meses es un proxy provisional hasta concluir el Acid Test 2.',
+            red:   '0 a 2 meses con OC confirmadas. Historial real insuficiente — datos sintéticos no cuentan. El forecast de compras para estos SKUs no es confiable.',
+          };
+
           return (
-            <button key={tier} onClick={toggleTier}
-              className={`px-3 py-1 text-sm rounded-lg transition-colors ${active ? baseStyles[tier].on : baseStyles[tier].off}`}>
-              {label[tier]} ({count})
-            </button>
+            <div key={tier} className="relative flex items-center gap-1">
+              <button onClick={toggleTier}
+                className={`px-3 py-1 text-sm rounded-lg transition-colors ${active ? baseStyles[tier].on : baseStyles[tier].off}`}>
+                {label[tier]} ({count})
+              </button>
+              <button
+                onClick={() => setOpenTip((prev) => (prev === tier ? null : tier))}
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+                aria-label={`Definición técnica: ${label[tier]}`}
+              >
+                <Info className="w-3.5 h-3.5" />
+              </button>
+              {openTip === tier && (
+                <div className="absolute left-0 top-full mt-2 z-50 w-72 rounded-lg border border-gray-200 bg-white shadow-lg p-3 text-xs text-gray-700 leading-relaxed">
+                  <p className="font-semibold text-gray-900 mb-1">{label[tier]}</p>
+                  <p>{tipText[tier]}</p>
+                  <button
+                    onClick={() => setOpenTip(null)}
+                    className="mt-2 text-gray-400 hover:text-gray-600 text-xs underline"
+                  >
+                    Cerrar
+                  </button>
+                </div>
+              )}
+            </div>
           );
         })}
       </div>
