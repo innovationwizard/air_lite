@@ -1,0 +1,16 @@
+You say: "the only failure was the unused Optional import in forecast_purchases_derived.py."
+That was certainly NOT the only failure. 
+In its current state, the whole page is still a complete failure. 
+Your design of the graphs is PLAIN STUPID! 
+I've created a new dir _qci/
+It has a README.md that you should read. 
+And I will be saving this prompt and all important prompts there because YOU RECURRENTLY FORGET AND DELETE CRITICAL INFORMATION ABOUT THIS APP. 
+THIS IS A DIRECT ORDER: DO NOT DELETE ANY CONTENT OF DIR _qci EVER! TREAT THIS DIRECT ORDER AS ABSOLUTE AND IMMUTABLE!
+---
+For context, we are looking at: 
+https://air-lite-app.vercel.app/superuser/forecast-diagnostic
+For clarity and focus, let's not mix all lines. 
+Let's talk, for now, about VENTAS. 
+At first glance, these are two MAJOR, CRITICAL flaws: 
+1. I look at this graph and you're giving "Ventas (histórico)" and "Ventas (forecast)" the exact same color. What this tells the user is that "Ventas (histórico)" === "Ventas (forecast)" , which is OBJECTIVELY FALSE. You are clearly NOT following @_THE_RULES.MD ! FOLLOW @_THE_RULES.MD !!!!! Do some serious research!!! How do the best companies in the world do this? How do best-in-class forecasting websites display what is historic vrs what is forecasted??? How does enterprise-grade software engineers design and configure these graphs to (1) SEE the accuracy of their forecasts and (2) IMMEDIATELY IDENTIFY what needs to be done to improve the accuracy of their forecasts????? Persist the results of your research in a new md file in dir _qci
+2. I look at this graph and, for any given month, I can see "Ventas (histórico)" OR "Ventas (forecast)". I can never see both for the same month. To the best of my knowledge and understanding, this is NOT how a COMPARISSON GRAPH should work. I'm not a graph specialist, but out of plain intuition, I would say that the user should be able to (1) pick a month, (2) see the forecasted value, (3) see the real value, (4) visually see the difference between forecasted value and real value for that month, and (5) assess the forecasted value. If the forecasted value is at least "good enough", then the user might dig deeper and continue assessing the accuracy of other forecasted values, which might, in the end, nudge the user to MAKE THE DEAL and pay for the app. In the current state of all the graphs on this page, NONE of this is possible, which is in itself a DEALBREAKER. If the user can't assess the accuracy of ANY forecasted values, he will most certainly NOT pay for the app and STOP considering any further demos and any further meetings. Do some serious research!!! How do the best companies in the world do this? How do best-in-class forecasting websites display the accuracy of their forecasted values??? How does enterprise-grade software engineers design and configure these graphs to (1) SHOWCASE the accuracy of their forecasts and (2) IMMEDIATELY tell the user what next steps the developers will be taking to close the gaps between their forecasted values and the real historic values????? Persist the results of this research in a new md file in dir _qci/ .

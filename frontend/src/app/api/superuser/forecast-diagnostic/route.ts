@@ -400,9 +400,13 @@ export async function GET(req: NextRequest) {
       purchases_ordered: number;
       purchases_received: number;
       sales_gtq: number;
-      // Forecast band on sales only (CIs available for sales).
+      // Forecast confidence bands (yhat_lower / yhat_upper) for all three metrics.
       sales_lower: number | null;
       sales_upper: number | null;
+      po_lower: number | null;
+      po_upper: number | null;
+      pr_lower: number | null;
+      pr_upper: number | null;
       // Bookkeeping flags so the chart can mark non-ok cells.
       any_status_not_ok: boolean;
       is_forecast: boolean;
@@ -413,15 +417,10 @@ export async function GET(req: NextRequest) {
       const skuObjs = perSku.filter((s) => s.uom === g.uom);
       for (const m of allMonths) {
         const isForecast = m > '2026-01';
-        let sales = 0;
-        let po = 0;
-        let pr = 0;
-        let salesGtq = 0;
-        let salesLower = 0;
-        let salesUpper = 0;
-        let anyLower = false;
-        let anyUpper = false;
-        let anyNotOk = false;
+        let sales = 0, po = 0, pr = 0, salesGtq = 0;
+        let salesLower = 0, salesUpper = 0, poLower = 0, poUpper = 0, prLower = 0, prUpper = 0;
+        let anyLower = false, anyUpper = false, anyPoLower = false, anyPoUpper = false;
+        let anyPrLower = false, anyPrUpper = false, anyNotOk = false;
         for (const s of skuObjs) {
           if (!isForecast) {
             const h = s.history.find((x) => x.month === m);
@@ -437,18 +436,16 @@ export async function GET(req: NextRequest) {
               sales += f.sales;
               po += f.purchases_ordered;
               pr += f.purchases_received;
-              if (f.sales_lower !== null) {
-                salesLower += f.sales_lower;
-                anyLower = true;
-              }
-              if (f.sales_upper !== null) {
-                salesUpper += f.sales_upper;
-                anyUpper = true;
-              }
+              if (f.sales_lower !== null) { salesLower += f.sales_lower; anyLower = true; }
+              if (f.sales_upper !== null) { salesUpper += f.sales_upper; anyUpper = true; }
+              if (f.purchases_ordered_lower !== null) { poLower += f.purchases_ordered_lower; anyPoLower = true; }
+              if (f.purchases_ordered_upper !== null) { poUpper += f.purchases_ordered_upper; anyPoUpper = true; }
+              if (f.purchases_received_lower !== null) { prLower += f.purchases_received_lower; anyPrLower = true; }
+              if (f.purchases_received_upper !== null) { prUpper += f.purchases_received_upper; anyPrUpper = true; }
               if (
                 f.sales_model_status !== 'ok' ||
-                f.purchases_ordered_model_status !== 'ok' ||
-                f.purchases_received_model_status !== 'ok'
+                !['ok', 'ok_derived'].includes(f.purchases_ordered_model_status) ||
+                !['ok', 'ok_derived'].includes(f.purchases_received_model_status)
               ) {
                 anyNotOk = true;
               }
@@ -463,6 +460,10 @@ export async function GET(req: NextRequest) {
           sales_gtq: salesGtq,
           sales_lower: anyLower ? salesLower : null,
           sales_upper: anyUpper ? salesUpper : null,
+          po_lower: anyPoLower ? poLower : null,
+          po_upper: anyPoUpper ? poUpper : null,
+          pr_lower: anyPrLower ? prLower : null,
+          pr_upper: anyPrUpper ? prUpper : null,
           any_status_not_ok: anyNotOk,
           is_forecast: isForecast,
         });

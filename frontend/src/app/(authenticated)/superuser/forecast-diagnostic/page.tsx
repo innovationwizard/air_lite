@@ -59,6 +59,10 @@ interface PerUomMonth {
   sales_gtq: number;
   sales_lower: number | null;
   sales_upper: number | null;
+  po_lower: number | null;
+  po_upper: number | null;
+  pr_lower: number | null;
+  pr_upper: number | null;
   any_status_not_ok: boolean;
   is_forecast: boolean;
 }
@@ -236,31 +240,80 @@ export default function ForecastDiagnosticPage() {
       const series = data.per_uom_history_forecast[g.uom] ?? [];
       const months = series.map((p) => p.month);
 
+      // Maps metric to its lower/upper CI field names in PerUomMonth.
+      const CI_KEYS: Record<Metric, { lo: keyof PerUomMonth; hi: keyof PerUomMonth }> = {
+        sales: { lo: 'sales_lower', hi: 'sales_upper' },
+        purchases_ordered: { lo: 'po_lower', hi: 'po_upper' },
+        purchases_received: { lo: 'pr_lower', hi: 'pr_upper' },
+      };
       const buildSeries = (metric: Metric) => {
-        const histData = series.map((p) => (p.is_forecast ? null : (p[metric] as number)));
+        const color = METRIC_COLOR[metric];
+        const { lo, hi } = CI_KEYS[metric];
+
+        const histData = series.map((p) => (!p.is_forecast ? (p[metric] as number) : null));
         const fcastData = series.map((p) => (p.is_forecast ? (p[metric] as number) : null));
+        // CI stacked band: base = lower, fill = upper - lower.
+        const ciLower = series.map((p) => (p.is_forecast ? (p[lo] as number | null) : null));
+        const ciBand = series.map((p) => {
+          if (!p.is_forecast) return null;
+          const l = p[lo] as number | null;
+          const h = p[hi] as number | null;
+          return l !== null && h !== null ? h - l : null;
+        });
+
+        const stackId = `ci_${metric}`;
         return [
+          // 1. Historic — solid, full opacity.
           {
             name: `${METRIC_LABEL[metric]} (histórico)`,
             type: 'line',
             data: histData,
             smooth: false,
             connectNulls: false,
-            itemStyle: { color: METRIC_COLOR[metric] },
-            lineStyle: { color: METRIC_COLOR[metric], width: 2 },
+            itemStyle: { color },
+            lineStyle: { color, width: 2 },
             symbol: 'circle',
             symbolSize: 4,
           },
+          // 2. CI lower bound — invisible, forms the stack base.
+          {
+            name: `_ci_lo_${metric}`,
+            type: 'line',
+            data: ciLower,
+            smooth: false,
+            connectNulls: false,
+            lineStyle: { width: 0, opacity: 0 },
+            itemStyle: { opacity: 0 },
+            symbol: 'none',
+            stack: stackId,
+            areaStyle: { opacity: 0 },
+            silent: true,
+          },
+          // 3. CI band — upper minus lower, stacked on the base.
+          {
+            name: `_ci_band_${metric}`,
+            type: 'line',
+            data: ciBand,
+            smooth: false,
+            connectNulls: false,
+            lineStyle: { width: 0, opacity: 0 },
+            itemStyle: { opacity: 0 },
+            symbol: 'none',
+            stack: stackId,
+            areaStyle: { color, opacity: 0.15 },
+            silent: true,
+          },
+          // 4. Forecast — dashed, reduced opacity so it's visually distinct from historic.
           {
             name: `${METRIC_LABEL[metric]} (forecast)`,
             type: 'line',
             data: fcastData,
             smooth: false,
             connectNulls: false,
-            itemStyle: { color: METRIC_COLOR[metric] },
-            lineStyle: { color: METRIC_COLOR[metric], width: 2, type: 'dashed' },
+            itemStyle: { color, opacity: 0.65 },
+            lineStyle: { color, width: 2, type: 'dashed', opacity: 0.65 },
             symbol: 'diamond',
-            symbolSize: 6,
+            symbolSize: 7,
           },
         ];
       };
@@ -294,8 +347,15 @@ export default function ForecastDiagnosticPage() {
             textStyle: { fontSize: 13, fontWeight: 600 },
           },
           tooltip: { trigger: 'axis', axisPointer: { type: 'cross' } },
-          legend: { top: 24, type: 'scroll' },
-          grid: { left: 70, right: 30, top: 70, bottom: 50 },
+          legend: {
+            top: 24,
+            type: 'scroll',
+            data: (['sales', 'purchases_ordered', 'purchases_received'] as Metric[]).flatMap((m) => [
+              `${METRIC_LABEL[m]} (histórico)`,
+              `${METRIC_LABEL[m]} (forecast)`,
+            ]),
+          },
+          grid: { left: 70, right: 30, top: 90, bottom: 50 },
           xAxis: { type: 'category', data: months, axisLabel: { fontSize: 10, rotate: 45 } },
           yAxis: { type: 'value', name: `cantidad (${g.uom})`, nameLocation: 'middle', nameGap: 55 },
           series: allSeries,
@@ -314,30 +374,76 @@ export default function ForecastDiagnosticPage() {
     const months = [...sku.history.map((m) => m.month), ...sku.forecast.map((m) => m.month)];
 
     const buildSeries = (metric: Metric) => {
-      const histVals = sku.history.map((m) => m[metric] as number);
-      const fcstVals = sku.forecast.map((m) => m[metric] as number);
-      const histData = [...histVals, ...sku.forecast.map(() => null)];
-      const fcstData = [...sku.history.map(() => null), ...fcstVals];
+      const color = METRIC_COLOR[metric];
       const status = sku.forecast_status[metric];
       const isError = !['ok', 'ok_derived'].includes(status);
-      const symbol = isError ? 'triangle' : 'diamond';
+
+      const nHistory = sku.history.length;
+      const histVals = sku.history.map((m) => m[metric] as number);
+      const fcstVals = sku.forecast.map((m) => m[metric] as number);
+      const histData: (number | null)[] = [...histVals, ...sku.forecast.map(() => null)];
+      const fcstData: (number | null)[] = [...sku.history.map(() => null), ...fcstVals];
+
+      // CI band per metric (lower + band height stacked).
+      const lowerKey = metric === 'sales' ? 'sales_lower' : metric === 'purchases_ordered' ? 'purchases_ordered_lower' : 'purchases_received_lower';
+      const upperKey = metric === 'sales' ? 'sales_upper' : metric === 'purchases_ordered' ? 'purchases_ordered_upper' : 'purchases_received_upper';
+      const ciLower: (number | null)[] = [
+        ...Array(nHistory).fill(null),
+        ...sku.forecast.map((f) => f[lowerKey as keyof typeof f] as number | null),
+      ];
+      const ciBand: (number | null)[] = [
+        ...Array(nHistory).fill(null),
+        ...sku.forecast.map((f) => {
+          const lo = f[lowerKey as keyof typeof f] as number | null;
+          const hi = f[upperKey as keyof typeof f] as number | null;
+          return lo !== null && hi !== null ? hi - lo : null;
+        }),
+      ];
+
+      const stackId = `c_ci_${metric}`;
       return [
+        // 1. Historic — solid, full opacity.
         {
           name: `${METRIC_LABEL[metric]} (histórico)`,
           type: 'line',
           data: histData,
-          itemStyle: { color: METRIC_COLOR[metric] },
-          lineStyle: { color: METRIC_COLOR[metric], width: 2 },
+          itemStyle: { color },
+          lineStyle: { color, width: 2 },
           symbol: 'circle',
           symbolSize: 5,
         },
+        // 2. CI lower bound — invisible stack base.
+        {
+          name: `_ci_lo_c_${metric}`,
+          type: 'line',
+          data: ciLower,
+          lineStyle: { width: 0, opacity: 0 },
+          itemStyle: { opacity: 0 },
+          symbol: 'none',
+          stack: stackId,
+          areaStyle: { opacity: 0 },
+          silent: true,
+        },
+        // 3. CI band — stacked fill.
+        {
+          name: `_ci_band_c_${metric}`,
+          type: 'line',
+          data: ciBand,
+          lineStyle: { width: 0, opacity: 0 },
+          itemStyle: { opacity: 0 },
+          symbol: 'none',
+          stack: stackId,
+          areaStyle: { color, opacity: 0.15 },
+          silent: true,
+        },
+        // 4. Forecast — dashed, reduced opacity so it's visually distinct from historic.
         {
           name: `${METRIC_LABEL[metric]} (forecast)`,
           type: 'line',
           data: fcstData,
-          itemStyle: { color: isError ? '#ef4444' : METRIC_COLOR[metric] },
-          lineStyle: { color: METRIC_COLOR[metric], width: 2, type: 'dashed' },
-          symbol,
+          itemStyle: { color: isError ? '#ef4444' : color, opacity: 0.65 },
+          lineStyle: { color: isError ? '#ef4444' : color, width: 2, type: 'dashed', opacity: 0.65 },
+          symbol: isError ? 'triangle' : 'diamond',
           symbolSize: isError ? 12 : 7,
         },
       ];
@@ -369,8 +475,15 @@ export default function ForecastDiagnosticPage() {
         subtextStyle: { fontSize: 11 },
       },
       tooltip: { trigger: 'axis', axisPointer: { type: 'cross' } },
-      legend: { top: 50, type: 'scroll' },
-      grid: { left: 70, right: 30, top: 90, bottom: 50 },
+      legend: {
+        top: 50,
+        type: 'scroll',
+        data: (['sales', 'purchases_ordered', 'purchases_received'] as Metric[]).flatMap((m) => [
+          `${METRIC_LABEL[m]} (histórico)`,
+          `${METRIC_LABEL[m]} (forecast)`,
+        ]),
+      },
+      grid: { left: 70, right: 30, top: 100, bottom: 50 },
       xAxis: { type: 'category', data: months, axisLabel: { fontSize: 10, rotate: 45 } },
       yAxis: { type: 'value', name: `cantidad (${sku.uom})`, nameLocation: 'middle', nameGap: 55 },
       series: allSeries,
