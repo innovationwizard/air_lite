@@ -117,6 +117,15 @@ const BUCKET_COLOR: Record<'green' | 'yellow' | 'red' | 'gray', string> = {
   gray: '#9ca3af',
 };
 
+// Encodes metric identity (hue) + ratio health (opacity) for Panel A bars.
+function metricColorWithBucketOpacity(metricColor: string, bucket: 'green' | 'yellow' | 'red' | 'gray'): string {
+  const alpha = bucket === 'green' ? 1.0 : bucket === 'yellow' ? 0.65 : bucket === 'red' ? 0.45 : 0.2;
+  const r = parseInt(metricColor.slice(1, 3), 16);
+  const g = parseInt(metricColor.slice(3, 5), 16);
+  const b = parseInt(metricColor.slice(5, 7), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
 // ─── page component ──────────────────────────────────────────────────────────
 export default function ForecastDiagnosticPage() {
   const [data, setData] = useState<DiagnosticResponse | null>(null);
@@ -161,7 +170,7 @@ export default function ForecastDiagnosticPage() {
         const r = s.ratio[m];
         return {
           value: r === null || !Number.isFinite(r) ? null : r,
-          itemStyle: { color: BUCKET_COLOR[ratioBucket(r)] },
+          itemStyle: { color: metricColorWithBucketOpacity(METRIC_COLOR[m], ratioBucket(r)) },
         };
       }),
       barGap: 0.1,
@@ -310,7 +319,8 @@ export default function ForecastDiagnosticPage() {
       const histData = [...histVals, ...sku.forecast.map(() => null)];
       const fcstData = [...sku.history.map(() => null), ...fcstVals];
       const status = sku.forecast_status[metric];
-      const symbol = status !== 'ok' ? 'triangle' : 'diamond';
+      const isError = !['ok', 'ok_derived'].includes(status);
+      const symbol = isError ? 'triangle' : 'diamond';
       return [
         {
           name: `${METRIC_LABEL[metric]} (histórico)`,
@@ -325,10 +335,10 @@ export default function ForecastDiagnosticPage() {
           name: `${METRIC_LABEL[metric]} (forecast)`,
           type: 'line',
           data: fcstData,
-          itemStyle: { color: status !== 'ok' ? '#ef4444' : METRIC_COLOR[metric] },
+          itemStyle: { color: isError ? '#ef4444' : METRIC_COLOR[metric] },
           lineStyle: { color: METRIC_COLOR[metric], width: 2, type: 'dashed' },
           symbol,
-          symbolSize: status !== 'ok' ? 12 : 7,
+          symbolSize: isError ? 12 : 7,
         },
       ];
     };

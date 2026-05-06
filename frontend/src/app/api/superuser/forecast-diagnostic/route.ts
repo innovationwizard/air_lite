@@ -327,19 +327,19 @@ export async function GET(req: NextRequest) {
           sales_lower: fSales && fSales.model_status === 'ok' ? (fSales.yhat_lower_sum !== null ? num(fSales.yhat_lower_sum) : null) : null,
           sales_upper: fSales && fSales.model_status === 'ok' ? (fSales.yhat_upper_sum !== null ? num(fSales.yhat_upper_sum) : null) : null,
           sales_model_status: fSales?.model_status ?? 'missing',
-          purchases_ordered: fOrd && fOrd.model_status === 'ok' ? num(fOrd.yhat_sum) : 0,
-          purchases_ordered_lower: fOrd && fOrd.model_status === 'ok' ? (fOrd.yhat_lower_sum !== null ? num(fOrd.yhat_lower_sum) : null) : null,
-          purchases_ordered_upper: fOrd && fOrd.model_status === 'ok' ? (fOrd.yhat_upper_sum !== null ? num(fOrd.yhat_upper_sum) : null) : null,
+          purchases_ordered: fOrd && ['ok', 'ok_derived'].includes(fOrd.model_status) ? num(fOrd.yhat_sum) : 0,
+          purchases_ordered_lower: fOrd && ['ok', 'ok_derived'].includes(fOrd.model_status) ? (fOrd.yhat_lower_sum !== null ? num(fOrd.yhat_lower_sum) : null) : null,
+          purchases_ordered_upper: fOrd && ['ok', 'ok_derived'].includes(fOrd.model_status) ? (fOrd.yhat_upper_sum !== null ? num(fOrd.yhat_upper_sum) : null) : null,
           purchases_ordered_model_status: fOrd?.model_status ?? 'missing',
-          purchases_received: fRec && fRec.model_status === 'ok' ? num(fRec.yhat_sum) : 0,
-          purchases_received_lower: fRec && fRec.model_status === 'ok' ? (fRec.yhat_lower_sum !== null ? num(fRec.yhat_lower_sum) : null) : null,
-          purchases_received_upper: fRec && fRec.model_status === 'ok' ? (fRec.yhat_upper_sum !== null ? num(fRec.yhat_upper_sum) : null) : null,
+          purchases_received: fRec && ['ok', 'ok_derived'].includes(fRec.model_status) ? num(fRec.yhat_sum) : 0,
+          purchases_received_lower: fRec && ['ok', 'ok_derived'].includes(fRec.model_status) ? (fRec.yhat_lower_sum !== null ? num(fRec.yhat_lower_sum) : null) : null,
+          purchases_received_upper: fRec && ['ok', 'ok_derived'].includes(fRec.model_status) ? (fRec.yhat_upper_sum !== null ? num(fRec.yhat_upper_sum) : null) : null,
           purchases_received_model_status: fRec?.model_status ?? 'missing',
         });
-        // Track worst status (anything not 'ok' surfaces).
+        // Track worst status — ok_derived is valid; only flag truly unexpected statuses.
         if (fSales?.model_status && fSales.model_status !== 'ok') forecastStatus.sales = fSales.model_status;
-        if (fOrd?.model_status && fOrd.model_status !== 'ok') forecastStatus.purchases_ordered = fOrd.model_status;
-        if (fRec?.model_status && fRec.model_status !== 'ok') forecastStatus.purchases_received = fRec.model_status;
+        if (fOrd?.model_status && !['ok', 'ok_derived'].includes(fOrd.model_status)) forecastStatus.purchases_ordered = fOrd.model_status;
+        if (fRec?.model_status && !['ok', 'ok_derived'].includes(fRec.model_status)) forecastStatus.purchases_received = fRec.model_status;
       }
 
       // 12-month rolling history mean (last 12 history months ending 2026-01).

@@ -1,0 +1,52 @@
+forecast: PO history completeness stoplight + full ML re-training
+
+WHY THE RE-TRAINING
+revenue_daily_for_ml was rebuilt 2026-04-29 (computed_at range
+04:18–13:18 UTC), five days after the sales Prophet forecasts were
+written on 2026-04-24T17:29 UTC. The training data had changed, so
+all prior forecast cells were stale. Re-ran the full two-pass pipeline
+against the current data:
+  Pass 1 — Prophet (sales): all 23 demo SKUs, training 2024-10-01 to
+            2026-01-31, prediction Feb + Mar 2026.
+  Pass 2 — Derived ratio (purchases_ordered + purchases_received):
+            sales_forecast × median(PO/Sales ratio, Tukey IQR×1.5
+            outlier exclusion), per SKU.
+Result: 138 forecast cells confirmed (23 SKUs × 3 metrics × 2 months),
+all model_status = ok / ok_derived.
+
+PO HISTORY COMPLETENESS COLUMN
+14 of 23 demo SKUs have fewer than 3 months of confirmed purchase order
+history in revenue_daily_for_ml (SSOT pol_confirmed_date_planned_
+product_qty_c40, states purchase/locked/done). The derived purchase
+forecast for these SKUs is based on 2 onboarding months only (Oct–Nov
+2024) and should be read with caution. Root cause: the company procures
+several CARVAJAL imported products through a mechanism not captured in
+standard Odoo PO tables for most of the training window.
+
+Migration adds po_history_real_months SMALLINT (0–16) to
+products_acid_test_active, recording the count of calendar months in
+the 16-month training window that have at least one confirmed PO.
+Synthetic fallback data (find_16) does not count. Backfill values
+verified by direct query of revenue_daily_for_ml 2026-05-05:
+  GREEN  (16/16): 13 SKUs — pids 5,20,29,33,36,145,469,539,
+                            1113,1127,1366,1562,1606
+  AMBER  ( 5/16):  2 SKUs — pids 37, 1035
+  RED    ( 2/16):  8 SKUs — pids 2,3,34,1069,1096,1587,1590,1600
+Amber/red boundary (≥3 months) is a provisional proxy pending Acid
+Test 2 scoring against Luis's actual Feb/Mar 2026 values.
+
+UI — Forecast a Ciegas page
+- SKU cell background: green-50 / amber-50 / red-50 per tier.
+- Small pill inside the SKU cell shows "Datos completos",
+  "Datos parciales (5/16)", or "Datos insuficientes (2/16)".
+- New "Historial OC:" filter row below the supplier filter. Three
+  combinable toggle buttons (green / amber / red). Default = all three
+  active. Minimum one must remain active at all times. Combinable with
+  the existing Proveedor filter.
+- API route updated to select and pass po_history_real_months from
+  products_acid_test_active through to the frontend.
+
+Scripts committed for audit trail (docs/reconciliation/):
+  run_full_training_2026-05-05.py  — today's two-pass re-training run
+  fix_feb2026_purchases_forecast_results.py  — previous session fix
+  FINDINGS_purchase_data_completeness_2026-04-29.md  — root cause doc
