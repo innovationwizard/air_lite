@@ -319,3 +319,112 @@ This directly answers both dealbreaker questions:
 **Source scripts NOT yet fixed:** `find_15.py` and `find_15b.py` still use `to_caja40()` for purchases. If these scripts are re-run without applying the patch first, the bug will be re-introduced. TODO: fix these source scripts to use stock_uom-based conversion.
 
 **UoM semantics persisted to memory:** `reference_uom_semantics.md` in project memory — includes physical meanings (FARDO10 = bundle of 10, CAJA40 = box of 40), conversion formulas, and root cause explanation.
+
+**Source script fix applied (same session):** `find_15.py` and `find_15b.py` both patched to replace `to_caja40()` with `to_stock_uom(qty, src_uom, tgt_uom)` that converts to each product's `stock_uom` instead of always converting to CAJA40. No `to_caja40` references remain in either file.
+
+---
+
+### Session 2026-05-07 — Fix B: Uncensored Demand Metric (Dealbreaker 2)
+
+**Root cause confirmed:** Prophet trains on `revenue_daily_for_ml` with `metric='sales'` (invoiced/delivered qty from account.move.line). During stockouts, invoiced qty = stock available < true customer demand. Prophet learns the supply-constrained signal, not actual demand.
+
+**Source of uncensored demand:** `sale_orders` + `sale_order_lines` tables in Supabase (already loaded, confirmed 80,525 confirmed orders with state='sale'). Key fields: `sale_orders.order_date` (demand arrival date), `sale_order_lines.quantity` (ordered qty regardless of stock), `sale_order_lines.delivered_qty` (fulfilled qty — the censored signal).
+
+**Note on plan assumption correction:** Plan-004 originally stated state filter should be `'Orden de venta'` (Spanish). Actual Supabase data stores state in English: `'sale'` for confirmed orders. Filter corrected to `state=eq.sale` in all scripts.
+
+#### B2/B3 — populate_demand_metric_2026-05-07.py
+
+**Script:** `docs/reconciliation/populate_demand_metric_2026-05-07.py`
+
+**What it does:**
+1. Idempotency check: aborts if demand rows already exist for pid=2 in revenue_daily_for_ml
+2. Loads all 80,525 confirmed sale_orders (state='sale'); filters to 75,310 in training window (2024-10-01 → 2026-01-31)
+3. Loads 122,460 sale_order_lines for 23 demo PIDs
+4. Aggregates to (product_id, order_date) summing quantity with UoM normalization to product's stock_uom
+5. Inserts 9,693 daily demand rows into BOTH `revenue_daily` and `revenue_daily_for_ml`
+
+**SSOT label:** `sol_confirmed_order_date_qty_ordered_native_uom`  
+**Metric:** `demand`
+
+**Verification results (pid=2, SKU 77205001, FARDO10):**
+
+| Month | Demand | Lost Sales | Fill Rate |
+|-------|--------|------------|-----------|
+| 2024-10 | 27,534 | 0 | 100.0% |
+| 2024-11 | 31,843 | 0 | 100.0% |
+| 2024-12 | 30,283 | 0 | 100.0% |
+| 2025-01 | 32,016 | 0 | 100.0% |
+| 2025-02 | 28,929 | 0 | 100.0% |
+| 2025-03 | 35,523 | 0 | 100.0% |
+| 2025-04 | 37,108 | 0 | 100.0% |
+| 2025-05 | 36,875 | 0 | 100.0% |
+| 2025-06 | 41,524 | 1,091 | 97.4% |
+| 2025-07 | 40,283 | 2,026 | 95.0% |
+| 2025-08 | 43,561 | 2,837 | 93.5% |
+| 2025-09 | 44,100 | 3,200 | 92.7% |
+| 2025-10 | 44,389 | 3,455 | 92.2% |
+| 2025-11 | 45,521 | 2,474 | 94.6% |
+| 2025-12 | 52,067 | 14,206 | 72.7% |
+| 2026-01 | 44,832 | 8,903 | 80.1% |
+
+**Client claim validated:** Client said demand is 45,000+ for SKU 77205001. Historical data confirms: avg Oct–Jan 2026 = ~38k, trending to 45k+ in H2 2025. Dec 2025 spike to 52k with 14k lost sales (27.3% unmet demand) is a major stockout event.
+
+All 23 demo PIDs received demand rows. [PASS] 
+
+#### B4 — trigger_ml_training_demand_2026-05-07.py
+
+**Script:** `docs/reconciliation/trigger_ml_training_demand_2026-05-07.py`
+
+**What it does:** Calls Railway ML service `/forecast/revenue-daily` directly for all 23 demo SKUs with `metric='demand'`, `ssot_label='sol_confirmed_order_date_qty_ordered_native_uom'`, training window 2024-10-01 → 2026-01-31, prediction through 2026-03-31. Persists monthly forecast rows to `forecast_results` via Supabase upsert.
+
+**Result: 23/23 SKUs OK**
+
+**Spot check — SKU 77205001 (pid=2) demand vs sales forecast:**
+
+| metric | month | yhat_sum | status |
+|--------|-------|----------|--------|
+| demand | 2026-02 | 42,330 | ok |
+| demand | 2026-03 | 39,225 | ok |
+| purchases_ordered | 2026-02 | 34,989 | ok_derived |
+| purchases_received | 2026-02 | 34,989 | ok_derived |
+| sales | 2026-02 | 35,172 | ok |
+| sales | 2026-03 | 35,851 | ok |
+
+**Lost sales gap now quantified:** Feb 2026 demand forecast 42,330 vs sales forecast 35,172 = **gap of 7,158 FARDO10/month** (~20%). This is the "invisible lost revenue" that was the DEALBREAKER.
+
+#### B5 — forecast-diagnostic route.ts + UI changes
+
+**Files modified:**
+- `frontend/src/app/api/superuser/forecast-diagnostic/route.ts`
+- `frontend/src/app/(authenticated)/superuser/forecast-diagnostic/page.tsx`
+
+**route.ts changes:**
+- `METRICS` constant: added `'demand'` → now `['sales', 'purchases_ordered', 'purchases_received', 'demand']`
+- `RevenueDailyRow.metric` type: added `| 'demand'`
+- `ForecastResultRow.metric` type: added `| 'demand'`
+- `MonthlyAgg` interface: added `demand: number`
+- `ForecastMonth` interface: added `demand`, `demand_lower`, `demand_upper`, `demand_model_status`
+- `histAgg` cell: added `demand: 0` initialization; `else if (r.metric === 'demand') { cell.demand += qty; }` accumulation
+- `history.push`: added `demand: cell?.demand ?? 0`
+- `forecastStatus` record: added `demand: 'ok'`
+- Forecast construction: added `fDemand = latestForecast.get(...)` lookup with `model_status === 'ok'` guard
+- `history12m`, `forecastMean`, `ratio`: added `demand` field
+- `PerUomMonth` interface: added `demand`, `demand_lower`, `demand_upper`
+- Per-UoM accumulation: added demand accumulation in both history and forecast sections; added demand CI handling; added demand status to `anyNotOk` check
+- `series.push`: added `demand`, `demand_lower`, `demand_upper`
+
+**page.tsx changes:**
+- `Metric` type: added `| 'demand'`
+- `MonthlyAgg` / `ForecastMonth` / `PerUomMonth` interfaces: added demand fields
+- `METRIC_COLOR`: `demand: '#f97316'` (orange-500)
+- `METRIC_LABEL`: `demand: 'Demanda (pedidos)'`
+- Panel A (ratio bars): added demand to series and legend
+- Panel B (per-UoM time series): added `demand` to `CI_KEYS`; added `buildSeries('demand')` to allSeries; added to legend
+- Panel C (SKU drilldown): added `demand` case to `lowerKey`/`upperKey` derivation; added `buildSeries('demand')` to allSeries; added to legend; added to summary table
+- In-sample fit series remains sales-only (demand has no in-sample fit)
+
+**Visual result:** Panel C now shows 4 lines for SKU 77205001 — Ventas (green), Compras (blue/purple), and Demanda (orange). The gap between the orange Demanda line and the green Ventas line IS the lost sales signal. Decision-makers can see: "We had 45k demand, sold 35k, lost 7k+/month to stockouts."
+
+**Dealbreaker 2 STATUS: RESOLVED** — Forecast-diagnostic page now surfaces the uncensored demand metric. The 35k vs 45k discrepancy is explained and quantified as lost sales.
+
+**TypeScript check:** `tsc --noEmit` passes with no errors after all changes.

@@ -10,13 +10,14 @@ import { Target, AlertTriangle, RefreshCw } from 'lucide-react';
 const ReactECharts = dynamicImport(() => import('echarts-for-react'), { ssr: false });
 
 // ─── types — mirror the GET /api/superuser/forecast-diagnostic response ──────
-type Metric = 'sales' | 'purchases_ordered' | 'purchases_received';
+type Metric = 'sales' | 'purchases_ordered' | 'purchases_received' | 'demand';
 
 interface MonthlyAgg {
   month: string;
   sales: number;
   purchases_ordered: number;
   purchases_received: number;
+  demand: number;
   sales_gtq: number | null;
 }
 
@@ -34,6 +35,10 @@ interface ForecastMonth {
   purchases_received_lower: number | null;
   purchases_received_upper: number | null;
   purchases_received_model_status: string;
+  demand: number;
+  demand_lower: number | null;
+  demand_upper: number | null;
+  demand_model_status: string;
 }
 
 interface InSampleMonth {
@@ -64,6 +69,7 @@ interface PerUomMonth {
   sales: number;
   purchases_ordered: number;
   purchases_received: number;
+  demand: number;
   sales_gtq: number;
   sales_lower: number | null;
   sales_upper: number | null;
@@ -71,6 +77,8 @@ interface PerUomMonth {
   po_upper: number | null;
   pr_lower: number | null;
   pr_upper: number | null;
+  demand_lower: number | null;
+  demand_upper: number | null;
   in_sample_fit_sales: number | null;
   in_sample_fit_sales_lower: number | null;
   in_sample_fit_sales_upper: number | null;
@@ -97,11 +105,13 @@ const METRIC_COLOR: Record<Metric, string> = {
   sales: '#10b981',                // emerald-500
   purchases_ordered: '#3b82f6',    // blue-500
   purchases_received: '#a855f7',   // purple-500
+  demand: '#f97316',               // orange-500 (uncensored demand)
 };
 const METRIC_LABEL: Record<Metric, string> = {
   sales: 'Ventas',
   purchases_ordered: 'Compras Ordenadas',
   purchases_received: 'Compras Recibidas',
+  demand: 'Demanda (pedidos)',
 };
 
 function fmt(n: number | null | undefined, digits = 0): string {
@@ -178,7 +188,7 @@ export default function ForecastDiagnosticPage() {
       return (a.movement_rank_within_class || 999) - (b.movement_rank_within_class || 999);
     });
     const xLabels = skus.map((s) => s.sku);
-    const series = (['sales', 'purchases_ordered', 'purchases_received'] as Metric[]).map((m) => ({
+    const series = (['sales', 'purchases_ordered', 'purchases_received', 'demand'] as Metric[]).map((m) => ({
       name: METRIC_LABEL[m],
       type: 'bar',
       data: skus.map((s) => {
@@ -209,7 +219,7 @@ export default function ForecastDiagnosticPage() {
           return lines.join('<br/>');
         },
       },
-      legend: { data: (['sales', 'purchases_ordered', 'purchases_received'] as Metric[]).map((m) => METRIC_LABEL[m]), top: 30 },
+      legend: { data: (['sales', 'purchases_ordered', 'purchases_received', 'demand'] as Metric[]).map((m) => METRIC_LABEL[m]), top: 30 },
       grid: { left: 60, right: 30, top: 80, bottom: 60 },
       xAxis: { type: 'category', data: xLabels, axisLabel: { rotate: 45, fontSize: 10 } },
       yAxis: {
@@ -256,6 +266,7 @@ export default function ForecastDiagnosticPage() {
         sales: { lo: 'sales_lower', hi: 'sales_upper' },
         purchases_ordered: { lo: 'po_lower', hi: 'po_upper' },
         purchases_received: { lo: 'pr_lower', hi: 'pr_upper' },
+        demand: { lo: 'demand_lower', hi: 'demand_upper' },
       };
       const buildSeries = (metric: Metric) => {
         const color = METRIC_COLOR[metric];
@@ -346,6 +357,7 @@ export default function ForecastDiagnosticPage() {
         ...buildSeries('sales'),
         ...buildSeries('purchases_ordered'),
         ...buildSeries('purchases_received'),
+        ...buildSeries('demand'),
       ];
 
       // Mark line at training cutoff (Jan 2026 month index).
@@ -375,7 +387,7 @@ export default function ForecastDiagnosticPage() {
             top: 24,
             type: 'scroll',
             data: [
-              ...(['sales', 'purchases_ordered', 'purchases_received'] as Metric[]).flatMap((m) => [
+              ...(['sales', 'purchases_ordered', 'purchases_received', 'demand'] as Metric[]).flatMap((m) => [
                 `${METRIC_LABEL[m]} (histórico)`,
                 `${METRIC_LABEL[m]} (forecast)`,
               ]),
@@ -412,8 +424,8 @@ export default function ForecastDiagnosticPage() {
       const fcstData: (number | null)[] = [...sku.history.map(() => null), ...fcstVals];
 
       // CI band per metric (lower + band height stacked).
-      const lowerKey = metric === 'sales' ? 'sales_lower' : metric === 'purchases_ordered' ? 'purchases_ordered_lower' : 'purchases_received_lower';
-      const upperKey = metric === 'sales' ? 'sales_upper' : metric === 'purchases_ordered' ? 'purchases_ordered_upper' : 'purchases_received_upper';
+      const lowerKey = metric === 'sales' ? 'sales_lower' : metric === 'purchases_ordered' ? 'purchases_ordered_lower' : metric === 'purchases_received' ? 'purchases_received_lower' : 'demand_lower';
+      const upperKey = metric === 'sales' ? 'sales_upper' : metric === 'purchases_ordered' ? 'purchases_ordered_upper' : metric === 'purchases_received' ? 'purchases_received_upper' : 'demand_upper';
       const ciLower: (number | null)[] = [
         ...Array(nHistory).fill(null),
         ...sku.forecast.map((f) => f[lowerKey as keyof typeof f] as number | null),
@@ -492,6 +504,7 @@ export default function ForecastDiagnosticPage() {
       ...buildSeries('sales'),
       ...buildSeries('purchases_ordered'),
       ...buildSeries('purchases_received'),
+      ...buildSeries('demand'),
     ];
 
     const trainingMonthLabel = trainingEnd ? trainingEnd.slice(0, 7) : null;
@@ -518,7 +531,7 @@ export default function ForecastDiagnosticPage() {
         top: 50,
         type: 'scroll',
         data: [
-          ...(['sales', 'purchases_ordered', 'purchases_received'] as Metric[]).flatMap((m) => [
+          ...(['sales', 'purchases_ordered', 'purchases_received', 'demand'] as Metric[]).flatMap((m) => [
             `${METRIC_LABEL[m]} (histórico)`,
             `${METRIC_LABEL[m]} (forecast)`,
           ]),
@@ -679,7 +692,7 @@ export default function ForecastDiagnosticPage() {
                 </tr>
               </thead>
               <tbody className="font-mono">
-                {(['sales', 'purchases_ordered', 'purchases_received'] as Metric[]).map((m) => {
+                {(['sales', 'purchases_ordered', 'purchases_received', 'demand'] as Metric[]).map((m) => {
                   const r = s.ratio[m];
                   const bucket = ratioBucket(r);
                   return (

@@ -41,7 +41,7 @@ interface ProductRow {
 
 interface RevenueDailyRow {
   product_id: number;
-  metric: 'sales' | 'purchases_ordered' | 'purchases_received';
+  metric: 'sales' | 'purchases_ordered' | 'purchases_received' | 'demand';
   observation_date: string;
   quantity: number;
   revenue_gtq: number | null;
@@ -49,7 +49,7 @@ interface RevenueDailyRow {
 
 interface ForecastResultRow {
   product_id: number;
-  metric: 'sales' | 'purchases_ordered' | 'purchases_received';
+  metric: 'sales' | 'purchases_ordered' | 'purchases_received' | 'demand';
   forecast_month: string;
   training_end_date: string;
   yhat_sum: number;
@@ -58,7 +58,7 @@ interface ForecastResultRow {
   model_status: string;
 }
 
-const METRICS = ['sales', 'purchases_ordered', 'purchases_received'] as const;
+const METRICS = ['sales', 'purchases_ordered', 'purchases_received', 'demand'] as const;
 type Metric = typeof METRICS[number];
 
 const PAGE_SIZE = 1000;
@@ -208,6 +208,7 @@ export async function GET(req: NextRequest) {
       sales: number;
       purchases_ordered: number;
       purchases_received: number;
+      demand: number;
       sales_gtq: number | null;
     }
     interface ForecastMonth {
@@ -224,6 +225,10 @@ export async function GET(req: NextRequest) {
       purchases_received_lower: number | null;
       purchases_received_upper: number | null;
       purchases_received_model_status: string;
+      demand: number;
+      demand_lower: number | null;
+      demand_upper: number | null;
+      demand_model_status: string;
     }
     // Prophet in-sample fit for each training-period month (sales only).
     // Lets the user compare actual vs model-predicted for the same month.
@@ -256,7 +261,7 @@ export async function GET(req: NextRequest) {
     }
 
     // Accumulate history per (product_id, month, metric).
-    const histAgg = new Map<number, Map<string, { sales: number; purchases_ordered: number; purchases_received: number; sales_gtq: number }>>();
+    const histAgg = new Map<number, Map<string, { sales: number; purchases_ordered: number; purchases_received: number; demand: number; sales_gtq: number }>>();
     let globalMinMonth: string | null = null;
     let globalMaxMonth: string | null = null;
     for (const r of historyRows) {
@@ -270,7 +275,7 @@ export async function GET(req: NextRequest) {
       }
       let cell = pidMap.get(month);
       if (!cell) {
-        cell = { sales: 0, purchases_ordered: 0, purchases_received: 0, sales_gtq: 0 };
+        cell = { sales: 0, purchases_ordered: 0, purchases_received: 0, demand: 0, sales_gtq: 0 };
         pidMap.set(month, cell);
       }
       const qty = num(r.quantity);
@@ -281,6 +286,8 @@ export async function GET(req: NextRequest) {
         cell.purchases_ordered += qty;
       } else if (r.metric === 'purchases_received') {
         cell.purchases_received += qty;
+      } else if (r.metric === 'demand') {
+        cell.demand += qty;
       }
     }
 
@@ -323,6 +330,7 @@ export async function GET(req: NextRequest) {
           sales: cell?.sales ?? 0,
           purchases_ordered: cell?.purchases_ordered ?? 0,
           purchases_received: cell?.purchases_received ?? 0,
+          demand: cell?.demand ?? 0,
           sales_gtq: cell ? cell.sales_gtq : 0,
         });
         // In-sample sales fit from Prophet (stored with model_status='ok_in_sample').
@@ -337,12 +345,13 @@ export async function GET(req: NextRequest) {
       }
 
       const forecast: ForecastMonth[] = [];
-      const forecastStatus: Record<Metric, string> = { sales: 'ok', purchases_ordered: 'ok', purchases_received: 'ok' };
+      const forecastStatus: Record<Metric, string> = { sales: 'ok', purchases_ordered: 'ok', purchases_received: 'ok', demand: 'ok' };
       for (const fmonth of ['2026-02', '2026-03']) {
         const fkey = `${fmonth}-01`;
         const fSales = latestForecast.get(`${product.id}|sales|${fkey}`);
         const fOrd = latestForecast.get(`${product.id}|purchases_ordered|${fkey}`);
         const fRec = latestForecast.get(`${product.id}|purchases_received|${fkey}`);
+        const fDemand = latestForecast.get(`${product.id}|demand|${fkey}`);
         if (fSales && fSales.training_end_date && (!trainingEndDate || fSales.training_end_date > trainingEndDate)) {
           trainingEndDate = fSales.training_end_date;
         }
@@ -360,11 +369,16 @@ export async function GET(req: NextRequest) {
           purchases_received_lower: fRec && ['ok', 'ok_derived'].includes(fRec.model_status) ? (fRec.yhat_lower_sum !== null ? num(fRec.yhat_lower_sum) : null) : null,
           purchases_received_upper: fRec && ['ok', 'ok_derived'].includes(fRec.model_status) ? (fRec.yhat_upper_sum !== null ? num(fRec.yhat_upper_sum) : null) : null,
           purchases_received_model_status: fRec?.model_status ?? 'missing',
+          demand: fDemand && fDemand.model_status === 'ok' ? num(fDemand.yhat_sum) : 0,
+          demand_lower: fDemand && fDemand.model_status === 'ok' ? (fDemand.yhat_lower_sum !== null ? num(fDemand.yhat_lower_sum) : null) : null,
+          demand_upper: fDemand && fDemand.model_status === 'ok' ? (fDemand.yhat_upper_sum !== null ? num(fDemand.yhat_upper_sum) : null) : null,
+          demand_model_status: fDemand?.model_status ?? 'missing',
         });
         // Track worst status — ok_derived is valid; only flag truly unexpected statuses.
         if (fSales?.model_status && fSales.model_status !== 'ok') forecastStatus.sales = fSales.model_status;
         if (fOrd?.model_status && !['ok', 'ok_derived'].includes(fOrd.model_status)) forecastStatus.purchases_ordered = fOrd.model_status;
         if (fRec?.model_status && !['ok', 'ok_derived'].includes(fRec.model_status)) forecastStatus.purchases_received = fRec.model_status;
+        if (fDemand?.model_status && fDemand.model_status !== 'ok') forecastStatus.demand = fDemand.model_status;
       }
 
       // 12-month rolling history mean (last 12 history months ending 2026-01).
@@ -373,16 +387,19 @@ export async function GET(req: NextRequest) {
         sales: last12.length ? last12.reduce((s, m) => s + m.sales, 0) / last12.length : 0,
         purchases_ordered: last12.length ? last12.reduce((s, m) => s + m.purchases_ordered, 0) / last12.length : 0,
         purchases_received: last12.length ? last12.reduce((s, m) => s + m.purchases_received, 0) / last12.length : 0,
+        demand: last12.length ? last12.reduce((s, m) => s + m.demand, 0) / last12.length : 0,
       };
       const forecastMean: Record<Metric, number> = {
         sales: forecast.length ? forecast.reduce((s, m) => s + m.sales, 0) / forecast.length : 0,
         purchases_ordered: forecast.length ? forecast.reduce((s, m) => s + m.purchases_ordered, 0) / forecast.length : 0,
         purchases_received: forecast.length ? forecast.reduce((s, m) => s + m.purchases_received, 0) / forecast.length : 0,
+        demand: forecast.length ? forecast.reduce((s, m) => s + m.demand, 0) / forecast.length : 0,
       };
       const ratio: Record<Metric, number | null> = {
         sales: history12m.sales > 0 ? forecastMean.sales / history12m.sales : null,
         purchases_ordered: history12m.purchases_ordered > 0 ? forecastMean.purchases_ordered / history12m.purchases_ordered : null,
         purchases_received: history12m.purchases_received > 0 ? forecastMean.purchases_received / history12m.purchases_received : null,
+        demand: history12m.demand > 0 ? forecastMean.demand / history12m.demand : null,
       };
 
       perSku.push({
@@ -425,14 +442,17 @@ export async function GET(req: NextRequest) {
       sales: number;
       purchases_ordered: number;
       purchases_received: number;
+      demand: number;
       sales_gtq: number;
-      // Forecast confidence bands (yhat_lower / yhat_upper) for all three metrics.
+      // Forecast confidence bands (yhat_lower / yhat_upper) for all metrics.
       sales_lower: number | null;
       sales_upper: number | null;
       po_lower: number | null;
       po_upper: number | null;
       pr_lower: number | null;
       pr_upper: number | null;
+      demand_lower: number | null;
+      demand_upper: number | null;
       // Prophet in-sample fit for the training period (sales only; null when not yet populated).
       in_sample_fit_sales: number | null;
       in_sample_fit_sales_lower: number | null;
@@ -447,10 +467,12 @@ export async function GET(req: NextRequest) {
       const skuObjs = perSku.filter((s) => s.uom === g.uom);
       for (const m of allMonths) {
         const isForecast = m > '2026-01';
-        let sales = 0, po = 0, pr = 0, salesGtq = 0;
+        let sales = 0, po = 0, pr = 0, demand = 0, salesGtq = 0;
         let salesLower = 0, salesUpper = 0, poLower = 0, poUpper = 0, prLower = 0, prUpper = 0;
+        let demandLower = 0, demandUpper = 0;
         let anyLower = false, anyUpper = false, anyPoLower = false, anyPoUpper = false;
-        let anyPrLower = false, anyPrUpper = false, anyNotOk = false;
+        let anyPrLower = false, anyPrUpper = false, anyDemandLower = false, anyDemandUpper = false;
+        let anyNotOk = false;
         let isFitSales = 0, isFitSalesLower = 0, isFitSalesUpper = 0;
         let anyFitSales = false, anyFitSalesLower = false, anyFitSalesUpper = false;
         for (const s of skuObjs) {
@@ -460,6 +482,7 @@ export async function GET(req: NextRequest) {
               sales += h.sales;
               po += h.purchases_ordered;
               pr += h.purchases_received;
+              demand += h.demand;
               salesGtq += h.sales_gtq ?? 0;
             }
             const is = s.in_sample_fit.find((x) => x.month === m);
@@ -475,16 +498,20 @@ export async function GET(req: NextRequest) {
               sales += f.sales;
               po += f.purchases_ordered;
               pr += f.purchases_received;
+              demand += f.demand;
               if (f.sales_lower !== null) { salesLower += f.sales_lower; anyLower = true; }
               if (f.sales_upper !== null) { salesUpper += f.sales_upper; anyUpper = true; }
               if (f.purchases_ordered_lower !== null) { poLower += f.purchases_ordered_lower; anyPoLower = true; }
               if (f.purchases_ordered_upper !== null) { poUpper += f.purchases_ordered_upper; anyPoUpper = true; }
               if (f.purchases_received_lower !== null) { prLower += f.purchases_received_lower; anyPrLower = true; }
               if (f.purchases_received_upper !== null) { prUpper += f.purchases_received_upper; anyPrUpper = true; }
+              if (f.demand_lower !== null) { demandLower += f.demand_lower; anyDemandLower = true; }
+              if (f.demand_upper !== null) { demandUpper += f.demand_upper; anyDemandUpper = true; }
               if (
                 f.sales_model_status !== 'ok' ||
                 !['ok', 'ok_derived'].includes(f.purchases_ordered_model_status) ||
-                !['ok', 'ok_derived'].includes(f.purchases_received_model_status)
+                !['ok', 'ok_derived'].includes(f.purchases_received_model_status) ||
+                f.demand_model_status !== 'ok'
               ) {
                 anyNotOk = true;
               }
@@ -496,6 +523,7 @@ export async function GET(req: NextRequest) {
           sales,
           purchases_ordered: po,
           purchases_received: pr,
+          demand,
           sales_gtq: salesGtq,
           sales_lower: anyLower ? salesLower : null,
           sales_upper: anyUpper ? salesUpper : null,
@@ -503,6 +531,8 @@ export async function GET(req: NextRequest) {
           po_upper: anyPoUpper ? poUpper : null,
           pr_lower: anyPrLower ? prLower : null,
           pr_upper: anyPrUpper ? prUpper : null,
+          demand_lower: anyDemandLower ? demandLower : null,
+          demand_upper: anyDemandUpper ? demandUpper : null,
           in_sample_fit_sales: !isForecast && anyFitSales ? isFitSales : null,
           in_sample_fit_sales_lower: !isForecast && anyFitSalesLower ? isFitSalesLower : null,
           in_sample_fit_sales_upper: !isForecast && anyFitSalesUpper ? isFitSalesUpper : null,

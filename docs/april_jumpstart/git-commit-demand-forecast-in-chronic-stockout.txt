@@ -1,0 +1,90 @@
+feat: uncensored demand metric — sale.order.line signal + forecast-diagnostic UI
+
+DEALBREAKER 2 RESOLVED: Prophet was training on invoiced (supply-constrained)
+quantities (metric='sales', from account.move.line). For SKU 77205001, this
+produced a 35k/month forecast while the client's known demand is 45k+/month.
+The gap is lost sales caused by chronic stockouts — invisible to the model
+because censored observations look like low demand, not constrained supply.
+
+ROOT CAUSE
+----------
+sale_orders.state values are stored in English ('sale'), not the Spanish label
+visible in the Odoo UI ('Orden de venta'). All demand aggregation uses the
+correct English filter.
+
+SSOT LABEL
+----------
+sol_confirmed_order_date_qty_ordered_native_uom
+  source    : sale_order_lines.quantity   (ordered qty, NOT delivered)
+  date      : sale_orders.order_date      (demand arrival date)
+  filter    : sale_orders.state = 'sale'  (confirmed orders only)
+  cap       : observation_date <= 2026-01-31  (blind test cutoff)
+
+HISTORICAL VALIDATION (pid=2, SKU 77205001, FARDO10)
+------------------------------------------------------
+  Jun 2025: demand=41,524  lost_sales=1,091   fill=97.4%
+  Nov 2025: demand=45,521  lost_sales=2,474   fill=94.6%
+  Dec 2025: demand=52,067  lost_sales=14,206  fill=72.7%
+  Jan 2026: demand=44,832  lost_sales=8,903   fill=80.1%
+Client claim of 45k+ confirmed by historical record.
+
+ML RESULT (Prophet, training_end=2026-01-31, 23/23 OK)
+-------------------------------------------------------
+  demand  Feb 2026: 42,330 FARDO10  (ok)
+  sales   Feb 2026: 35,172 FARDO10  (ok)
+  gap:     7,158 FARDO10/month (~20%) = quantified lost sales
+
+DATA PIPELINE (new scripts — not wired into automated run)
+----------------------------------------------------------
+docs/reconciliation/populate_demand_metric_2026-05-07.py
+  Loads sale_order_lines for 23 demo PIDs, aggregates to daily
+  (product_id, order_date) with UoM normalization to stock_uom.
+  Writes 9,693 rows to revenue_daily AND revenue_daily_for_ml.
+  Idempotent: aborts if demand rows already exist for pid=2.
+  Run AFTER fix_purchase_uom (UoM fix already applied).
+  Run BEFORE trigger_ml_training_demand (ML reads revenue_daily_for_ml).
+
+docs/reconciliation/trigger_ml_training_demand_2026-05-07.py
+  Calls Railway ML service /forecast/revenue-daily directly,
+  bypassing Next.js middleware (requires browser session cookie).
+  Persists monthly yhat_sum/lower/upper to forecast_results via
+  Supabase service role key (upsert on 5-column conflict key).
+  23/23 SKUs OK.
+
+FRONTEND — forecast-diagnostic route.ts
+----------------------------------------
+- METRICS: added 'demand' → ['sales','purchases_ordered','purchases_received','demand']
+- RevenueDailyRow.metric, ForecastResultRow.metric: added | 'demand'
+- MonthlyAgg: demand: number
+- ForecastMonth: demand, demand_lower, demand_upper, demand_model_status
+- PerUomMonth: demand, demand_lower, demand_upper
+- histAgg cell: demand: 0 init + else-if accumulation branch
+- history.push: demand field populated
+- forecastStatus Record: demand: 'ok'
+- Forecast lookup: fDemand from latestForecast, guard model_status === 'ok'
+- history12m / forecastMean / ratio Records: demand field added
+- Per-UoM accumulation: demand in both history and forecast sections,
+  CI band tracking (anyDemandLower/Upper), anyNotOk includes demand status
+- series.push: demand, demand_lower, demand_upper
+
+FRONTEND — forecast-diagnostic page.tsx
+-----------------------------------------
+- Metric type: added | 'demand'
+- MonthlyAgg / ForecastMonth / PerUomMonth interfaces updated
+- METRIC_COLOR['demand'] = '#f97316'  (orange-500)
+- METRIC_LABEL['demand'] = 'Demanda (pedidos)'
+- Panel A (ratio bars): demand series + legend
+- Panel B (per-UoM): CI_KEYS.demand, buildSeries('demand'), legend
+- Panel C (drilldown): lowerKey/upperKey handles 'demand' case,
+  buildSeries('demand'), summary table row, legend
+- In-sample fit conditional stays sales-only (no demand in-sample fit)
+- tsc --noEmit: no errors
+
+PLAN + CHANGELOG
+-----------------
+_qci/plan-004: additive Implementation Log section — Fix B (B2–B5),
+  full demand history table, ML results table, frontend change inventory.
+changelogs/2026-05-07_uom-purchase-fix-and-uncensored-demand-metric.md:
+  documents both Dealbreaker 1 (UoM fix, prior scripts) and Dealbreaker 2
+  (this commit) with root cause derivations, data before/after tables,
+  pipeline order, and decisions not taken.
