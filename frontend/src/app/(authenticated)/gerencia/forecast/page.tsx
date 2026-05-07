@@ -163,6 +163,7 @@ export default function ForecastPage() {
   const [openHistoryTip, setOpenHistoryTip] = useState<string | null>(null);
   const [tipPos, setTipPos] = useState<{ top: number; left: number } | null>(null);
   const historyTipRef = useRef<HTMLDivElement>(null);
+  const [metricFilter, setMetricFilter] = useState<'' | 'ventas' | 'compras_ordenadas' | 'compras_recibidas'>('ventas');
 
   useEffect(() => {
     Promise.all([
@@ -268,6 +269,10 @@ export default function ForecastPage() {
     };
   }, [visible]);
 
+  const showVentas    = metricFilter === '' || metricFilter === 'ventas';
+  const showOrdenadas = metricFilter === '' || metricFilter === 'compras_ordenadas';
+  const showRecibidas = metricFilter === '' || metricFilter === 'compras_recibidas';
+
   return (
     <div className="space-y-6">
       <div>
@@ -315,6 +320,26 @@ export default function ForecastPage() {
             Descargar CSV
           </button>
         </div>
+      </div>
+
+      <div className="flex gap-2 items-center flex-wrap">
+        <span className="text-sm text-gray-600">Forecast:</span>
+        {([
+          { key: '' as const,                    label: 'Todo' },
+          { key: 'ventas' as const,              label: 'Ventas' },
+          { key: 'compras_ordenadas' as const,   label: 'Compras Ordenadas' },
+          { key: 'compras_recibidas' as const,   label: 'Compras Recibidas' },
+        ]).map(({ key, label }) => (
+          <button
+            key={key}
+            onClick={() => setMetricFilter(key)}
+            className={`px-3 py-1 text-sm rounded-lg transition-colors ${
+              metricFilter === key ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-700'
+            }`}
+          >
+            {label}
+          </button>
+        ))}
       </div>
 
       <div className="flex gap-2 items-center flex-wrap">
@@ -394,29 +419,25 @@ export default function ForecastPage() {
               <thead className="bg-gray-50">
                 <tr className="border-b border-gray-200">
                   <th className="text-left px-3 py-2 font-medium text-gray-700 sticky left-0 bg-gray-50 z-10">SKU / Producto</th>
-                  <th className="text-right px-2 py-2 font-medium text-emerald-700 bg-emerald-50" colSpan={2}>Ventas (cantidad)</th>
-                  <th className="text-right px-2 py-2 font-medium text-blue-700 bg-blue-50" colSpan={2}>Compras Ordenadas</th>
-                  <th className="text-right px-2 py-2 font-medium text-purple-700 bg-purple-50" colSpan={2}>Compras Recibidas</th>
-                  <th className="text-center px-2 py-2 font-medium text-emerald-800 bg-emerald-100" colSpan={2}>Furgones — Ventas</th>
-                  <th className="text-center px-2 py-2 font-medium text-blue-800 bg-blue-100" colSpan={2}>Furgones — Compras Ordenadas</th>
-                  <th className="text-center px-2 py-2 font-medium text-purple-800 bg-purple-100" colSpan={2}>Furgones — Compras Recibidas</th>
-                  <th className="text-right px-2 py-2 font-medium text-gray-500 bg-gray-50">m³ / unidad</th>
-                  <th className="text-right px-2 py-2 font-medium text-gray-500 bg-gray-50">m³ / furgón</th>
+                  {showVentas    && <th className="text-right px-2 py-2 font-medium text-emerald-700 bg-emerald-50" colSpan={2}>Ventas (cantidad)</th>}
+                  {showOrdenadas && <th className="text-right px-2 py-2 font-medium text-blue-700 bg-blue-50" colSpan={2}>Compras Ordenadas</th>}
+                  {showRecibidas && <th className="text-right px-2 py-2 font-medium text-purple-700 bg-purple-50" colSpan={2}>Compras Recibidas</th>}
+                  {showVentas    && <th className="text-center px-2 py-2 font-medium text-emerald-800 bg-emerald-100" colSpan={2}>Furgones — Ventas</th>}
+                  {showOrdenadas && <th className="text-center px-2 py-2 font-medium text-blue-800 bg-blue-100" colSpan={2}>Furgones — Compras Ordenadas</th>}
+                  {showRecibidas && <th className="text-center px-2 py-2 font-medium text-purple-800 bg-purple-100" colSpan={2}>Furgones — Compras Recibidas</th>}
+                  <th className="text-right px-2 py-2 font-medium text-gray-300 bg-gray-50">m³ / unidad</th>
+                  <th className="text-right px-2 py-2 font-medium text-gray-300 bg-gray-50">m³ furgón</th>
+                  <th className="text-right px-2 py-2 font-medium text-gray-300 bg-gray-50">Unidades / furgón</th>
                 </tr>
                 <tr className="border-b border-gray-200 text-xs text-gray-500">
                   <th className="sticky left-0 bg-gray-50 z-10"></th>
-                  <th className="text-right px-2 py-1 bg-emerald-50">Feb 26</th>
-                  <th className="text-right px-2 py-1 bg-emerald-50">Mar 26</th>
-                  <th className="text-right px-2 py-1 bg-blue-50">Feb 26</th>
-                  <th className="text-right px-2 py-1 bg-blue-50">Mar 26</th>
-                  <th className="text-right px-2 py-1 bg-purple-50">Feb 26</th>
-                  <th className="text-right px-2 py-1 bg-purple-50">Mar 26</th>
-                  <th className="text-right px-2 py-1 bg-emerald-100">Feb 26</th>
-                  <th className="text-right px-2 py-1 bg-emerald-100">Mar 26</th>
-                  <th className="text-right px-2 py-1 bg-blue-100">Feb 26</th>
-                  <th className="text-right px-2 py-1 bg-blue-100">Mar 26</th>
-                  <th className="text-right px-2 py-1 bg-purple-100">Feb 26</th>
-                  <th className="text-right px-2 py-1 bg-purple-100">Mar 26</th>
+                  {showVentas    && <><th className="text-right px-2 py-1 bg-emerald-50">Feb 26</th><th className="text-right px-2 py-1 bg-emerald-50">Mar 26</th></>}
+                  {showOrdenadas && <><th className="text-right px-2 py-1 bg-blue-50">Feb 26</th><th className="text-right px-2 py-1 bg-blue-50">Mar 26</th></>}
+                  {showRecibidas && <><th className="text-right px-2 py-1 bg-purple-50">Feb 26</th><th className="text-right px-2 py-1 bg-purple-50">Mar 26</th></>}
+                  {showVentas    && <><th className="text-right px-2 py-1 bg-emerald-100">Feb 26</th><th className="text-right px-2 py-1 bg-emerald-100">Mar 26</th></>}
+                  {showOrdenadas && <><th className="text-right px-2 py-1 bg-blue-100">Feb 26</th><th className="text-right px-2 py-1 bg-blue-100">Mar 26</th></>}
+                  {showRecibidas && <><th className="text-right px-2 py-1 bg-purple-100">Feb 26</th><th className="text-right px-2 py-1 bg-purple-100">Mar 26</th></>}
+                  <th className="bg-gray-50"></th>
                   <th className="bg-gray-50"></th>
                   <th className="bg-gray-50"></th>
                 </tr>
@@ -455,24 +476,15 @@ export default function ForecastPage() {
                           </button>
                         </div>
                       </td>
-                      <td className="px-2 py-1.5 text-right font-mono text-emerald-900 bg-emerald-50/60">{fmt(r.sales_feb)}</td>
-                      <td className="px-2 py-1.5 text-right font-mono text-emerald-900 bg-emerald-50/60">{fmt(r.sales_mar)}</td>
-                      <td className="px-2 py-1.5 text-right font-mono text-blue-900 bg-blue-50/60">{fmt(r.purchases_ordered_feb)}</td>
-                      <td className="px-2 py-1.5 text-right font-mono text-blue-900 bg-blue-50/60">{fmt(r.purchases_ordered_mar)}</td>
-                      <td className="px-2 py-1.5 text-right font-mono text-purple-900 bg-purple-50/60">{fmt(r.purchases_received_feb)}</td>
-                      <td className="px-2 py-1.5 text-right font-mono text-purple-900 bg-purple-50/60">{fmt(r.purchases_received_mar)}</td>
-                      <td className="px-2 py-1.5 text-right font-mono text-emerald-900 bg-emerald-100/70 font-semibold">{fmtFurgo(r.sales_feb, r.volume_m3)}</td>
-                      <td className="px-2 py-1.5 text-right font-mono text-emerald-900 bg-emerald-100/70 font-semibold">{fmtFurgo(r.sales_mar, r.volume_m3)}</td>
-                      <td className="px-2 py-1.5 text-right font-mono text-blue-900 bg-blue-100/70 font-semibold">{fmtFurgo(r.purchases_ordered_feb, r.volume_m3)}</td>
-                      <td className="px-2 py-1.5 text-right font-mono text-blue-900 bg-blue-100/70 font-semibold">{fmtFurgo(r.purchases_ordered_mar, r.volume_m3)}</td>
-                      <td className="px-2 py-1.5 text-right font-mono text-purple-900 bg-purple-100/70 font-semibold">{fmtFurgo(r.purchases_received_feb, r.volume_m3)}</td>
-                      <td className="px-2 py-1.5 text-right font-mono text-purple-900 bg-purple-100/70 font-semibold">{fmtFurgo(r.purchases_received_mar, r.volume_m3)}</td>
-                      <td className="px-2 py-1.5 text-right font-mono text-gray-500 bg-gray-50/60 text-xs">
-                        {r.volume_m3 != null ? r.volume_m3.toFixed(4) : '—'}
-                      </td>
-                      <td className="px-2 py-1.5 text-right font-mono text-gray-500 bg-gray-50/60 text-xs">
-                        {r.volume_m3 != null ? (FURGO_M3 / r.volume_m3).toFixed(1) : '—'}
-                      </td>
+                      {showVentas    && <><td className="px-2 py-1.5 text-right font-mono text-emerald-900 bg-emerald-50/60">{fmt(r.sales_feb)}</td><td className="px-2 py-1.5 text-right font-mono text-emerald-900 bg-emerald-50/60">{fmt(r.sales_mar)}</td></>}
+                      {showOrdenadas && <><td className="px-2 py-1.5 text-right font-mono text-blue-900 bg-blue-50/60">{fmt(r.purchases_ordered_feb)}</td><td className="px-2 py-1.5 text-right font-mono text-blue-900 bg-blue-50/60">{fmt(r.purchases_ordered_mar)}</td></>}
+                      {showRecibidas && <><td className="px-2 py-1.5 text-right font-mono text-purple-900 bg-purple-50/60">{fmt(r.purchases_received_feb)}</td><td className="px-2 py-1.5 text-right font-mono text-purple-900 bg-purple-50/60">{fmt(r.purchases_received_mar)}</td></>}
+                      {showVentas    && <><td className="px-2 py-1.5 text-right font-mono text-emerald-900 bg-emerald-100/70 font-semibold">{fmtFurgo(r.sales_feb, r.volume_m3)}</td><td className="px-2 py-1.5 text-right font-mono text-emerald-900 bg-emerald-100/70 font-semibold">{fmtFurgo(r.sales_mar, r.volume_m3)}</td></>}
+                      {showOrdenadas && <><td className="px-2 py-1.5 text-right font-mono text-blue-900 bg-blue-100/70 font-semibold">{fmtFurgo(r.purchases_ordered_feb, r.volume_m3)}</td><td className="px-2 py-1.5 text-right font-mono text-blue-900 bg-blue-100/70 font-semibold">{fmtFurgo(r.purchases_ordered_mar, r.volume_m3)}</td></>}
+                      {showRecibidas && <><td className="px-2 py-1.5 text-right font-mono text-purple-900 bg-purple-100/70 font-semibold">{fmtFurgo(r.purchases_received_feb, r.volume_m3)}</td><td className="px-2 py-1.5 text-right font-mono text-purple-900 bg-purple-100/70 font-semibold">{fmtFurgo(r.purchases_received_mar, r.volume_m3)}</td></>}
+                      <td className="px-2 py-1.5 text-right font-mono text-gray-300 bg-gray-50/60 text-xs">{r.volume_m3 != null ? r.volume_m3.toFixed(4) : '—'}</td>
+                      <td className="px-2 py-1.5 text-right font-mono text-gray-300 bg-gray-50/60 text-xs">{r.volume_m3 != null ? FURGO_M3 : '—'}</td>
+                      <td className="px-2 py-1.5 text-right font-mono text-gray-300 bg-gray-50/60 text-xs">{r.volume_m3 != null && r.volume_m3 > 0 ? Math.round(FURGO_M3 / r.volume_m3).toLocaleString('es-GT') : '—'}</td>
                     </tr>
                   );
                 })}
@@ -480,18 +492,13 @@ export default function ForecastPage() {
               <tfoot className="bg-gray-50 font-semibold">
                 <tr>
                   <td className="px-3 py-2 text-right sticky left-0 bg-gray-50">TOTAL ({visible.length} SKUs)</td>
-                  <td className="px-2 py-2 text-right font-mono text-emerald-900 bg-emerald-50">{fmt(totals.sales_feb)}</td>
-                  <td className="px-2 py-2 text-right font-mono text-emerald-900 bg-emerald-50">{fmt(totals.sales_mar)}</td>
-                  <td className="px-2 py-2 text-right font-mono text-blue-900 bg-blue-50">{fmt(totals.po_ord_feb)}</td>
-                  <td className="px-2 py-2 text-right font-mono text-blue-900 bg-blue-50">{fmt(totals.po_ord_mar)}</td>
-                  <td className="px-2 py-2 text-right font-mono text-purple-900 bg-purple-50">{fmt(totals.po_rcv_feb)}</td>
-                  <td className="px-2 py-2 text-right font-mono text-purple-900 bg-purple-50">{fmt(totals.po_rcv_mar)}</td>
-                  <td className="px-2 py-2 text-right font-mono text-emerald-900 bg-emerald-100">{totals.furgo_sales_feb.toFixed(1)}</td>
-                  <td className="px-2 py-2 text-right font-mono text-emerald-900 bg-emerald-100">{totals.furgo_sales_mar.toFixed(1)}</td>
-                  <td className="px-2 py-2 text-right font-mono text-blue-900 bg-blue-100">{totals.furgo_ord_feb.toFixed(1)}</td>
-                  <td className="px-2 py-2 text-right font-mono text-blue-900 bg-blue-100">{totals.furgo_ord_mar.toFixed(1)}</td>
-                  <td className="px-2 py-2 text-right font-mono text-purple-900 bg-purple-100">{totals.furgo_rcv_feb.toFixed(1)}</td>
-                  <td className="px-2 py-2 text-right font-mono text-purple-900 bg-purple-100">{totals.furgo_rcv_mar.toFixed(1)}</td>
+                  {showVentas    && <><td className="px-2 py-2 text-right font-mono text-emerald-900 bg-emerald-50">{fmt(totals.sales_feb)}</td><td className="px-2 py-2 text-right font-mono text-emerald-900 bg-emerald-50">{fmt(totals.sales_mar)}</td></>}
+                  {showOrdenadas && <><td className="px-2 py-2 text-right font-mono text-blue-900 bg-blue-50">{fmt(totals.po_ord_feb)}</td><td className="px-2 py-2 text-right font-mono text-blue-900 bg-blue-50">{fmt(totals.po_ord_mar)}</td></>}
+                  {showRecibidas && <><td className="px-2 py-2 text-right font-mono text-purple-900 bg-purple-50">{fmt(totals.po_rcv_feb)}</td><td className="px-2 py-2 text-right font-mono text-purple-900 bg-purple-50">{fmt(totals.po_rcv_mar)}</td></>}
+                  {showVentas    && <><td className="px-2 py-2 text-right font-mono text-emerald-900 bg-emerald-100">{totals.furgo_sales_feb.toFixed(1)}</td><td className="px-2 py-2 text-right font-mono text-emerald-900 bg-emerald-100">{totals.furgo_sales_mar.toFixed(1)}</td></>}
+                  {showOrdenadas && <><td className="px-2 py-2 text-right font-mono text-blue-900 bg-blue-100">{totals.furgo_ord_feb.toFixed(1)}</td><td className="px-2 py-2 text-right font-mono text-blue-900 bg-blue-100">{totals.furgo_ord_mar.toFixed(1)}</td></>}
+                  {showRecibidas && <><td className="px-2 py-2 text-right font-mono text-purple-900 bg-purple-100">{totals.furgo_rcv_feb.toFixed(1)}</td><td className="px-2 py-2 text-right font-mono text-purple-900 bg-purple-100">{totals.furgo_rcv_mar.toFixed(1)}</td></>}
+                  <td className="bg-gray-50"></td>
                   <td className="bg-gray-50"></td>
                   <td className="bg-gray-50"></td>
                 </tr>
