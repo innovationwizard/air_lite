@@ -6,6 +6,18 @@
 
 ---
 
+> **SUPERSEDED — 2026-05-07**
+>
+> The purchase data situation described in this document — specifically the analysis of SKU 77205001 (pid=2) showing R=0.0162 derived from 2 onboarding months — has been resolved. The complete purchase history for that SKU and 13 others was found in `stock_moves` and loaded into `revenue_daily` via `find_15b`. The R value for SKU 77205001 is now 0.2487 computed from 15 months of real data.
+>
+> The sales analysis (Hypothesis 1 — zero-sale days, day-of-week breakdown, density metrics) remains valid and unchanged.
+>
+> **How the purchase gap was found and fixed:** [`changelogs/2026-05-06-07_purchase-history-gap-fix-red-tier-skus.md`](changelogs/2026-05-06-07_purchase-history-gap-fix-red-tier-skus.md)
+>
+> **Where current purchase coverage data lives:** `docs/reconciliation/recompute_po_history_real_months_2026-05-07.py` output — 20 GREEN / 3 AMBER / 0 RED across 23 demo SKUs.
+
+---
+
 ## Context
 
 The Forecast a Ciegas page displays Prophet ML predictions for February and March 2026, trained on `revenue_daily` from 2024-10-01 to 2026-01-31 (488 calendar days). The insider reported:

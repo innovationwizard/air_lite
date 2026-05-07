@@ -4,6 +4,24 @@
 
 ---
 
+> **STATUS: RESOLVED — 2026-05-07**
+>
+> The data gap documented in this file has been fully closed. The root cause was confirmed: the 14 Tier-3/Tier-4 SKUs receive goods through `stock.picking "Recibidos Internacional"` (writing to `stock_moves`), not through `purchase.order`. All 14 PIDs have 15–16 months of real purchase coverage in `revenue_daily_for_ml`. The stoplight distribution is now 20 GREEN / 3 AMBER / 0 RED.
+>
+> **What was done and how:**
+> - `docs/reconciliation/find_15b_supplement_purchases_from_stock_moves_2026-05-06.py` — reads `stock_moves` (vendor→internal, `state=done`) for the 14 red-tier PIDs and inserts 3,139 rows into `revenue_daily`.
+> - `docs/reconciliation/recompute_po_history_real_months_2026-05-07.py` — recomputes `products_acid_test_active.po_history_real_months` from `revenue_daily_for_ml`; patched 8 rows from 2 → 16.
+> - Full ML retrain (Pass 1 + Pass 2) completed; 138/138 forecast cells confirmed.
+> - Pipeline order (authoritative): `find_15` → `find_15b` → `smooth_oct2024` → `recompute_po_history_real_months` → ML training. `find_16` is deprecated — must not be run.
+>
+> **Full detailed record:** [`changelogs/2026-05-06-07_purchase-history-gap-fix-red-tier-skus.md`](../../changelogs/2026-05-06-07_purchase-history-gap-fix-red-tier-skus.md)
+>
+> The historical analysis below is preserved as-written — it documents the reasoning and evidence that led to the fix.
+
+---
+
+---
+
 ## The Contrast That Triggered This Document
 
 Two responses, same session, same database, same 23 SKUs — diametrically opposed conclusions.
@@ -187,13 +205,33 @@ The following cannot be resolved from database queries alone:
 
 ## Summary Table
 
-| Classification | SKUs | Forecast quality | Action needed |
-|---|---|---|---|
-| Tier 1 — Full history, REYMA | 7 (pids 20, 33, 469, 539, 1366, 1562, 1606) | Reliable | None |
-| Tier 2 — Partial history | 2 (pids 37, 1035) | Limited, usable | Monitor |
-| Tier 3 — Fallback (class median, synthetic) | 6 (pids 5, 29, 36, 145, 1113, 1127) | Self-referential, not independently validated | Confirm class ratio with Luis |
-| Tier 4 — Onboarding data only | 8 (pids 2, 3, 34, 1069, 1096, 1587, 1590, 1600) | Unreliable — based on 1–2 months of unrepresentative data | Investigate procurement mechanism |
+> **Updated 2026-05-07** — Original classifications shown for historical context. The "action needed" column reflects the state as of 2026-04-29; see the resolution banner at the top for current status.
 
-**Bottom line:** The derived ratio purchase forecast is reliable for 7 of 23 demo SKUs (all REYMA, all with 16 months of confirmed PO history). For the remaining 16 SKUs, the forecast quality ranges from limited-but-defensible (2 SKUs) to self-referential (6 SKUs) to wrong (8 SKUs including the one displayed in the screenshot).
+| Classification | SKUs | Forecast quality (as of 2026-04-29) | Forecast quality (as of 2026-05-07) | Resolution |
+|---|---|---|---|---|
+| Tier 1 — Full history, REYMA | 7 (pids 20, 33, 469, 539, 1366, 1562, 1606) | Reliable | **Reliable** | Unchanged — always GREEN |
+| Tier 2 — Partial history | 2 (pids 37, 1035) | Limited, usable | **Limited, usable** | Unchanged — 5/16 months confirmed correct |
+| Tier 3 — Fallback (class median, synthetic) | 6 (pids 5, 29, 36, 145, 1113, 1127) | Self-referential, not independently validated | **Reliable (real data)** | `find_15b` populated 16 real stock_moves months. `find_16` synthetic fallback deprecated. |
+| Tier 4 — Onboarding data only | 8 (pids 2, 3, 34, 1069, 1096, 1587, 1590, 1600) | Unreliable — 1–2 months | **Reliable (real data)** | `find_15b` populated 15–16 real stock_moves months for all 8 PIDs. |
 
-The `purchase_orders` / `purchase_order_lines` tables in Supabase are not a complete picture of this company's purchasing activity. They are a complete picture of the subset of purchasing activity that flowed through the standard Odoo PO workflow for products that were actively maintained in that workflow throughout the training window.
+**Bottom line (2026-05-07):** The derived ratio purchase forecast is now reliable for 20 of 23 demo SKUs. The remaining 3 AMBER SKUs (77205187, 77205207 at 5/16; 77205287 at 15/16) reflect genuine procurement patterns, not data gaps. Zero RED SKUs.
+
+The `purchase_orders` / `purchase_order_lines` tables in Supabase are not a complete picture of this company's purchasing activity — that finding stands. For the 14 import-channel SKUs, the complete record is in `stock_moves` (vendor→internal receipts). The `find_15b` supplement script bridges this gap in the ML pipeline.
+
+---
+
+## Open Questions — Status as of 2026-05-07
+
+The four open questions from the original document have been resolved:
+
+**1. How does the company replenish the 14 Tier-3 SKUs in practice?**
+→ Confirmed: `stock.picking "Recibidos Internacional"` — stock receipt moves from `from_location_id = 41` (Partners/Vendors) to internal locations. No `purchase.order` header is created. The complete 16-month receipt history for all 14 PIDs exists in `stock_moves`.
+
+**2. Are import orders tracked in a separate Odoo model?**
+→ Confirmed: yes — `stock.picking` receipts, not `purchase.order`. The Supabase `stock_moves` table contains these records with `state = 'done'` and full date/quantity coverage.
+
+**3. What does the Odoo dashboard show for SKU 77205001 purchases in Feb and Mar 2026?**
+→ The client insider confirmed real data is complete. The `stock_moves` query verified 16/16 months of receipt coverage. The R value computed from real data is 0.2487 (15 months, 1 outlier excluded by Tukey). This replaces the previous R=0.0162 (2 onboarding months only).
+
+**4. Why do the REYMA transparent cups have only 2 months of purchase data while other REYMA SKUs have 16?**
+→ Confirmed by `stock_moves` query: these products (pids 34, 1587, 1590, 1600) receive their inventory through the same "Recibidos Internacional" channel as the CARVAJAL import SKUs. The 16-month stock_moves record confirms continuous replenishment throughout the training window.

@@ -1,7 +1,12 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { TrendingUp, Sparkles, Download, Info } from 'lucide-react';
+
+const MONTH_NAMES_ES = [
+  'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+  'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre',
+];
 
 // Furgón capacity used for m³/furgón calculations.
 // WARNING: exact unit type per supplier (Carvajal / Reyma) is NOT confirmed.
@@ -154,19 +159,52 @@ export default function ForecastPage() {
   const [classFilter, setClassFilter] = useState<'' | 'REYMA' | 'CARVAJAL'>('');
   const [tierFilter, setTierFilter] = useState<Set<CompletenessTier>>(new Set(['green', 'amber', 'red']));
   const [openTip, setOpenTip] = useState<CompletenessTier | null>(null);
+  const [purchaseHistory, setPurchaseHistory] = useState<Record<string, Record<string, number>>>({});
+  const [openHistoryTip, setOpenHistoryTip] = useState<string | null>(null);
+  const [tipPos, setTipPos] = useState<{ top: number; left: number } | null>(null);
+  const historyTipRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     Promise.all([
       fetch('/api/acid-test/forecast?scope=top&forecast_month=2026-02-01').then((r) => r.json()),
       fetch('/api/acid-test/forecast?scope=top&forecast_month=2026-03-01').then((r) => r.json()),
+      fetch('/api/acid-test/purchase-history?scope=top').then((r) => r.json()),
     ])
-      .then(([feb, mar]) => {
+      .then(([feb, mar, hist]) => {
         const combined: ForecastRow[] = [...(feb.forecasts ?? []), ...(mar.forecasts ?? [])];
         setRaw(combined);
+        setPurchaseHistory(hist.history ?? {});
         setLoading(false);
       })
       .catch((e) => { setErr(String(e)); setLoading(false); });
   }, []);
+
+  // Close history tooltip on outside click
+  useEffect(() => {
+    if (!openHistoryTip) return;
+    function onDown(e: MouseEvent) {
+      if (historyTipRef.current && !historyTipRef.current.contains(e.target as Node)) {
+        setOpenHistoryTip(null);
+        setTipPos(null);
+      }
+    }
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
+  }, [openHistoryTip]);
+
+  const handleHistoryTipClick = useCallback((sku: string, e: React.MouseEvent<HTMLButtonElement>) => {
+    if (openHistoryTip === sku) {
+      setOpenHistoryTip(null);
+      setTipPos(null);
+      return;
+    }
+    const rect = e.currentTarget.getBoundingClientRect();
+    const tooltipWidth = 340;
+    const left = Math.min(rect.left, window.innerWidth - tooltipWidth - 8);
+    const top = rect.bottom + 6;
+    setOpenHistoryTip(sku);
+    setTipPos({ top, left });
+  }, [openHistoryTip]);
 
   const rows: SkuRow[] = useMemo(() => {
     const m = new Map<string, SkuRow>();
@@ -308,7 +346,7 @@ export default function ForecastPage() {
           };
           const tipText: Record<CompletenessTier, string> = {
             green: '16/16 meses del período de entrenamiento (oct 2024 – ene 2026) tienen al menos una OC confirmada (estado: compra / bloqueado / hecho). Datos sintéticos no cuentan. Máxima calidad de datos para el forecast de compras.',
-            amber: 'Entre 3 y 15 meses tienen OC confirmadas. Historial parcial; la precisión del forecast de compras está pendiente de validación empírica. El umbral de 3 meses es un proxy provisional hasta concluir el Acid Test 2.',
+            amber: 'Entre 3 y 15 meses tienen OC confirmadas. Historial parcial; la precisión del forecast de compras está pendiente de validación empírica. El umbral de 3 meses es un proxy provisional.',
             red:   '0 a 2 meses con OC confirmadas. Historial real insuficiente — datos sintéticos no cuentan. El forecast de compras para estos SKUs no es confiable.',
           };
 
@@ -408,6 +446,13 @@ export default function ForecastPage() {
                               ? ` (${r.po_history_real_months}/16)`
                               : ''}
                           </span>
+                          <button
+                            onClick={(e) => handleHistoryTipClick(r.sku, e)}
+                            className="text-gray-400 hover:text-gray-600 transition-colors ml-0.5"
+                            aria-label={`Ver historial real de compras: ${r.sku}`}
+                          >
+                            <Info className="w-3 h-3" />
+                          </button>
                         </div>
                       </td>
                       <td className="px-2 py-1.5 text-right font-mono text-emerald-900 bg-emerald-50/60">{fmt(r.sales_feb)}</td>
@@ -460,6 +505,59 @@ export default function ForecastPage() {
         Datos: <code>forecast_results</code> en Supabase prod. Artificial Intelligence ML Model (weekly + yearly seasonality, 80% confidence intervals).
         Training end: 2026-01-31. Prediction window: 2026-02-01 → 2026-03-31.
       </div>
+
+      {openHistoryTip && tipPos && (() => {
+        const skuRow = rows.find((r) => r.sku === openHistoryTip);
+        const history = purchaseHistory[openHistoryTip] ?? {};
+        const fmtUnit = (n: number | undefined) =>
+          n !== undefined ? Math.round(n).toLocaleString('es-GT') : '—';
+        return (
+          <div
+            ref={historyTipRef}
+            style={{ position: 'fixed', top: tipPos.top, left: tipPos.left, zIndex: 9999 }}
+            className="w-[360px] rounded-lg border border-gray-200 bg-white shadow-xl p-3 text-xs"
+          >
+            <div className="font-semibold text-gray-900 mb-0.5 font-mono">{openHistoryTip}</div>
+            <div className="text-gray-500 mb-2 truncate">{skuRow?.name}</div>
+            <table className="w-full border-collapse">
+              <thead>
+                <tr className="border-b border-gray-200 text-gray-600">
+                  <th className="text-left py-1 pr-2 font-medium">Mes</th>
+                  <th className="text-right py-1 px-1 font-medium">2024</th>
+                  <th className="text-right py-1 px-1 font-medium">2025</th>
+                  <th className="text-right py-1 px-1 font-medium">2026</th>
+                </tr>
+              </thead>
+              <tbody>
+                {MONTH_NAMES_ES.map((name, i) => {
+                  const mm = String(i + 1).padStart(2, '0');
+                  const v24 = history[`2024-${mm}`];
+                  const v25 = history[`2025-${mm}`];
+                  const v26 = history[`2026-${mm}`];
+                  const hasAny = v24 !== undefined || v25 !== undefined || v26 !== undefined;
+                  return (
+                    <tr key={mm} className={`border-b border-gray-50 ${hasAny ? '' : 'text-gray-300'}`}>
+                      <td className="text-left py-0.5 pr-2 text-gray-700">{name}</td>
+                      <td className="text-right py-0.5 px-1 font-mono">{fmtUnit(v24)}</td>
+                      <td className="text-right py-0.5 px-1 font-mono">{fmtUnit(v25)}</td>
+                      <td className="text-right py-0.5 px-1 font-mono">{fmtUnit(v26)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+            <p className="mt-2 text-gray-400 leading-relaxed">
+              Fuente: <code>revenue_daily</code> — OC confirmadas + recepciones de stock. Valores reales, no interpolados. UdM: cajas de 40 unidades.
+            </p>
+            <button
+              onClick={() => { setOpenHistoryTip(null); setTipPos(null); }}
+              className="mt-1.5 text-gray-400 hover:text-gray-600 underline"
+            >
+              Cerrar
+            </button>
+          </div>
+        );
+      })()}
     </div>
   );
 }

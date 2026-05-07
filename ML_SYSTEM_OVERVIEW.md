@@ -1,5 +1,5 @@
 # ML System Overview — AI Refill Lite
-_Last updated: 2026-04-27_
+_Last updated: 2026-05-07_
 
 ---
 
@@ -12,8 +12,10 @@ _Last updated: 2026-04-27_
 | Metric | Odoo Source | Key Formula Detail |
 |--------|-------------|-------------------|
 | Sales | `account.move.line` | Income account, posted invoices/refunds, `invoice_date` |
-| Purchases Ordered | `purchase.order.line` | All PO states, `date_planned` (not `date_order`), `product_qty` |
-| Purchases Received | `purchase.order.line` | purchase/done states only, `date_planned`, `qty_received` |
+| Purchases Ordered | `purchase.order.line` **+ `stock_moves`** | Confirmed PO states (`purchase/locked/done`), `date_planned`, `product_qty` — **plus** vendor→internal stock receipt moves for 14 import-channel SKUs (see note below) |
+| Purchases Received | `purchase.order.line` **+ `stock_moves`** | Same dual-source as ordered; for import SKUs received qty = ordered qty (physical receipt IS the confirmed order) |
+
+> **Dual-source purchase data (added 2026-05-07):** 14 of the 23 demo SKUs receive goods through `stock.picking "Recibidos Internacional"` — inventory receipt moves with no `purchase.order` header. Their complete purchase history lives in `stock_moves` (Supabase), not in `purchase_order_lines`. The `find_15b` script bridges this gap by reading `stock_moves` (vendor→internal, `state=done`) and populating `revenue_daily`. Without this supplement, those 14 SKUs appeared to have 1–2 months of purchase history when they actually had 15–16. See [`changelogs/2026-05-06-07_purchase-history-gap-fix-red-tier-skus.md`](changelogs/2026-05-06-07_purchase-history-gap-fix-red-tier-skus.md) for the full explanation.
 
 Refunds count as negative quantities in both GTQ and units.
 
@@ -322,8 +324,23 @@ A new function — something like `schedule_truck_loads(purchase_lines, truck_ty
 | `supabase/migrations/20260322000003_rpc_functions.sql` | KPI RPCs (stockout risk, ABC/XYZ, slow-moving) |
 | `supabase/migrations/20260330000004_fix_rpc_overloads.sql` | `rpc_oa_warehouse_space()` + `rpc_oa_reception_saturation()` |
 | `supabase/migrations/20260422000005_warehouse_capacity.sql` | Central warehouse capacity seed: 10,007.28 m³ |
-| `frontend/src/app/(authenticated)/gerencia/forecast/page.tsx` | "Forecast a Ciegas" with furgon conversion columns |
+| `supabase/migrations/20260505000001_products_acid_test_add_po_history_real_months.sql` | `po_history_real_months` column — stoplight tier source for `/gerencia/forecast` |
+| `frontend/src/app/(authenticated)/gerencia/forecast/page.tsx` | "Forecast a Ciegas" — stoplight filter, furgon columns, info-icon tooltips |
 | `frontend/src/app/(authenticated)/poc/programacion/page.tsx` | Purchase scheduling POC (61 pre-computed weeks) |
 | `frontend/src/app/(authenticated)/oa/recepcion/page.tsx` | Reception scheduling (furgon_53 truck type, dock assignment) |
 | `_AI_Refill_Lite_Path_Forward_2026-04-21.md` | Roadmap; names truck/container loading as client's #1 pain (Path B) |
 | `changelogs/2026-04-27_gerencia-ux-overhaul-and-furgones-columns.md` | Furgon column design rationale and FURGO_M3=122 caveat |
+
+**Purchase data pipeline scripts (run in order):**
+
+| Script | Writes to | When to run |
+|--------|-----------|-------------|
+| `docs/reconciliation/find_15_populate_revenue_daily_purchases_from_supabase.py` | `revenue_daily` | Whenever `purchase_order_lines` data changes; clears and rebuilds for 23 demo SKUs |
+| `docs/reconciliation/find_15b_supplement_purchases_from_stock_moves_2026-05-06.py` | `revenue_daily` | After find_15; supplements 14 import-channel SKUs from `stock_moves` |
+| `docs/reconciliation/smooth_oct2024_purchase_anomaly.py` | `revenue_daily_for_ml` | After find_15b; replaces Oct-2024 onboarding spike with median; rebuilds ML table |
+| `docs/reconciliation/recompute_po_history_real_months_2026-05-07.py` | `products_acid_test_active` | After smooth_oct2024; patches stoplight values |
+| `docs/reconciliation/run_full_training_2026-05-05.py` | `forecast_results` | After recompute; triggers Prophet + derived-ratio ML train for all 23 demo SKUs |
+
+**Do NOT run `find_16_carvajal_tier3_fallback_purchases_for_ml.py` after find_15b.** That script was a synthetic fallback for the pre-find_15b world where 6 CARVAJAL Tier 3 PIDs had no real purchase data. After find_15b, those PIDs have real data; running find_16 would overwrite real data with synthetic estimates.
+
+**Full purchase data gap fix record:** [`changelogs/2026-05-06-07_purchase-history-gap-fix-red-tier-skus.md`](changelogs/2026-05-06-07_purchase-history-gap-fix-red-tier-skus.md)

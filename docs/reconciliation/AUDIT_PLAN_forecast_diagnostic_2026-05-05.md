@@ -5,6 +5,24 @@
 
 ---
 
+> **STATUS: ROOT CAUSE RESOLVED — 2026-05-07**
+>
+> The underlying purchase data gap that fed the bugs described in this audit plan has been fully closed. The 14 red-tier demo SKUs that were showing zero purchase history (and therefore zero purchase forecasts) now have 15–16 months of real data in `revenue_daily_for_ml`, sourced from `stock_moves` receipts. The ML pipeline has been re-trained; 138/138 forecast cells are populated with non-zero, real-data-derived values.
+>
+> **Where the purchase data fix lives:**
+> - `docs/reconciliation/find_15b_supplement_purchases_from_stock_moves_2026-05-06.py` — reads `stock_moves` vendor→internal receipts for 14 red-tier PIDs, inserts into `revenue_daily`
+> - `docs/reconciliation/recompute_po_history_real_months_2026-05-07.py` — patches `products_acid_test_active.po_history_real_months`; stoplight result: 20 GREEN / 3 AMBER / 0 RED
+>
+> **UI bugs** (BUG-1, BUG-2, BUG-3, BUG-6) described in this plan were fixed in the `forecast-diagnostic` module repair session (see git log around commits `bd6a135` and `369135e`).
+>
+> **Full data pipeline record:** [`changelogs/2026-05-06-07_purchase-history-gap-fix-red-tier-skus.md`](../../changelogs/2026-05-06-07_purchase-history-gap-fix-red-tier-skus.md)
+>
+> The audit plan below is preserved as-written — it documents the root cause investigation and the acceptance criteria that were met.
+
+---
+
+---
+
 ## 0. Executive Summary of Confirmed Bugs (from source code)
 
 Before any investigation, two bugs are confirmed by reading the code alone. They explain the majority of what is visible in the screenshots.

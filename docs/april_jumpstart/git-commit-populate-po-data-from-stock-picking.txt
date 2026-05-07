@@ -1,0 +1,27 @@
+git commit -m "$(cat <<'EOF'
+data: populate purchase history for 14 red-tier demo SKUs from stock_moves
+
+Three new reconciliation scripts:
+
+load_missing_purchase_order_lines: loaded 960 genuinely new POL rows from the
+Odoo CSV export (982 attempted; 22 timezone-shifted duplicates removed post-load).
+Supabase purchase_order_lines: 16,159 → 17,118 rows.
+
+find_15b_supplement_purchases_from_stock_moves: reads stock.picking
+"Recibidos Internacional" receipts (from_location_id=41, state=done) for
+14 red-tier PIDs from stock_moves. Aggregates to daily CAJA40 and inserts
+into revenue_daily for months not already covered by find_15. 3,139 rows
+inserted. 13/14 PIDs now have 16/16 months; 77205287 missing Mar-2025
+(verified: no receipt that month).
+
+recompute_po_history_real_months: queries revenue_daily_for_ml after the full
+pipeline (find_15 → find_15b → smooth_oct2024) and patches
+products_acid_test_active.po_history_real_months. Result: 20 GREEN (16/16),
+3 AMBER (5–15/16), 0 RED. The 8 previously red-tier SKUs (including 77205001
+Bandeja Bio 2P Foam CARVAJAL) are now GREEN.
+
+Pipeline order: find_15 → find_15b → smooth_oct2024 → this script → ML training.
+Do NOT run find_16 after find_15b — the synthetic fallback is no longer needed.
+
+EOF
+)"

@@ -6,6 +6,26 @@
 
 ---
 
+> **PARTIALLY SUPERSEDED — 2026-05-07**
+>
+> This document analyzed 444 confirmed POL rows matching 23 demo SKUs, from which it concluded that 62.8% of SKU-months had zero confirmed purchase orders. That figure was accurate for `purchase_order_lines` at the time — but `purchase_order_lines` was not the complete record of purchasing activity for 14 of the 23 SKUs.
+>
+> The complete record for those 14 SKUs is in `stock_moves` (vendor→internal receipts via `stock.picking "Recibidos Internacional"`). After loading that data through `find_15b`, the picture changes dramatically:
+>
+> | | As of 2026-04-29 | As of 2026-05-07 |
+> |---|---|---|
+> | POL rows for 23 demo SKUs | 444 confirmed | 444 + 3,139 stock_moves rows in `revenue_daily` |
+> | SKU-months with zero purchase data | 62.8% (231 of 368) | ~8% (only 3 AMBER SKUs with partial gaps) |
+> | `purchase_order_lines` total rows | 16,159 | 17,118 (+960 from CSV gap-fill) |
+>
+> **The frequency hypothesis** (one PO per month per SKU) was always based on `purchase_order_lines` only. For the 14 stock_moves-based SKUs, the equivalent unit of purchase frequency is one `stock.picking` receipt per month — and the data confirms they receive shipments in essentially every month of the training window.
+>
+> **Full explanation of what was found and how it was fixed:** [`changelogs/2026-05-06-07_purchase-history-gap-fix-red-tier-skus.md`](changelogs/2026-05-06-07_purchase-history-gap-fix-red-tier-skus.md)
+>
+> The analysis below is preserved as-written — it correctly characterizes the `purchase_order_lines`-only view of the data, which remains valid for the 9 standard-PO SKUs (Population A).
+
+---
+
 ## Hypothesis Being Tested
 
 > For all 23 SKUs included in the DEMO sample, our client makes ONE monthly purchase as per their human forecasts, with the occasional second extraordinary purchase when they see a stockout approaching. Three in the same month is extremely rare; four does not occur.
