@@ -1,0 +1,15 @@
+I had a quick feedback meet with our client insider supporter. 
+We deep dived on this product. 
+I'm taking this as a hint that the decision makers have special interest in this product. 
+He highlighted two DEALBREAKER LEVEL remarks: 
+"
+1. Is the app telling me that we consistently receive 10,000 units per month and at the same time we consistently sell 30,000 to 40,000 units per month? Do you see the incongruency? 
+2. Human-made forecasted demand for this product has consistently been over 42,000 units per month for the last six months. Sales have not been able to catch up to the forecasted demand due to operating in a permanent stockout state. Why is the app telling me that I can sell Feb 26: 35,172 and Mar 26: 35,850 WHEN I KNOW FOR A FACT THAT WE HAVE DEMAND FOR AT LEAST 45,000 units per month, for each Feb 26 and Mar 26??? 
+"
+Strictly adhering to @_THE_RULES.MD 
+1. Study the @real_data manifest. 
+2. Do research on how the best companies in the world forecast REAL DEMAND in cases where sales don't reflect demand due to stockouts. Persist your findings to a new md file.  
+3. Based on your findings, make a plan for our app to forecast REAL DEMAND for our client based on the data available in @real_data , not in data you assume that can be found elsewhere, not in data you assume we can get if we ask for; ON DATA AVAILABLE IN @real_data ONLY. NO ASSUMPTIONS. Persist your findings to a new md file. 
+4. Be sure to read relevant documentation so that you don't assume this app is something that IT IS NOT, a mistake you have recurrently made before. 
+5. Be sure to read all the files in @_qci/ , where this prompt is also stored so that you don't completely forget it, a critical error you have recurrently made before. 
+6. Split this task in small batches, so that partial progress is not completely forgotten and completely deleted, another critical error you have recurrently made before. 

@@ -37,9 +37,14 @@ SOURCE: stock_moves WHERE:
 
 DATE FIELD: stock_moves.move_date (the actual receipt date)
 
-UOM NORMALIZATION: same formula as find_15
-  normalized = raw_qty * CAJA40_RATIO / src_ratio
-  CAJA40_RATIO = 0.025 (from units_of_measure.ratio WHERE name='CAJA40')
+UOM NORMALIZATION: convert to product's stock_uom (NOT to CAJA40)
+  normalized = raw_qty * (stock_uom_ratio / src_ratio)
+  where stock_uom_ratio = units_of_measure.ratio for the product's stock_uom
+
+  BUG HISTORY: the original formula was raw_qty * CAJA40_RATIO / src_ratio which
+  converted to CAJA40 units. Since revenue_daily.sales stores quantities in each
+  product's stock_uom (FARDO10, CAJA20, etc.), purchases appeared 2-40x too low
+  on the chart. Fixed 2026-05-07. See memory/reference_uom_semantics.md.
 
 SSOT LABELS: same as find_15 (ML pipeline reads these labels)
   purchases_ordered:  pol_confirmed_date_planned_product_qty_c40
@@ -168,13 +173,28 @@ CAJA40_RATIO = uom_ratio['CAJA40']
 print(f'  {len(uom_ratio)} UoMs. CAJA40 ratio={CAJA40_RATIO}')
 
 
-def to_caja40(qty: float, uom_name: str) -> float | None:
-    ratio = uom_ratio.get(uom_name)
-    if ratio is None or ratio == 0:
+def to_stock_uom(qty: float, src_uom_name: str, tgt_uom_name: str) -> float | None:
+    """Convert qty from src_uom to tgt_uom (both by name).
+    Formula: qty * (tgt_ratio / src_ratio)
+    CORRECT: target is product's stock_uom, NOT CAJA40.
+    """
+    src = uom_ratio.get(src_uom_name)
+    tgt = uom_ratio.get(tgt_uom_name)
+    if src is None or src == 0 or tgt is None:
         return None
-    return qty * CAJA40_RATIO / ratio
+    return qty * (tgt / src)
 
-# ── Step 2: Stock locations — internal locations ───────────────────────────────
+# ── Step 2a: Load product stock_uoms for red-tier PIDs ───────────────────────
+
+print('\nLoading product stock_uoms for red-tier PIDs…')
+pid_csv_uom = ','.join(str(p) for p in RED_TIER_PIDS)
+prod_rows = supa_get_all(f'/rest/v1/products?id=in.({pid_csv_uom})&select=id,sku,stock_uom')
+pid_stock_uom: dict[int, str] = {p['id']: (p['stock_uom'] or 'CAJA40') for p in prod_rows}
+for pid, uom in sorted(pid_stock_uom.items()):
+    factor = uom_ratio.get(uom, CAJA40_RATIO) / CAJA40_RATIO
+    print(f'  pid={pid:>6}  stock_uom={uom:>8}  factor vs CAJA40={factor:.4f}')
+
+# ── Step 2b: Stock locations — internal locations ─────────────────────────────
 
 print('\nLoading internal stock locations…')
 locs = supa_get_all('/rest/v1/stock_locations?select=id,name,location_type')
@@ -216,7 +236,8 @@ for m in purchase_moves:
     qty  = float(m['quantity'] or 0)
     if qty <= 0:
         continue
-    norm = to_caja40(qty, uom)
+    tgt_uom = pid_stock_uom.get(pid, 'CAJA40')
+    norm = to_stock_uom(qty, uom, tgt_uom)
     if norm is None:
         skipped_uom.append({'pid': pid, 'uom': uom, 'date': date})
         continue

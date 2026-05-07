@@ -146,11 +146,18 @@ if 'CAJA40' not in uom_ratio:
 CAJA40_RATIO = uom_ratio['CAJA40']
 print(f"  {len(uom_ratio)} UoMs loaded. CAJA40 ratio = {CAJA40_RATIO}")
 
-def to_caja40(qty, uom_name):
-    ratio = uom_ratio.get(uom_name)
-    if ratio is None or ratio == 0:
+def to_stock_uom(qty, src_uom_name, tgt_uom_name):
+    """Convert qty from src_uom to tgt_uom (both by name).
+    Formula: qty * (tgt_ratio / src_ratio)
+    CORRECT target: product's stock_uom (NOT CAJA40).
+    BUG FIX 2026-05-07: previous version used to_caja40() which converted to
+    CAJA40 while sales are stored in stock_uom → purchases appeared 2-40× too low.
+    """
+    src = uom_ratio.get(src_uom_name)
+    tgt = uom_ratio.get(tgt_uom_name)
+    if src is None or src == 0 or tgt is None:
         return None
-    return qty * CAJA40_RATIO / ratio
+    return qty * (tgt / src)
 
 print()
 
@@ -172,6 +179,14 @@ if len(demo_meta) != 23:
 demo_product_ids = [r['products_id'] for r in demo_meta]
 pid_to_sku = {r['products_id']: r['default_code'] for r in demo_meta}
 print(f"  {len(demo_product_ids)} product_ids: {sorted(demo_product_ids)}\n")
+
+# ── Step 2b: Load stock_uom per product (for correct UoM conversion) ─────────
+
+print("Loading stock_uom for 23 demo products…")
+pid_csv_uom = ','.join(str(p) for p in demo_product_ids)
+prod_uom_rows = get_all(f'/rest/v1/products?id=in.({pid_csv_uom})&select=id,stock_uom')
+pid_stock_uom: dict[int, str] = {p['id']: (p['stock_uom'] or 'CAJA40') for p in prod_uom_rows}
+print(f"  Loaded {len(pid_stock_uom)} stock_uoms\n")
 
 # ── Step 3: Fetch all purchase_orders ─────────────────────────────────────────
 
@@ -230,10 +245,12 @@ for line in all_lines:
     pid  = line['product_id']
     uom  = line['uom']
 
+    tgt_uom = pid_stock_uom.get(pid, 'CAJA40')
+
     # purchases_ordered
     raw_ord = float(line.get('quantity') or 0)
     if raw_ord > 0:
-        norm_ord = to_caja40(raw_ord, uom)
+        norm_ord = to_stock_uom(raw_ord, uom, tgt_uom)
         if norm_ord is None:
             skipped_unknown_uom.append({'line_id': line['id'], 'uom': uom,
                                         'product_id': pid, 'metric': 'ordered'})
@@ -244,7 +261,7 @@ for line in all_lines:
     # purchases_received
     raw_rcv = float(line.get('received_qty') or 0)
     if raw_rcv > 0:
-        norm_rcv = to_caja40(raw_rcv, uom)
+        norm_rcv = to_stock_uom(raw_rcv, uom, tgt_uom)
         if norm_rcv is None:
             skipped_unknown_uom.append({'line_id': line['id'], 'uom': uom,
                                         'product_id': pid, 'metric': 'received'})
