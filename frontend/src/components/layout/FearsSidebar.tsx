@@ -102,10 +102,10 @@ const allNavGroups: NavGroup[] = [
         subtitle: 'Resumen del silo de Compras',
       },
       {
-        name: 'Forecast de Demanda',
-        href: '/backtest',
+        name: 'Forecast de Compras',
+        href: '/compras/forecast',
         icon: BarChart3,
-        subtitle: '12 meses automatizados',
+        subtitle: 'Feb & Mar 2026 — 23 SKUs',
       },
       {
         name: 'Programación de Compras',

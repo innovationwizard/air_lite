@@ -428,3 +428,60 @@ All 23 demo PIDs received demand rows. [PASS]
 **Dealbreaker 2 STATUS: RESOLVED** — Forecast-diagnostic page now surfaces the uncensored demand metric. The 35k vs 45k discrepancy is explained and quantified as lost sales.
 
 **TypeScript check:** `tsc --noEmit` passes with no errors after all changes.
+
+---
+
+### Session 2026-05-08 — INCIDENT: Stoplight Regression 20/3/0 → 16/4/3 (Root Cause + Fix)
+
+**Observed regression:** After the 2026-05-07 UoM fix + demand metric session, the `/gerencia/forecast` stoplight showed 16 GREEN / 4 AMBER / 3 RED instead of the expected 20 GREEN / 3 AMBER / 0 RED.
+
+**Diagnosed via direct Supabase query 2026-05-08.** The query checked all 23 demo PIDs for month coverage in both `revenue_daily` and `revenue_daily_for_ml`.
+
+**Root cause — two compounding failures from the 2026-05-07 pipeline run:**
+
+**Failure 1: `smooth_oct2024_purchase_anomaly.py` ran while `revenue_daily` was in a broken state.**
+`fix_purchase_uom_revenue_daily_2026-05-07.py` DELETE'd purchase rows for the affected PIDs then failed to re-insert them all (HTTP 409 at batch 4). The recovery script `fix_purchase_uom_missing_pids_2026-05-07.py` only partially recovered revenue_daily:
+- pid=1113 (77205035): 8/16 months written
+- pid=1127 (77205005): 0/16 months written
+- pid=1587 (77201019): 0/16 months written
+- pid=1590 (77201055): 0/16 months written
+- pid=1600 (77201056): 0/16 months written
+
+`smooth` ran against this incomplete `revenue_daily` and faithfully rebuilt `revenue_daily_for_ml` with the same missing months.
+
+**Failure 2: `find_16_carvajal_tier3_fallback_purchases_for_ml.py` was re-run — explicitly prohibited per this plan.**
+This plan states: *"DO NOT run find_16 in this pipeline."* The 2026-05-06-07 changelog states: *"Running find_16 after find_15b would delete the real data from revenue_daily_for_ml and replace it with synthetic estimates."*
+
+find_16 ran after smooth. It writes synthetic ratio-based estimates directly to `revenue_daily_for_ml`, bypassing `revenue_daily` entirely. It covered PIDs 1113 and 1127 (which are in TIER3_PIDS) with synthetic data, partially masking the revenue_daily data loss for those two PIDs. PIDs 1587, 1590, 1600 are not in TIER3_PIDS — find_16 never touched them. They stayed at 0 months → RED.
+
+**Exact state when regression was detected (verified by query):**
+
+| PID | SKU | revenue_daily months | rdml months | source of rdml data | stoplight |
+|-----|-----|---------------------|-------------|---------------------|-----------|
+| 1113 | 77205035 | 8 | 16 | find_16 synthetic | GREEN (masked) |
+| 1127 | 77205005 | 0 | 15 | find_16 synthetic (Oct missing) | AMBER ← was GREEN |
+| 1587 | 77201019 | 0 | 0 | nothing | RED ← was GREEN |
+| 1590 | 77201055 | 0 | 0 | nothing | RED ← was GREEN |
+| 1600 | 77201056 | 0 | 0 | nothing | RED ← was GREEN |
+
+stock_moves had complete 16-month real data for all 5 PIDs throughout. Data was never gone from the source — only from revenue_daily and revenue_daily_for_ml.
+
+**Fix applied 2026-05-08:**
+
+1. `docs/reconciliation/fix_revenue_daily_5_pids_2026-05-08.py` (NEW)
+   Re-derives from stock_moves for all 5 PIDs using `to_stock_uom()` (correct UoM, never to_caja40).
+   UPSERT (not INSERT) on `(product_id, ssot_label, metric, observation_date)` — prevents 409.
+   Result: all 5 PIDs → 16/16 months in revenue_daily. [PASS]
+
+2. `smooth_oct2024_purchase_anomaly.py` re-run — rebuilds revenue_daily_for_ml from now-correct revenue_daily.
+   Acid Test 1 anchors: [PASS] all 4 Δ=0.
+
+3. `recompute_po_history_real_months_2026-05-07.py` re-run — 4 rows patched.
+   Final: **20 GREEN / 3 AMBER / 0 RED. Restored.**
+
+4. `trigger_ml_training_2026-05-07.py` re-run — **69/69 OK** (improved from 66/69 — the 3 previously failing PIDs 1587/1590/1600 now have full purchase history and pass ratio computation).
+
+**Permanent guard added to find_16:**
+`find_16_carvajal_tier3_fallback_purchases_for_ml.py` now has a `raise RuntimeError(...)` at module level — the script cannot run at all. The error message names the incident, points to the fix script, and explains how to override deliberately if ever needed.
+
+**Stoplight STATUS: RESTORED to 20/3/0 as of 2026-05-08.**

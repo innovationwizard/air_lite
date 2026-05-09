@@ -44,11 +44,43 @@ PIPELINE ORDER
 2. smooth_oct2024_purchase_anomaly.py                          (rebuilds revenue_daily_for_ml)
 3. THIS SCRIPT                                                 (adds fallback rows for Tier 3 SKUs)
 4. ML training via POST /api/acid-test/forecast/run
+
+⚠️  DEPRECATION WARNING — READ BEFORE RUNNING
+-----------------------------------------------
+This script is PROHIBITED after find_15b has been applied to the pipeline.
+
+REASON: find_15b (find_15b_supplement_purchases_from_stock_moves_2026-05-06.py)
+populates revenue_daily with REAL stock_moves receipts for the 6 Tier 3 PIDs
+(5, 29, 36, 145, 1113, 1127) AND the other 8 red-tier PIDs. Running this script
+AFTER find_15b deletes that real data from revenue_daily_for_ml and replaces it
+with synthetic estimates — strictly worse.
+
+INCIDENT 2026-05-07/08: This script was run after find_15b was already applied.
+It deleted real stock_moves data for PIDs 1113 and 1127 from revenue_daily_for_ml
+and replaced with synthetic ratios. It also masked data-loss for those PIDs while
+PIDs 1587, 1590, 1600 (not in TIER3_PIDS) were left at 0 months.
+Result: stoplight regression from 20/3/0 → 16/4/3.
+Fix: docs/reconciliation/fix_revenue_daily_5_pids_2026-05-08.py
+
+This script is ONLY valid for the pre-find_15b pipeline state where the 6 Tier 3
+CARVAJAL PIDs had zero real purchase data outside October 2024.
+
+DO NOT RUN unless you have confirmed that find_15b has NOT been applied.
 """
 
 import os, json, statistics, urllib.request, urllib.error
 from pathlib import Path
 from collections import defaultdict
+
+raise RuntimeError(
+    "find_16 is PROHIBITED after find_15b has been applied.\n"
+    "Running this script deletes real stock_moves purchase data from\n"
+    "revenue_daily_for_ml and replaces it with synthetic estimates.\n"
+    "Incident 2026-05-08: caused stoplight regression 20/3/0 → 16/4/3.\n"
+    "Fix: docs/reconciliation/fix_revenue_daily_5_pids_2026-05-08.py\n"
+    "If you genuinely need the pre-find_15b fallback behavior, remove this\n"
+    "guard explicitly and document why in the commit message."
+)
 
 TRAINING_START = '2024-10-01'
 TRAINING_END   = '2026-01-31'

@@ -3,7 +3,7 @@
 export const dynamic = 'force-dynamic';
 
 import { useState, useEffect } from 'react';
-import { Play, ChevronRight } from 'lucide-react';
+import { Play, ChevronRight, Download } from 'lucide-react';
 
 interface ScheduleRun {
   id: number;
@@ -50,6 +50,40 @@ const formatDate = (d: string) => {
   const date = new Date(d + 'T12:00:00');
   return date.toLocaleDateString('es-GT', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
 };
+
+function exportScheduleCSV(lines: ScheduleLine[], run: ScheduleRun) {
+  const headers = [
+    'SKU', 'Producto', 'Proveedor', 'Fecha recomendada', 'Cantidad', 'UOM',
+    'Valor GTQ', 'Días abasto (antes)', 'Días abasto (después)',
+    'Demanda semanal proyectada', 'Inventario actual', 'Inventario máximo',
+  ];
+  const escape = (v: string | number | null | undefined) => {
+    const s = v == null ? '' : String(v);
+    return s.includes(',') || s.includes('"') || s.includes('\n') ? `"${s.replace(/"/g, '""')}"` : s;
+  };
+  const dataRows = lines.map((l) => [
+    l.products?.sku ?? '',
+    l.products?.name ?? `Producto ${l.product_id}`,
+    l.supplier_name,
+    l.recommended_date,
+    l.recommended_qty,
+    l.uom,
+    l.recommended_value.toFixed(0),
+    l.days_of_supply_before.toFixed(1),
+    l.days_of_supply_after.toFixed(1),
+    l.forecasted_weekly_demand.toFixed(0),
+    l.current_inventory.toFixed(0),
+    l.max_inventory_qty.toFixed(0),
+  ].map(escape).join(','));
+  const csv = '﻿' + [headers.map(escape).join(','), ...dataRows].join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `programacion-compras_${run.schedule_week_start}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
 
 const formatWeek = (start: string, end: string) => {
   const s = new Date(start + 'T12:00:00');
@@ -189,12 +223,23 @@ export default function ProgramacionPage() {
             Semana {currentIndex + 1} de {runs.length} — Carvajal y Reyma
           </p>
         </div>
-        <button
-          onClick={() => { setCurrentIndex(-1); setSelectedRun(null); setLines([]); }}
-          className="text-sm text-gray-400 hover:text-gray-600"
-        >
-          Reiniciar
-        </button>
+        <div className="flex items-center gap-3">
+          {lines.length > 0 && selectedRun && (
+            <button
+              onClick={() => exportScheduleCSV(lines, selectedRun)}
+              className="flex items-center gap-1.5 px-3 py-2 text-sm border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+            >
+              <Download className="w-4 h-4" />
+              Exportar CSV
+            </button>
+          )}
+          <button
+            onClick={() => { setCurrentIndex(-1); setSelectedRun(null); setLines([]); }}
+            className="text-sm text-gray-400 hover:text-gray-600"
+          >
+            Reiniciar
+          </button>
+        </div>
       </div>
 
       {/* Progress bar */}
