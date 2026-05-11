@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
-import { ShoppingCart, AlertTriangle, Snowflake, TrendingUp, Truck, ArrowRight, Package } from 'lucide-react';
+import { ShoppingCart, AlertTriangle, Snowflake, TrendingUp, Truck, ArrowRight, Package, Info } from 'lucide-react';
 
 interface StockoutRisk {
   product_id: number;
@@ -67,6 +67,7 @@ export default function ComprasHomePage() {
   const [abcItems, setAbcItems] = useState<AbcXyzItem[]>([]);
   const [orderPlan, setOrderPlan] = useState<SupplierOrderSummary[]>([]);
   const [orderPlanGaps, setOrderPlanGaps] = useState(0);
+  const [ropAlerts, setRopAlerts] = useState<{ order_today: number; order_this_week: number } | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -85,6 +86,7 @@ export default function ComprasHomePage() {
             0,
           ),
         );
+        setRopAlerts(planData?.rop_alerts ?? null);
         setLoading(false);
       })
       .catch(() => setLoading(false));
@@ -151,6 +153,38 @@ export default function ComprasHomePage() {
           <p className="text-xs text-gray-400 mt-0.5">Días de stock</p>
         </div>
       </div>
+
+      {/* ROP Alert Cards */}
+      {!loading && ropAlerts !== null && (
+        <div className="grid grid-cols-2 gap-4">
+          <div className="bg-red-50 border border-red-100 rounded-xl p-4">
+            <div className="flex items-center gap-1.5">
+              <p className="text-xs text-red-700 font-medium">Pedir HOY</p>
+              <div className="relative group inline-block">
+                <Info className="w-3 h-3 text-red-400 cursor-help" />
+                <div className="absolute z-10 hidden group-hover:block bottom-full left-1/2 -translate-x-1/2 mb-2 w-60 bg-gray-900 text-white text-xs rounded-lg p-3 shadow-lg pointer-events-none">
+                  SKUs donde el stock actual ya está por debajo del punto de reorden. El pedido debería haberse emitido ya.
+                </div>
+              </div>
+            </div>
+            <p className="text-3xl font-bold text-red-700 mt-1">{ropAlerts.order_today}</p>
+            <p className="text-xs text-red-500 mt-0.5">Stock ≤ punto de reorden</p>
+          </div>
+          <div className="bg-amber-50 border border-amber-100 rounded-xl p-4">
+            <div className="flex items-center gap-1.5">
+              <p className="text-xs text-amber-700 font-medium">Pedir esta semana</p>
+              <div className="relative group inline-block">
+                <Info className="w-3 h-3 text-amber-400 cursor-help" />
+                <div className="absolute z-10 hidden group-hover:block bottom-full left-1/2 -translate-x-1/2 mb-2 w-60 bg-gray-900 text-white text-xs rounded-lg p-3 shadow-lg pointer-events-none">
+                  SKUs que romperán su punto de reorden en los próximos 7 días calendario, basado en la demanda promedio diaria.
+                </div>
+              </div>
+            </div>
+            <p className="text-3xl font-bold text-amber-700 mt-1">{ropAlerts.order_this_week}</p>
+            <p className="text-xs text-amber-500 mt-0.5">Rompen ROP en ≤ 7 días</p>
+          </div>
+        </div>
+      )}
 
       {/* Order Plan Panel */}
       {!loading && orderPlan.length > 0 && (

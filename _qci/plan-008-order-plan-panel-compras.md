@@ -2,7 +2,8 @@
 **Date:** 2026-05-11  
 **Scope:** 23 demo SKUs (12 REYMA + 11 CARVAJAL) — `is_top_10_in_class = true` in `products_acid_test_active`  
 **Feature:** Add "Plan de compras esta semana" panel to `/compras` page  
-**Answers question:** "CARVAJAL: Q X — X furgones / REYMA: Q X — X furgones" (currently absent from the page — confirmed by reading `compras/page.tsx` line 1–238)
+**Answers question:** "CARVAJAL: Q X — X furgones / REYMA: Q X — X furgones" (currently absent from the page — confirmed by reading `compras/page.tsx` line 1–238)  
+**Status:** ✅ COMPLETE — verified live 2026-05-11. Panel renders with real data: CARVAJAL 4/11 SKUs Q 690,007 5.6 furgones · REYMA 11/12 SKUs Q 5,095,937 34.8 furgones · 3 SKUs excluidos (lead_time = 0 en Odoo).
 
 ---
 

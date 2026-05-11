@@ -90,6 +90,8 @@ export async function GET() {
     }
 
     // 5. Compute order recommendation per SKU, aggregate by supplier_class
+    let ropToday = 0;
+    let ropThisWeek = 0;
     const supplierTotals = new Map<string, SupplierOrderSummary>();
     for (const sku of demoSkus) {
       const supplierClass = skuToSupplier.get(sku) ?? 'UNKNOWN';
@@ -120,9 +122,20 @@ export async function GET() {
         summary.skus_with_zero_lead_time += 1;
       }
 
+      const ssDay = SAFETY_STOCK_DAYS[abcClass + xyzClass] ?? DEFAULT_SAFETY_STOCK_DAYS;
+
+      // ROP alert counts (eligible SKUs only: avg > 0 and leadTime > 0)
+      if (avg > 0 && leadTime > 0) {
+        const rop = avg * (leadTime + ssDay);
+        if (currentStock <= rop) {
+          ropToday += 1;
+        } else if (currentStock - avg * 7 <= rop) {
+          ropThisWeek += 1;
+        }
+      }
+
       if (avg === 0 || unitCost === 0) continue;
 
-      const ssDay = SAFETY_STOCK_DAYS[abcClass + xyzClass] ?? DEFAULT_SAFETY_STOCK_DAYS;
       const targetStock = avg * (2 * leadTime + ssDay);
       const qtyRaw = Math.max(0, targetStock - currentStock);
       const qtyRec = Math.ceil(qtyRaw);
@@ -140,6 +153,7 @@ export async function GET() {
       suppliers: Array.from(supplierTotals.values()).sort((a, b) =>
         a.supplier_class.localeCompare(b.supplier_class),
       ),
+      rop_alerts: { order_today: ropToday, order_this_week: ropThisWeek },
       snapshot_date: SNAPSHOT_DATE,
       furgo_m3: FURGO_M3,
       furgo_confirmed: false,

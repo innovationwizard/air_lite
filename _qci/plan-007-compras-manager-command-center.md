@@ -7,7 +7,7 @@
 **Review status (section-by-section with user):**
 - [x] Section 0 — confirmed OK
 - [x] Section 1.1 — confirmed OK
-- [ ] Section 1.2 — NOT independently verified. User's exact words: "I will have to trust on you because I don't have the time to do my own research."
+- [ ] Section 1.2 — NOT independently verified by user (no time for independent research). Review interrupted here by context compaction — resume from this section.
 - [ ] Section 1.3 — rewritten to purely prescriptive + UI capacity notes corrected against real_data/ CSVs. NOT confirmed by user.
 - [ ] Section 2 — pending review
 - [ ] Section 3 — pending review
