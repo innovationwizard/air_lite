@@ -63,7 +63,7 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({ error: 'unknown action' }, { status: 400 });
   } catch (error) {
-    console.error('acid-test/gap-report error:', error);
+    console.error('gerencia/gap-report error:', error);
     return NextResponse.json(
       { error: 'Error al obtener el reporte de gap', details: String(error) },
       { status: 500 },

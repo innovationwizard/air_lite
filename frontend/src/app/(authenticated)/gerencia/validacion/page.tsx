@@ -50,7 +50,7 @@ export default function GerenciaValidacionPage() {
   useEffect(() => {
     setLoading(true);
     setError(null);
-    fetch(`/api/acid-test/gap-report?action=report&scope=top&from=${selectedMonth}&to=${selectedMonth}`)
+    fetch(`/api/gerencia/gap-report?action=report&scope=top&from=${selectedMonth}&to=${selectedMonth}`)
       .then((res) => { if (!res.ok) throw new Error('HTTP ' + res.status); return res.json(); })
       .then((data) => { setRows(data.rows ?? []); setLoading(false); })
       .catch((err) => { setError(String(err)); setLoading(false); });

@@ -83,7 +83,7 @@ export default function GapReportPage() {
 
   useEffect(() => {
     setLoadingSkus(true);
-    fetch(`/api/acid-test/gap-report?action=skus&scope=${SCOPE}`)
+    fetch(`/api/gerencia/gap-report?action=skus&scope=${SCOPE}`)
       .then((res) => { if (!res.ok) throw new Error('HTTP ' + res.status); return res.json(); })
       .then((data) => { setSkus(data.skus ?? []); setLoadingSkus(false); })
       .catch((err) => { setError(String(err)); setLoadingSkus(false); });
@@ -102,7 +102,7 @@ export default function GapReportPage() {
       params.set('from', '2024-09');
     }
 
-    fetch(`/api/acid-test/gap-report?${params.toString()}`)
+    fetch(`/api/gerencia/gap-report?${params.toString()}`)
       .then((res) => { if (!res.ok) throw new Error('HTTP ' + res.status); return res.json(); })
       .then((data) => { setRows(data.rows ?? []); setLoadingRows(false); })
       .catch((err) => { setError(String(err)); setLoadingRows(false); });

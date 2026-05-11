@@ -29,7 +29,7 @@ const PURCHASE_TRIPLETS = [
 ] as const;
 
 /**
- * POST /api/acid-test/forecast/run
+ * POST /api/forecast/run
  *
  * Two-pass orchestration:
  *   Pass 1 — Prophet for sales (all SKUs).  Results persisted to
@@ -142,7 +142,7 @@ export async function POST(req: NextRequest) {
       results,
     });
   } catch (error) {
-    console.error('acid-test/forecast/run POST error:', error);
+    console.error('forecast/run POST error:', error);
     return NextResponse.json(
       { error: 'Error ejecutando forecasts', details: String(error) },
       { status: 500 },

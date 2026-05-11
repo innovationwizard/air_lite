@@ -84,7 +84,7 @@ export async function GET(req: NextRequest) {
       sku_count: skuSet.size,
     });
   } catch (error) {
-    console.error('acid-test/forecast GET error:', error);
+    console.error('forecast GET error:', error);
     return NextResponse.json(
       { error: 'Error al leer forecasts', details: String(error) },
       { status: 500 },

@@ -1,54 +1,7 @@
-¡Gracias!
-¡Gracias!
-¡Gracias!
-¡Gracias!
-Hola David, muy buenos días
-Hola Jorge, buenos días, ¿qué estás?
-Muy bien
-Ya llegando al ombliguito de la semana
-Literal
-Este...
-¿Qué te presento?
-Sí, por favor
 Aquí la idea Jorge es
 ¿Qué se va a presentar al gerente?
-Sí
 ¿Cómo lo podemos convencer?
-Bueno, estos son los números nuevos
-Ahora como
-Creo que más o menos te expliqué la vez pasada
-Que
-Separe el motor de
-De predicción en fases
-Y separe
-Las cargas de predicción
-En estos...
-Estas categorías que ves acá
-Historial de órdenes de compra
-Por ejemplo, ahorita está
-Filtrado por
-Reima
-Y estamos viendo
-Los que tienen datos completos
-Datos parciales, datos insuficientes
-Quitemos datos insuficientes
-Quitemos datos parciales
-Quitemos datos parciales
-Y este fue el pantallazo
-Que te...
-Que te mandé ayer
-Ahora
-Incluso aquí creo que le voy a...
-Le voy a poner un filtro adicional
-Para...
-Por ejemplo
-Ver únicamente
-Ventas
-Sin ver orden...
-Compras ordenadas y compras recibidas
-Otro filtro para ver sólo
-Compras ordenadas y otro para ver sólo
-Compras recibidas porque
+
 Me parece que una de las...
 Por lo menos yo cuando
 Veo esto como usuario
@@ -56,36 +9,20 @@ Solamente ver la cantidad de columnas
 Ya me pierde
 Creo que...
 Si le vamos a presentar al gerente
-Ya...
 Deberíamos decirle...
-Ok...
 Ahorita vamos a ver...
 Sólo Reima
 Sólo actos completos
 Sólo de ventas
-Y...
 Básicamente serían estas dos columnas
 Las primeras dos que tenemos acá
+
 Ok...
-Una...
 Ese es un punto muy bueno
 El que me acabas de decir
 No tener tanta información a la vista
 Eso está excelente
-Ahorita...
-Yo como...
-Me pongo en esa posición y te digo...
-Ok...
-Me estás dando datos completos
-13...
-Pero...
-Para ti...
-Que son datos insuficientes
-O sea...
-Yo me pongo a preguntarte eso
-¿Por qué sabes que son datos insuficientes?
-¿En qué te basas?
-Y...
+
 Así te preguntaría yo
 Ah...
 Ok...

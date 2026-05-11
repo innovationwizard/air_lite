@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
-import { ShoppingCart, AlertTriangle, Snowflake, TrendingUp, Truck, ArrowRight } from 'lucide-react';
+import { ShoppingCart, AlertTriangle, Snowflake, TrendingUp, Truck, ArrowRight, Package } from 'lucide-react';
 
 interface StockoutRisk {
   product_id: number;
@@ -25,6 +25,15 @@ interface AbcXyzItem {
   avg_daily_demand: number;
   lead_time_days: number;
   unit_cost: number;
+}
+
+interface SupplierOrderSummary {
+  supplier_class: string;
+  sku_count_total: number;
+  sku_count_with_order: number;
+  total_gtq: number;
+  total_furgones: number;
+  skus_with_zero_lead_time: number;
 }
 
 function gtqEnRiesgo(r: StockoutRisk): number {
@@ -56,16 +65,26 @@ const RISK_LABELS: Record<string, string> = {
 export default function ComprasHomePage() {
   const [risks, setRisks] = useState<StockoutRisk[]>([]);
   const [abcItems, setAbcItems] = useState<AbcXyzItem[]>([]);
+  const [orderPlan, setOrderPlan] = useState<SupplierOrderSummary[]>([]);
+  const [orderPlanGaps, setOrderPlanGaps] = useState(0);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     Promise.all([
       fetch('/api/kpis/stockout-risk').then((r) => r.json()),
       fetch('/api/kpis/abc-xyz').then((r) => r.json()),
+      fetch('/api/kpis/order-plan').then((r) => r.json()),
     ])
-      .then(([riskData, abcData]) => {
+      .then(([riskData, abcData, planData]) => {
         setRisks(Array.isArray(riskData) ? riskData : []);
         setAbcItems(Array.isArray(abcData) ? abcData : []);
+        setOrderPlan(planData?.suppliers ?? []);
+        setOrderPlanGaps(
+          (planData?.suppliers ?? []).reduce(
+            (s: number, x: SupplierOrderSummary) => s + (x.skus_with_zero_lead_time ?? 0),
+            0,
+          ),
+        );
         setLoading(false);
       })
       .catch(() => setLoading(false));
@@ -132,6 +151,62 @@ export default function ComprasHomePage() {
           <p className="text-xs text-gray-400 mt-0.5">Días de stock</p>
         </div>
       </div>
+
+      {/* Order Plan Panel */}
+      {!loading && orderPlan.length > 0 && (
+        <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+          <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
+            <h2 className="font-semibold text-gray-900 text-sm flex items-center gap-2">
+              <Truck className="w-4 h-4 text-emerald-500" />
+              Plan de compras — esta semana
+            </h2>
+            <Link href="/compras/forecast" className="text-xs text-emerald-600 hover:underline flex items-center gap-1">
+              Ver detalle <ArrowRight className="w-3 h-3" />
+            </Link>
+          </div>
+          <div className="divide-y divide-gray-50">
+            {orderPlan.map((s) => (
+              <div key={s.supplier_class} className="px-4 py-3 flex items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
+                    s.supplier_class === 'REYMA'
+                      ? 'bg-emerald-100 text-emerald-800'
+                      : 'bg-sky-100 text-sky-800'
+                  }`}>
+                    {s.supplier_class}
+                  </span>
+                  <span className="text-sm text-gray-600">
+                    {s.sku_count_with_order} de {s.sku_count_total} SKUs
+                  </span>
+                </div>
+                <div className="flex items-center gap-6 text-right">
+                  <div>
+                    <p className="text-sm font-semibold text-gray-900">{fmtGTQ(s.total_gtq)}</p>
+                    <p className="text-xs text-gray-400">valor pedido</p>
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-gray-700">{s.total_furgones.toFixed(1)}</p>
+                    <p className="text-xs text-gray-400">furgones</p>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="px-4 py-2 bg-gray-50 border-t border-gray-100 flex flex-wrap items-center gap-x-3 gap-y-1">
+            <span className="text-[10px] text-gray-400">
+              Stock: snapshot 3-mar-2026 · Política ABC/XYZ
+            </span>
+            <span className="text-[10px] text-amber-600">
+              ⚠ Furgones: furgón 53 pies (122 m³) — pendiente confirmación con proveedor
+            </span>
+            {orderPlanGaps > 0 && (
+              <span className="text-[10px] text-red-500">
+                · {orderPlanGaps} SKU{orderPlanGaps > 1 ? 's' : ''} excluidos (lead time = 0 en Odoo)
+              </span>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Top 5 Excepciones */}
       {!loading && top5.length > 0 && (

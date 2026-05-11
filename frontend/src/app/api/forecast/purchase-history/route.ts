@@ -83,7 +83,7 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({ history });
   } catch (error) {
-    console.error('purchase-history GET error:', error);
+    console.error('forecast/purchase-history GET error:', error);
     return NextResponse.json({ error: String(error) }, { status: 500 });
   }
 }

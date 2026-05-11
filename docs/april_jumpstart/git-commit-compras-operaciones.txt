@@ -1,0 +1,95 @@
+feat: COMPRAS & OPERACIONES demo upgrade — Plans 005 + 006
+
+Closes all 10 gaps identified in the gap analysis against Slim4, Kinaxis,
+o9, and SAP S/4HANA. All features run on the existing real Supabase
+snapshot (PLASTICENTRO, S.A., March 3 2026). No mock data. Zero live
+Odoo sync required.
+
+3 SQL migrations applied to remote Supabase. TypeScript: 0 errors.
+
+────────────────────────────────────────────────────────
+P1 — Hot List: financial quantification
+────────────────────────────────────────────────────────
+rpc_stockout_risks() extended with unit_price (list_price) and
+supplier_name. GTQ en riesgo = max(0, lead_time_days − days_of_supply)
+× avg_daily_demand × unit_price. Default sort: GTQ DESC. New KPI card
+shows total GTQ at risk across Crítico + Alto. Projected stockout date
+("Se agota") added per row.
+
+P1 — Hold List: financial quantification
+rpc_abc_xyz_classification() extended with current_stock, avg_daily_demand,
+lead_time_days, unit_cost, supplier_name. GTQ inmovilizado = max(0,
+current_stock − lead_time_days × 3 × avg_daily_demand) × unit_cost.
+Daily carrying cost at 18% annual rate shown per row and in KPI cards.
+
+────────────────────────────────────────────────────────
+P2 — Interactive filters
+────────────────────────────────────────────────────────
+Hot List: risk level chips, supplier dropdown, search, "Limpiar filtros".
+Hold List: ABC chips, XYZ chips, supplier dropdown, sort selector (GTQ /
+class / CV), search. All filter states reflected in KPI totals.
+
+────────────────────────────────────────────────────────
+P3 — Policy context on Días de Inventario
+────────────────────────────────────────────────────────
+New columns: Cobertura efectiva (days_of_supply − lead_time_days, with
+"OC atrasada" / "Pedir ya" labels), GTQ en stock (stock × cost), vs.
+Política badge (BAJO / OK / SOBRE). KPI cards updated with GTQ per
+status bucket.
+
+────────────────────────────────────────────────────────
+P4 — Forecast accessible to COMPRAS role
+────────────────────────────────────────────────────────
+New /compras/forecast page: same Prophet data as /gerencia/forecast,
+buyer-focused (defaults to compras_ordenadas metric). Adds "¿Qué comprar
+ahora?" urgency panel — SKUs where days_of_supply < lead_time_days,
+fetched in parallel from /api/kpis/stockout-risk. Sidebar updated:
+COMPRAS "Forecast de Demanda" → "Forecast de Compras" → /compras/forecast.
+
+────────────────────────────────────────────────────────
+P5 — Hub pages: static card grids → live command centers
+────────────────────────────────────────────────────────
+/compras: 4 live KPI cards (excepciones, GTQ en riesgo, GTQ inmovilizado,
+cobertura), Top 5 exceptions panel sorted by financial impact.
+/operaciones: 4 live KPI cards (items hot + GTQ, items hold + GTQ,
+cobertura, total inventario GTQ), status distribution bar, Top 5 críticos
+by urgency, Top 5 capital inmovilizado. Both fetch two KPI endpoints in
+parallel. Hardcoded names removed.
+
+────────────────────────────────────────────────────────
+P6 — ABC/XYZ policy consequence (Hold List)
+────────────────────────────────────────────────────────
+9-cell policy legend panel. Tooltip on badge hover: service level target,
+safety stock days, review frequency per AX–CZ cell. Stored as local TS
+constant — no DB query, no migration needed.
+
+────────────────────────────────────────────────────────
+P7 — CSV export on all table pages
+────────────────────────────────────────────────────────
+Hot List, Hold List, Días de Inventario, Programación de Compras.
+UTF-8 BOM for Excel/Spanish locale. All exports honor current filters.
+
+────────────────────────────────────────────────────────
+Plan 006 — Per-warehouse Hot List (warehouse filter)
+────────────────────────────────────────────────────────
+New rpc_stockout_risks_by_warehouse(): returns product × warehouse rows
+(quantity > 0). Risk thresholds identical to rpc_stockout_risks() —
+lead-time-based, not fixed. rpc_stockout_risks() untouched — command
+centers depend on it.
+
+New API route /api/kpis/stockout-risk-by-warehouse. Hot List now fetches
+both endpoints in parallel. KPI totals always product-level (no
+double-counting across bodegas). Warehouse dropdown switches table to
+per-warehouse view with Bodega column; existing filters still apply.
+days_of_supply semantics labeled in UI: warehouse stock / company demand.
+
+────────────────────────────────────────────────────────
+Migrations applied (remote Supabase)
+────────────────────────────────────────────────────────
+20260508000001 — rpc_stockout_risks: + unit_price, supplier_name
+20260508000002 — rpc_abc_xyz_classification: + current_stock,
+                 avg_daily_demand, lead_time_days, unit_cost, supplier_name
+20260508000003 — rpc_stockout_risks_by_warehouse (new function)
+
+All three use DROP FUNCTION IF EXISTS before CREATE OR REPLACE to handle
+PostgreSQL's return-type change restriction.

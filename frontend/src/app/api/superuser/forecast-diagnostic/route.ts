@@ -7,7 +7,7 @@ export const dynamic = 'force-dynamic';
  * Backs /superuser/forecast-diagnostic.
  *
  * Read-only aggregation of revenue_daily (history) + forecast_results (Feb/Mar
- * 2026 predictions) for the 23-SKU acid-test scope. Designed against the §3
+ * 2026 predictions) for the 23-SKU forecast scope. Designed against the §3
  * UoM standardization policy in docs/april_jumpstart/_FORECAST_DEEP_DIVE_APR24.md:
  *
  *   - Single SKU and same-UoM groups: absolute-quantity sums are allowed.
@@ -138,7 +138,7 @@ export async function GET(req: NextRequest) {
     const supplierClass =
       classParam === 'REYMA' || classParam === 'CARVAJAL' ? classParam : null;
 
-    // 1. Scope — 23 acid-test SKUs (optionally class-filtered).
+    // 1. Scope — 23 forecast SKUs (optionally class-filtered).
     const scopeRows: ScopeRow[] = (
       await (() => {
         let q = supabase

@@ -1,0 +1,61 @@
+feat: rename acid-test routes to production paths + Plan 008 order plan panel
+
+## Route rename: /api/acid-test/* → stable paths
+
+The /api/acid-test/ prefix was a holdover from the original proof-of-concept
+phase. These routes are now production-facing for COMPRAS and GERENCIA roles.
+
+Deleted:
+  frontend/src/app/api/acid-test/forecast/route.ts
+  frontend/src/app/api/acid-test/forecast/run/route.ts
+  frontend/src/app/api/acid-test/gap-report/route.ts
+  frontend/src/app/api/acid-test/purchase-history/route.ts
+
+Replaced by:
+  frontend/src/app/api/forecast/route.ts           (was: acid-test/forecast)
+  frontend/src/app/api/forecast/run/route.ts       (was: acid-test/forecast/run)
+  frontend/src/app/api/forecast/purchase-history/  (was: acid-test/purchase-history)
+  frontend/src/app/api/gerencia/gap-report/        (was: acid-test/gap-report)
+
+Callers updated:
+  compras/forecast/page.tsx
+  gerencia/forecast/page.tsx
+  gerencia/gap-report/page.tsx
+  gerencia/validacion/page.tsx
+  api/superuser/forecast-diagnostic/route.ts (comment cleanup only)
+
+No logic changes — pure path rename. Zero breaking changes to response shapes.
+
+## Plan 008 — Order plan panel on /compras
+
+Answers: "¿Qué le compro a CARVAJAL esta semana? ¿Y a REYMA?"
+
+New API route: frontend/src/app/api/kpis/order-plan/route.ts
+  - Queries products_acid_test_active (23 demo SKUs, supplier_class)
+  - Queries products (volume_m3)
+  - Calls rpc_abc_xyz_classification (abc_class, xyz_class, current_stock,
+    lead_time_days, unit_cost)
+  - Computes avg_daily_demand from revenue_daily directly — the RPC's
+    avg_daily_demand field returns 0 for all rows (pre-existing data bug)
+  - Formula: target_stock = avg_daily_demand × (2 × lead_time_days + ss_days)
+    where ss_days comes from the 9-cell ABC/XYZ policy (AX=3d … CZ=14d)
+  - Aggregates qty_recommended, GTQ, and furgones by supplier_class
+  - Tracks skus_with_zero_lead_time: 7 of 11 CARVAJAL SKUs have lead_time=0
+    in Odoo — surfaced as a gap counter in the UI, not silently excluded
+
+Modified: frontend/src/app/(authenticated)/compras/page.tsx
+  - New "Plan de compras — esta semana" panel between KPI cards and Top 5
+  - One row per supplier: badge, "N de M SKUs", GTQ value, furgones count
+  - Footer: snapshot date, furgones caveat (122 m³ unconfirmed), gap counter
+  - Promise.all extended to 3 parallel fetches
+
+Pre-implementation Python simulation (verified against real data):
+  CARVAJAL  4 / 11 SKUs  Q 690,007   5.6 furgones
+  REYMA    12 / 12 SKUs  Q 6,093,118  37.8 furgones
+
+FURGO_M3 = 122 (53-foot trailer — unconfirmed with client, shown as caveat).
+
+New planning docs:
+  _qci/plan-007-compras-manager-command-center.md
+  _qci/plan-008-order-plan-panel-compras.md
+  changelogs/2026-05-11_order-plan-panel-compras.md

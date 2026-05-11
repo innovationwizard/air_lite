@@ -148,9 +148,9 @@ export default function ComprasForecastPage() {
 
   useEffect(() => {
     Promise.all([
-      fetch('/api/acid-test/forecast?scope=top&forecast_month=2026-02-01').then((r) => r.json()),
-      fetch('/api/acid-test/forecast?scope=top&forecast_month=2026-03-01').then((r) => r.json()),
-      fetch('/api/acid-test/purchase-history?scope=top').then((r) => r.json()),
+      fetch('/api/forecast?scope=top&forecast_month=2026-02-01').then((r) => r.json()),
+      fetch('/api/forecast?scope=top&forecast_month=2026-03-01').then((r) => r.json()),
+      fetch('/api/forecast/purchase-history?scope=top').then((r) => r.json()),
       fetch('/api/kpis/stockout-risk').then((r) => r.json()),
     ])
       .then(([feb, mar, hist, risks]) => {
