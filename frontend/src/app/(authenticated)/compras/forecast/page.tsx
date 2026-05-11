@@ -8,7 +8,18 @@ const MONTH_NAMES_ES = [
   'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre',
 ];
 
-const FURGO_M3 = 122;
+const FURGO_M3 = 122; // Furgón 53 pies (122 m³). Confirmed with client 2026-05-11.
+
+const SAFETY_STOCK_DAYS: Record<string, number> = {
+  AX: 3, AY: 7,  AZ: 14,
+  BX: 5, BY: 10, BZ: 14,
+  CX: 7, CY: 10, CZ: 14,
+};
+const DEFAULT_SAFETY_STOCK_DAYS = 7;
+
+const PACKING_MULTIPLES: Record<string, number> = {
+  FARDO10: 10, FARDO05: 5, FARDO04: 4, FARDO20: 20, CAJA40: 40,
+};
 
 interface ForecastRow {
   sku: string;
@@ -42,6 +53,7 @@ type SkuRow = {
   purchases_received_feb: number | null;
   purchases_received_mar: number | null;
   training_end_date: string | null;
+  cantidad_recomendada: number | null;
 };
 
 interface StockoutRisk {
@@ -52,6 +64,10 @@ interface StockoutRisk {
   lead_time_days: number;
   risk_level: string;
   supplier_name: string | null;
+  avg_daily_demand: number;
+  current_stock: number;
+  abc_class: string | null;
+  xyz_class: string | null;
 }
 
 type CompletenessTier = 'green' | 'amber' | 'red';
@@ -108,6 +124,8 @@ function furgoTotalForSort(r: SkuRow, metric: string): number {
     units = (r.purchases_received_feb ?? 0) + (r.purchases_received_mar ?? 0);
   } else if (metric === 'ventas') {
     units = (r.sales_feb ?? 0) + (r.sales_mar ?? 0);
+  } else if (metric === 'recomendado') {
+    units = r.cantidad_recomendada ?? 0;
   }
   return (units * r.volume_m3) / FURGO_M3;
 }
@@ -115,6 +133,7 @@ function furgoTotalForSort(r: SkuRow, metric: string): number {
 function downloadCsv(rows: SkuRow[], filterLabel: string) {
   const headers = [
     'SKU', 'Producto', 'Proveedor', 'Unidad de Medida',
+    'Cantidad Recomendada', 'Furgones Recomendados',
     'Compras Ordenadas Feb 2026', 'Compras Ordenadas Mar 2026',
     'Compras Recibidas Feb 2026', 'Compras Recibidas Mar 2026',
     'Ventas Feb 2026', 'Ventas Mar 2026',
@@ -125,16 +144,23 @@ function downloadCsv(rows: SkuRow[], filterLabel: string) {
     const s = v == null ? '' : String(v);
     return s.includes(',') || s.includes('"') || s.includes('\n') ? `"${s.replace(/"/g, '""')}"` : s;
   };
-  const dataRows = rows.map((r) => [
-    r.sku, r.name, r.supplier_class, r.stock_uom ?? '',
-    r.purchases_ordered_feb ?? '', r.purchases_ordered_mar ?? '',
-    r.purchases_received_feb ?? '', r.purchases_received_mar ?? '',
-    r.sales_feb ?? '', r.sales_mar ?? '',
-    furgoVal(r.purchases_ordered_feb, r.volume_m3),
-    furgoVal(r.purchases_ordered_mar, r.volume_m3),
-    r.volume_m3 != null ? r.volume_m3.toFixed(4) : '',
-    r.volume_m3 != null ? (FURGO_M3 / r.volume_m3).toFixed(1) : '',
-  ].map(escape).join(','));
+  const dataRows = rows.map((r) => {
+    const recFurgo = r.cantidad_recomendada != null && r.cantidad_recomendada > 0 && r.volume_m3 != null
+      ? ((r.cantidad_recomendada * r.volume_m3) / FURGO_M3).toFixed(1)
+      : '';
+    return [
+      r.sku, r.name, r.supplier_class, r.stock_uom ?? '',
+      r.cantidad_recomendada != null && r.cantidad_recomendada > 0 ? r.cantidad_recomendada : '',
+      recFurgo,
+      r.purchases_ordered_feb ?? '', r.purchases_ordered_mar ?? '',
+      r.purchases_received_feb ?? '', r.purchases_received_mar ?? '',
+      r.sales_feb ?? '', r.sales_mar ?? '',
+      furgoVal(r.purchases_ordered_feb, r.volume_m3),
+      furgoVal(r.purchases_ordered_mar, r.volume_m3),
+      r.volume_m3 != null ? r.volume_m3.toFixed(4) : '',
+      r.volume_m3 != null ? (FURGO_M3 / r.volume_m3).toFixed(1) : '',
+    ].map(escape).join(',');
+  });
   const csv = [headers.map(escape).join(','), ...dataRows].join('\n');
   const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
@@ -156,9 +182,10 @@ export default function ComprasForecastPage() {
   const [openHistoryTip, setOpenHistoryTip] = useState<string | null>(null);
   const [tipPos, setTipPos] = useState<{ top: number; left: number } | null>(null);
   const historyTipRef = useRef<HTMLDivElement>(null);
-  const [metricFilter, setMetricFilter] = useState<'' | 'ventas' | 'compras_ordenadas' | 'compras_recibidas'>('compras_ordenadas');
+  const [metricFilter, setMetricFilter] = useState<'' | 'ventas' | 'compras_ordenadas' | 'compras_recibidas' | 'recomendado'>('recomendado');
   const [urgentItems, setUrgentItems] = useState<StockoutRisk[]>([]);
   const [urgentSkus, setUrgentSkus] = useState<Set<string>>(new Set());
+  const [riskMap, setRiskMap] = useState<Map<string, StockoutRisk>>(new Map());
   const [urgencyFilter, setUrgencyFilter] = useState<'all' | 'urgent' | 'plan'>('all');
   const [sortByFurgones, setSortByFurgones] = useState(false);
 
@@ -179,6 +206,9 @@ export default function ComprasForecastPage() {
         setUrgentItems(
           atRisk.sort((a, b) => a.days_of_supply - b.days_of_supply).slice(0, 5),
         );
+        const map = new Map<string, StockoutRisk>();
+        for (const r of allRisks) map.set(r.sku, r);
+        setRiskMap(map);
         setLoading(false);
       })
       .catch((e) => { setErr(String(e)); setLoading(false); });
@@ -213,19 +243,36 @@ export default function ComprasForecastPage() {
   const rows: SkuRow[] = useMemo(() => {
     const m = new Map<string, SkuRow>();
     for (const r of raw) {
-      const existing = m.get(r.sku) ?? {
-        sku: r.sku,
-        name: r.product_name ?? '',
-        supplier_class: r.supplier_class ?? '',
-        movement_rank_within_class: r.movement_rank_within_class ?? null,
-        stock_uom: r.stock_uom ?? null,
-        volume_m3: r.volume_m3 ?? null,
-        po_history_real_months: r.po_history_real_months ?? null,
-        sales_feb: null, sales_mar: null,
-        purchases_ordered_feb: null, purchases_ordered_mar: null,
-        purchases_received_feb: null, purchases_received_mar: null,
-        training_end_date: r.training_end_date ?? null,
-      };
+      const existing = m.get(r.sku) ?? (() => {
+        const risk = riskMap.get(r.sku);
+        let cantidad_recomendada: number | null = null;
+        if (risk && risk.avg_daily_demand > 0 && risk.lead_time_days > 0) {
+          const cell = (risk.abc_class ?? '') + (risk.xyz_class ?? '');
+          const ss = SAFETY_STOCK_DAYS[cell] ?? DEFAULT_SAFETY_STOCK_DAYS;
+          const target = risk.avg_daily_demand * (2 * risk.lead_time_days + ss);
+          const rec_raw = Math.max(0, target - risk.current_stock);
+          if (rec_raw === 0) {
+            cantidad_recomendada = 0;
+          } else {
+            const mult = PACKING_MULTIPLES[r.stock_uom ?? ''] ?? 1;
+            cantidad_recomendada = Math.ceil(rec_raw / mult) * mult;
+          }
+        }
+        return {
+          sku: r.sku,
+          name: r.product_name ?? '',
+          supplier_class: r.supplier_class ?? '',
+          movement_rank_within_class: r.movement_rank_within_class ?? null,
+          stock_uom: r.stock_uom ?? null,
+          volume_m3: r.volume_m3 ?? null,
+          po_history_real_months: r.po_history_real_months ?? null,
+          sales_feb: null, sales_mar: null,
+          purchases_ordered_feb: null, purchases_ordered_mar: null,
+          purchases_received_feb: null, purchases_received_mar: null,
+          training_end_date: r.training_end_date ?? null,
+          cantidad_recomendada,
+        };
+      })();
       const key = r.forecast_month.startsWith('2026-02')
         ? `${r.metric}_feb`
         : r.forecast_month.startsWith('2026-03')
@@ -240,7 +287,7 @@ export default function ComprasForecastPage() {
       if (a.supplier_class !== b.supplier_class) return a.supplier_class.localeCompare(b.supplier_class);
       return (a.movement_rank_within_class ?? 999) - (b.movement_rank_within_class ?? 999);
     });
-  }, [raw]);
+  }, [raw, riskMap]);
 
   const visible = useMemo(() => {
     const filtered = rows.filter((r) => {
@@ -276,9 +323,15 @@ export default function ComprasForecastPage() {
       furgo_ord_mar: furgoSum('purchases_ordered_mar'),
       furgo_rcv_feb: furgoSum('purchases_received_feb'),
       furgo_rcv_mar: furgoSum('purchases_received_mar'),
+      rec_qty: visible.reduce((a, r) => a + (r.cantidad_recomendada ?? 0), 0),
+      furgo_rec: visible.reduce((a, r) => {
+        if (r.cantidad_recomendada == null || r.volume_m3 == null) return a;
+        return a + (r.cantidad_recomendada * r.volume_m3) / FURGO_M3;
+      }, 0),
     };
   }, [visible]);
 
+  const showRecomendado = metricFilter === '' || metricFilter === 'recomendado';
   const showVentas    = metricFilter === '' || metricFilter === 'ventas';
   const showOrdenadas = metricFilter === '' || metricFilter === 'compras_ordenadas';
   const showRecibidas = metricFilter === '' || metricFilter === 'compras_recibidas';
@@ -353,6 +406,7 @@ export default function ComprasForecastPage() {
         <span className="text-sm text-gray-600">Métrica:</span>
         {([
           { key: '' as const,                    label: 'Todo' },
+          { key: 'recomendado' as const,         label: 'Recomendado' },
           { key: 'compras_ordenadas' as const,   label: 'Compras Ordenadas' },
           { key: 'compras_recibidas' as const,   label: 'Compras Recibidas' },
           { key: 'ventas' as const,              label: 'Ventas' },
@@ -465,6 +519,7 @@ export default function ComprasForecastPage() {
               <thead className="bg-gray-50">
                 <tr className="border-b border-gray-200">
                   <th className="text-left px-3 py-2 font-medium text-gray-700 sticky left-0 bg-gray-50 z-10">SKU / Producto</th>
+                  {showRecomendado && <th className="text-center px-2 py-2 font-medium text-orange-700 bg-orange-50" colSpan={2}>Cantidad Recomendada</th>}
                   {showOrdenadas && <th className="text-right px-2 py-2 font-medium text-blue-700 bg-blue-50" colSpan={2}>Compras Ordenadas</th>}
                   {showRecibidas && <th className="text-right px-2 py-2 font-medium text-purple-700 bg-purple-50" colSpan={2}>Compras Recibidas</th>}
                   {showVentas    && <th className="text-right px-2 py-2 font-medium text-emerald-700 bg-emerald-50" colSpan={2}>Ventas (cantidad)</th>}
@@ -476,6 +531,7 @@ export default function ComprasForecastPage() {
                 </tr>
                 <tr className="border-b border-gray-200 text-xs text-gray-500">
                   <th className="sticky left-0 bg-gray-50 z-10"></th>
+                  {showRecomendado && <><th className="text-right px-2 py-1 bg-orange-50">Unidades</th><th className="text-right px-2 py-1 bg-orange-100">Furgones</th></>}
                   {showOrdenadas && <><th className="text-right px-2 py-1 bg-blue-50">Feb 26</th><th className="text-right px-2 py-1 bg-blue-50">Mar 26</th></>}
                   {showRecibidas && <><th className="text-right px-2 py-1 bg-purple-50">Feb 26</th><th className="text-right px-2 py-1 bg-purple-50">Mar 26</th></>}
                   {showVentas    && <><th className="text-right px-2 py-1 bg-emerald-50">Feb 26</th><th className="text-right px-2 py-1 bg-emerald-50">Mar 26</th></>}
@@ -520,6 +576,16 @@ export default function ComprasForecastPage() {
                           </button>
                         </div>
                       </td>
+                      {showRecomendado && (
+                        <>
+                          <td className="px-2 py-1.5 text-right font-mono font-semibold bg-orange-50/60 text-orange-900">
+                            {r.cantidad_recomendada === null ? '—' : r.cantidad_recomendada === 0 ? <span className="text-green-600 text-xs">✓ OK</span> : fmt(r.cantidad_recomendada)}
+                          </td>
+                          <td className="px-2 py-1.5 text-right font-mono font-semibold bg-orange-100/70 text-orange-900">
+                            {r.cantidad_recomendada == null || r.cantidad_recomendada === 0 ? '—' : fmtFurgo(r.cantidad_recomendada, r.volume_m3)}
+                          </td>
+                        </>
+                      )}
                       {showOrdenadas && <><td className="px-2 py-1.5 text-right font-mono text-blue-900 bg-blue-50/60">{fmt(r.purchases_ordered_feb)}</td><td className="px-2 py-1.5 text-right font-mono text-blue-900 bg-blue-50/60">{fmt(r.purchases_ordered_mar)}</td></>}
                       {showRecibidas && <><td className="px-2 py-1.5 text-right font-mono text-purple-900 bg-purple-50/60">{fmt(r.purchases_received_feb)}</td><td className="px-2 py-1.5 text-right font-mono text-purple-900 bg-purple-50/60">{fmt(r.purchases_received_mar)}</td></>}
                       {showVentas    && <><td className="px-2 py-1.5 text-right font-mono text-emerald-900 bg-emerald-50/60">{fmt(r.sales_feb)}</td><td className="px-2 py-1.5 text-right font-mono text-emerald-900 bg-emerald-50/60">{fmt(r.sales_mar)}</td></>}
@@ -535,6 +601,7 @@ export default function ComprasForecastPage() {
               <tfoot className="bg-gray-50 font-semibold">
                 <tr>
                   <td className="px-3 py-2 text-right sticky left-0 bg-gray-50">TOTAL ({visible.length} SKUs)</td>
+                  {showRecomendado && <><td className="px-2 py-2 text-right font-mono text-orange-900 bg-orange-50">{fmt(totals.rec_qty)}</td><td className="px-2 py-2 text-right font-mono text-orange-900 bg-orange-100">{totals.furgo_rec.toFixed(1)}</td></>}
                   {showOrdenadas && <><td className="px-2 py-2 text-right font-mono text-blue-900 bg-blue-50">{fmt(totals.po_ord_feb)}</td><td className="px-2 py-2 text-right font-mono text-blue-900 bg-blue-50">{fmt(totals.po_ord_mar)}</td></>}
                   {showRecibidas && <><td className="px-2 py-2 text-right font-mono text-purple-900 bg-purple-50">{fmt(totals.po_rcv_feb)}</td><td className="px-2 py-2 text-right font-mono text-purple-900 bg-purple-50">{fmt(totals.po_rcv_mar)}</td></>}
                   {showVentas    && <><td className="px-2 py-2 text-right font-mono text-emerald-900 bg-emerald-50">{fmt(totals.sales_feb)}</td><td className="px-2 py-2 text-right font-mono text-emerald-900 bg-emerald-50">{fmt(totals.sales_mar)}</td></>}

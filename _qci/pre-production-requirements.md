@@ -21,23 +21,17 @@
 
 ---
 
-## 2. FURGO_M3 = 122 — must be confirmed with client before removing disclaimer
+## ✅ 2. FURGO_M3 = 122 — RESOLVED 2026-05-11
 
-**Trigger:** Presenting furgones calculations as confirmed, reliable, or production-grade to the client — or removing the "pendiente confirmación con proveedor" disclaimer from any UI.
+**Resolution:** Client confirmed CARVAJAL and REYMA both deliver in furgón 53 pies (122 m³). Constant is correct. All UI disclaimers and WARNING code comments removed 2026-05-11.
 
-**Constraint:** `FURGO_M3 = 122` (53-foot trailer, ~122 m³) is an unverified approximation used across four locations in the codebase. A 10% error in this constant propagates a 10% error into every furgones figure shown on the platform. CARVAJAL and REYMA may deliver in different truck configurations (48-foot trailers are common in Guatemala: 105–110 m³; 10-ton trucks: 45–60 m³).
+**Affected files updated:**
+- `frontend/src/app/(authenticated)/compras/forecast/page.tsx` — WARNING comment replaced with confirmed note
+- `frontend/src/app/(authenticated)/gerencia/forecast/page.tsx` — WARNING comment replaced with confirmed note
+- `frontend/src/app/api/kpis/order-plan/route.ts` — WARNING comment replaced with confirmed note
+- `frontend/src/app/(authenticated)/compras/page.tsx` — UI disclaimer in Order Plan panel footer changed to neutral label
 
-**What must happen first:** A direct confirmation from PLASTICENTRO's logistics or purchasing team: what truck type does CARVAJAL deliver in? What truck type does REYMA deliver in? Are different routes or order volumes served by different truck sizes?
-
-**Current workaround:** All four UI locations show a visible disclaimer. The order-plan API returns `furgo_confirmed: false`. Do not remove either until the constant is confirmed.
-
-**Affected files (all hardcode `FURGO_M3 = 122`):**
-- `frontend/src/app/(authenticated)/compras/forecast/page.tsx` line 11
-- `frontend/src/app/(authenticated)/gerencia/forecast/page.tsx` line 14
-- `frontend/src/app/api/kpis/order-plan/route.ts` line 15
-- `frontend/src/app/(authenticated)/compras/page.tsx` (disclaimer rendered in Order Plan panel footer and ROP cards)
-
-**Evidence:** Plan 007 Section 4.6, Plan 008 Section 4.2, Plan 010 known limitations.
+**Evidence:** Plan 007 Section 4.6, user confirmation 2026-05-11.
 
 ---
 

@@ -8,9 +8,7 @@ const MONTH_NAMES_ES = [
   'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre',
 ];
 
-// Furgón capacity used for m³/furgón calculations.
-// WARNING: exact unit type per supplier (Carvajal / Reyma) is NOT confirmed.
-// Using furgon_53 (53-foot trailer) as a demo approximation only.
+// Furgón 53 pies (53-foot trailer) = 122 m³. Confirmed with client 2026-05-11.
 const FURGO_M3 = 122;
 
 interface ForecastRow {

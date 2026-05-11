@@ -10,8 +10,7 @@ const SNAPSHOT_DATE = '2026-03-03';
 const DEMAND_WINDOW_DAYS = 90;
 const DEMAND_FROM = '2025-12-03'; // 90 days before SNAPSHOT_DATE
 
-// WARNING: unconfirmed with client — using furgón 53 pies as demo approximation.
-// All furgon calculations are downstream of this constant.
+// Furgón 53 pies (53-foot trailer) = 122 m³. Confirmed with client 2026-05-11.
 const FURGO_M3 = 122;
 
 // Source: capital-congelado/page.tsx lines 45–54

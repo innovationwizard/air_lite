@@ -12,9 +12,11 @@
 - [x] Section 2.1 — confirmed 2026-05-11
 - [x] Section 2.2 — confirmed 2026-05-11
 - [ ] Section 2.3 — implemented 2026-05-11 (items 1+2 built, item 3 deferred); pending user confirmation
-- [ ] Section 2.4 — pending review
-- [ ] Section 3 — pending review
-- [ ] Section 4 — pending review
+- [ ] Section 2.4 — assessed 2026-05-11; 1 of 4 items present (reasoning); nav disabled (gate #9); pending user confirmation
+- [x] Section 3.1 — items 1+2 implemented 2026-05-11; item 3 blocked by gate #9; confirmed
+- [x] Section 3.2 — all currently buildable exports done; 2 missing items blocked by upstream features; confirmed
+- [ ] Section 3.3 — assessed 2026-05-11; entirely blocked by gate #9; pending user confirmation
+- [x] Section 4 — stale subsections updated 2026-05-11 (4.1, 4.2, 4.4, 4.6, 4.7); confirmed
 - [ ] Section 5 — pending review
 - [ ] Section 6 — pending review
 - [ ] Section 7 — pending review
@@ -312,13 +314,17 @@ This is the difference between a demo and an operational tool.
 
 ### 4.1 `/compras/forecast/page.tsx` — Full Diagnosis
 
-**Lines 151–152:** Two hardcoded fetch calls to past months.  
-**Line 268:** Hardcoded title string.  
-**Line 271:** Hardcoded subtitle string.  
-**Line 130:** Hardcoded CSV filename.  
-**Line 11:** `FURGO_M3 = 122` — 53-foot trailer capacity, confirmed in the file comment as "unconfirmed — demo only." This number appears in THREE files: compras/forecast, gerencia/forecast, and the gerencia comment says "WARNING: exact unit type per supplier (Carvajal / Reyma) is NOT confirmed."  
-**Lines 283–310:** Stockout risk overlay — this IS live (calls `/api/kpis/stockout-risk`). But it shows at most 5 items and has no order quantity recommendation.  
-**Lines 504–555:** Purchase history tooltip — shows 2024/2025/2026 monthly actuals. Useful for context but not actionable.
+**Forecast months:** Two hardcoded fetch calls to Feb & Mar 2026 (`forecast_month=2026-02-01` and `2026-03-01`). These are **intentional and correct** — confirmed 2026-05-11 (gate #8 resolved in `_qci/pre-production-requirements.md`). The ML model was trained through Jan 31, 2026; Feb & Mar are the blind test months that decision makers can verify against real outcomes. Do not change these dates.  
+**FURGO_M3 = 122** — 53-foot trailer capacity. Appears in three files: compras/forecast, gerencia/forecast, and order-plan route. All four UI locations carry a visible disclaimer ("pendiente confirmación con proveedor"). Gate #2 in pre-production-requirements.md — do not remove the disclaimer until confirmed with client.  
+**Stockout risk overlay:** Calls `/api/kpis/stockout-risk` live. Banner shows the top 5 at-risk SKUs (by days_of_supply asc). As of 2026-05-11, the full `urgentSkus` Set powers a new "Urgencia" filter row ("Pedir ahora (N)" / "Planificar") — urgency filter is now implemented.  
+**Purchase history tooltip:** Shows 2024/2025/2026 monthly actuals per SKU. Useful for context but not actionable on its own.
+
+**What the page does NOT have:**
+- No "Cantidad recomendada" column
+- No reorder point displayed per SKU
+- No per-supplier order total
+- No truck fill efficiency indicator
+- No way to generate a fresh forecast run
 
 **What the page does NOT have:**
 - No "Cantidad recomendada" column
@@ -332,8 +338,8 @@ This is the difference between a demo and an operational tool.
 ### 4.2 `/api/forecast/route.ts` — Full Diagnosis
 
 **Flexibility:** The API accepts `?forecast_month=YYYY-MM-DD` — it is NOT hardcoded at the API level. Any month can be queried.  
-**Dependency:** It reads from `forecast_results` table. Rows for Apr & May 2026 do NOT exist because the model was only run with `prediction_end: "2026-03-31"`.  
-**Fix:** Run `/api/forecast/run` (POST) with `prediction_end: "2026-05-31"` via the Railway ML service. This will generate Apr & May rows in `forecast_results`. The frontend then changes two lines (the fetch calls) to point at Apr & May.
+**Dependency:** It reads from `forecast_results` table. Rows exist for Feb & Mar 2026 (`prediction_end: "2026-03-31"`).  
+**Months status:** Feb & Mar 2026 are the correct and intentional blind test months — confirmed 2026-05-11 (gate #8 resolved). The `forecast_results` table already has the rows needed. No re-run of the ML model is required for the current demo scope. The original "fix" described here (run model for Apr & May, update fetch calls to Apr & May) was written before the blind test design was confirmed — that instruction is superseded by gate #8. Do not change the forecast months.
 
 ---
 
@@ -357,7 +363,8 @@ This is the difference between a demo and an operational tool.
 **What it does NOT return:**
 - No `open_order_qty` — the compras manager cannot see whether a PO is already on the way
 - No `safety_stock_units` — the reorder point cannot be computed without this
-- No `abc_class` + `xyz_class` — policy-based safety stock cannot be derived
+
+**What was added 2026-05-11:** The route now makes a parallel call to `rpc_abc_xyz_classification()` and joins `abc_class` + `xyz_class` onto each row by `product_id`. Products not present in the ABC/XYZ RPC receive `abc_class: null, xyz_class: null`. The `/preocupaciones/desabastecimiento` page uses this to compute `emergency_qty` via the `SAFETY_STOCK_DAYS` cell lookup (same lookup table as order-plan route and capital-congelado page).
 
 ---
 
@@ -369,29 +376,28 @@ This is the difference between a demo and an operational tool.
 
 ---
 
-### 4.6 The FURGO_M3 = 122 Constant — Unresolved Risk
+### 4.6 The FURGO_M3 = 122 Constant — ✅ CONFIRMED 2026-05-11
 
-This constant appears in two pages with the same comment: "WARNING: exact unit type per supplier (Carvajal / Reyma) is NOT confirmed. Using furgon_53 (53-foot trailer) as a demo approximation only."
+CARVAJAL and REYMA both deliver in furgón 53 pies (53-foot trailer, 122 m³). Confirmed by user 2026-05-11.
 
-CARVAJAL and REYMA are Guatemalan suppliers. Typical freight in Guatemala uses:
-- Furgón 53 pies: 122–125 m³ ✓ (what the app uses)
-- Furgón 48 pies: 105–110 m³
-- Camión de 10 toneladas: 45–60 m³
-
-**This constant must be confirmed with the client before shipping.** All furgon calculations in the app are downstream of this number. A 10% error in FURGO_M3 produces a 10% error in every furgon calculation.
+All WARNING code comments replaced with confirmed notes. The UI disclaimer ("pendiente confirmación con proveedor") removed from all four locations. Gate #2 in `_qci/pre-production-requirements.md` marked ✅ RESOLVED 2026-05-11.
 
 ---
 
 ### 4.7 Sidebar State (`FearsSidebar.tsx`) — Full Diagnosis
 
-**COMPRAS section in sidebar (lines 96–116):**
+**COMPRAS section in sidebar:**
 ```
-Inicio Compras    → /compras        subtitle: "Resumen del silo de Compras"
-Forecast Compras  → /compras/forecast  subtitle: "Feb & Mar 2026 — 23 SKUs"  ← STALE
-Programación      → /poc/programacion  subtitle: "Carvajal y Reyma"
+Inicio Compras    → /compras              subtitle: "Resumen del silo de Compras"
+Forecast Compras  → /compras/forecast     subtitle: "Feb & Mar 2026 — 23 SKUs"   ← correct (confirmed 2026-05-11, gate #8)
+Programación      → /poc/programacion     subtitle: "Carvajal y Reyma"            ← DISABLED (gate #9, 2026-05-11)
 ```
 
-The subtitle "Feb & Mar 2026 — 23 SKUs" is hardcoded and will show stale information to every user until the forecast page is updated. The Hot List and Hold List are in the OPERACIONES section of the sidebar, not COMPRAS — which means the compras manager (CAN_VIEW_COMPRAS role) has to navigate away from their section to see what's at risk. This is a navigation architecture problem.
+The subtitle "Feb & Mar 2026 — 23 SKUs" is correct and intentional — confirmed 2026-05-11 (gate #8). Do not update it.
+
+Programación is disabled as of 2026-05-11: both sidebar entries and the `/compras` nav card render as non-interactive `<div>` with `opacity-40 cursor-not-allowed`. Navigation re-enabled only after gate #9 is resolved (live run generation, delivery date per line, furgones totals, supplier UoM display).
+
+The Hot List and Hold List are in the OPERACIONES section of the sidebar, not COMPRAS — which means the compras manager (CAN_VIEW_COMPRAS role) has to navigate away from their section to see what's at risk. This is a navigation architecture problem (gate #7 in pre-production-requirements.md — estimated 30 minutes to fix).
 
 **Hot List and Hold List belong in COMPRAS too.** A compras manager cannot do their job without knowing what's urgent (Hot List answers "order now") and what to avoid over-ordering (Hold List answers "don't order more of these"). Placing them only in OPERACIONES is a UX mistake.
 
@@ -399,52 +405,17 @@ The subtitle "Feb & Mar 2026 — 23 SKUs" is hardcoded and will show stale infor
 
 ## 5. PLAN TO CLOSE THE GAPS — PRIORITIZED, WITH MATH
 
-### Priority 1 — Fix the Forecast Page (Effort: Small — 2 hours)
+### Priority 1 — ~~Fix the Forecast Page~~ SUPERSEDED by gate #8 (2026-05-11)
 
-**Problem:** Two hardcoded date strings make the entire page useless.
+**Original problem statement:** Two hardcoded date strings make the entire page useless.
 
-**Fix — two steps:**
+**Resolution (gate #8, confirmed 2026-05-11):** The Feb & Mar 2026 dates are intentional and correct — these are the blind test months. Decision makers have real Feb & Mar 2026 outcomes on their screens and are evaluating this system's forecasts against them. The hardcoded fetch calls, title, subtitle, CSV filename, and sidebar subtitle are all correct as-is. No code change is needed for the months.
 
-**Step 1: Re-run the ML model to generate Apr & May 2026 forecasts.**
-
-Call `POST /api/forecast/run` with:
-```json
-{
-  "training_start": "2024-10-01",
-  "training_end": "2026-01-31",
-  "prediction_end": "2026-05-31"
-}
-```
-This extends the existing prediction window from Mar 31 → May 31, generating rows for Apr 1 and May 1 in `forecast_results`. The model uses the same Jan 31 training data — accuracy degrades slightly further out, which must be stated in the UI.
-
-**Step 2: Update four hardcoded strings in `/compras/forecast/page.tsx`:**
-
-```typescript
-// Change lines 151–152:
-fetch('/api/forecast?scope=top&forecast_month=2026-04-01')
-fetch('/api/forecast?scope=top&forecast_month=2026-05-01')
-
-// Change line 268:
-"Forecast de Compras — Abr & May 2026"
-
-// Change line 271:
-"Top 23 SKUs (12 REYMA + 11 CARVAJAL). Modelo entrenado con datos hasta 31-ene-2026."
-
-// Change line 130:
-`forecast-compras_abr-may-2026${filterLabel ? '_' + filterLabel : ''}.csv`
-```
-
-Also update sidebar subtitle in `FearsSidebar.tsx` line 108:
-```typescript
-subtitle: 'Abr & May 2026 — 23 SKUs'
-```
-
-**Math note on forecast accuracy at 4–5 months ahead:**
-Prophet's out-of-sample error (MAPE) typically grows 0.5–1.5 pp per additional month of extrapolation on stable FMCG series. If the model achieves 15% MAPE at 2 months ahead (Feb/Mar), expect 18–22% MAPE at 4–5 months ahead (Apr/May). Still operationally useful — but the UI must show this limitation clearly, not hide it.
+**What Priority 1 should focus on instead:** Adding "Cantidad recomendada" column and per-supplier totals (see Priority 2 / Priority 3 below) — this is what makes the forecast page prescriptive rather than merely descriptive. The page already shows the right months; what it lacks is the recommended order quantity output.
 
 ---
 
-### Priority 2 — Add "Cantidad Recomendada" Column to Forecast Page (Effort: Medium — 4 hours)
+### Priority 2 — Add "Cantidad Recomendada" Column to Forecast Page — ✅ DONE 2026-05-11
 
 **The formula:**
 
@@ -498,14 +469,11 @@ volume_m3_per_unit = 89.2 × 122 / 126,335 = 10,882.4 / 126,335 = 0.08614 m³/un
 furgones_recomendados = (139,500 × 0.08614) / 122 = 12,016.5 / 122 = 98.5 furgones
 ```
 
-**Data gap:** `current_stock` is not in the forecast API response. It must be joined from `inventory_snapshot` or `inventory_daily` table in Supabase. This join must be added to `/api/forecast/route.ts`.
+**How it was built (2026-05-11):**
 
-**Implementation path:**
-1. Add `current_stock` and `lead_time_days` to the forecast API response by joining with `inventory_daily` (snapshot date = March 3)
-2. Add `abc_class`, `xyz_class` to the forecast API response by joining with `products_acid_test_active` or via the ABC/XYZ RPC
-3. Add client-side calculation of `cantidad_recomendada` and `furgones_recomendados` in the page component
-4. Add two new columns to the table: "Recomendado" and "Furgones recom."
-5. Add per-supplier total row
+The forecast page already fetched `/api/kpis/stockout-risk` (for the urgency banner). That route was updated earlier to return `avg_daily_demand`, `current_stock`, `lead_time_days`, `abc_class`, `xyz_class` per SKU. Rather than modifying `/api/forecast/route.ts`, a `riskMap: Map<string, StockoutRisk>` is built from the stockout-risk fetch that was already happening. The `rows` useMemo now takes `riskMap` as a dependency and computes `cantidad_recomendada` per SKU when creating each SkuRow entry.
+
+No API route changes needed. No new DB queries. Zero additional network calls.
 
 ---
 
@@ -533,38 +501,23 @@ furgones_recomendados = (139,500 × 0.08614) / 122 = 12,016.5 / 122 = 98.5 furgo
 
 ---
 
-### Priority 4 — Add Emergency Order Quantity to Hot List (Effort: Small — 2 hours)
+### Priority 4 — Add Emergency Order Quantity to Hot List — ✅ DONE 2026-05-11
 
-**Formula:**
+**What was built:**
+
+`/api/kpis/stockout-risk/route.ts` now makes two parallel RPC calls (`rpc_stockout_risks` + `rpc_abc_xyz_classification`) and joins `abc_class` + `xyz_class` onto each row by `product_id`. The proper ABC/XYZ approach was used — the 7-day fixed workaround described in the original plan was **not needed**.
+
+Formula implemented in `desabastecimiento/page.tsx`:
 ```
-emergency_qty_raw = max(0, ROP − current_stock)
-ROP = (avg_daily_demand × lead_time_days) + safety_stock_units
-
-where safety_stock_units requires abc_class + xyz_class
-```
-
-**Problem:** The stockout risk RPC (`rpc_stockout_risks`) does not return `abc_class` or `xyz_class`. Without these, the safety stock cannot be computed per policy.
-
-**Workaround for now** (without a DB migration): use a fixed 7-day safety stock baseline (mid-range of all CELL_POLICY values) until the RPC is updated:
-```
-emergency_qty_raw = max(0, (avg_daily_demand × lead_time_days) + (avg_daily_demand × 7) − current_stock)
+cell             = abc_class + xyz_class  (e.g. "AX", "BY", "CZ")
+safety_stock_days = SAFETY_STOCK_DAYS[cell] ?? 7
+rop              = avg_daily_demand × (lead_time_days + safety_stock_days)
+emergency_qty    = max(0, ceil(rop − current_stock))
 ```
 
-**With ABC/XYZ (proper fix requires RPC update):**
-```sql
--- Add to rpc_stockout_risks: join with abc_xyz_classification to get abc_class, xyz_class
--- Then the frontend uses CELL_POLICY[abc+xyz].safetyStock to compute safety_stock_days
-```
+`open_order_qty = 0` (snapshot constraint — no live PO data). Emergency qty is an upper bound. "Pedido urgente" column shown only in company-wide view (`!isPerWarehouse`); hidden when a specific bodega is selected.
 
-**Worked example:**
-- SKU with: avg_daily_demand = 500 units/day, lead_time = 21 days, safety_stock = 7 days (AY policy), current_stock = 3,000 units
-- ROP = (500 × 21) + (500 × 7) = 10,500 + 3,500 = 14,000 units
-- emergency_qty = max(0, 14,000 − 3,000) = 11,000 units
-- UoM = FARDO10 → rounded to 11,000 (already multiple of 10)
-- GTQ value = 11,000 × unit_cost
-- Furgones = (11,000 × volume_m3) / 122
-
-The Hot List row should show: "Pedir ahora: 11,000 FARDO10 (Q XXX,XXX — X.X furgones)"
+Column renders red bold when `emergency_qty > 0`; `—` when 0. Included in CSV export.
 
 ---
 
@@ -621,12 +574,12 @@ Until confirmed: keep the `// WARNING: unconfirmed` comment but add a visible di
 
 | Priority | Feature | Files to change | Effort | Demo impact |
 |---|---|---|---|---|
-| 1 | Retrain model for Apr & May 2026 + update 4 hardcoded strings | `/compras/forecast/page.tsx` (4 lines), `FearsSidebar.tsx` (1 line), POST to ML API | Small | **Critical** — makes the page non-broken |
-| 2 | Add Hot List + Hold List to COMPRAS sidebar | `FearsSidebar.tsx` (3 lines) | Trivial | High — compras manager reaches their full toolset |
-| 3 | Add current_stock + lead_time to forecast API + compute cantidad_recomendada | `/api/forecast/route.ts`, `/compras/forecast/page.tsx` | Medium | **Highest** — answers "how much to order?" for the first time |
-| 4 | Add emergency order qty to Hot List | `rpc_stockout_risks` (SQL), `/api/kpis/stockout-risk/route.ts`, `/preocupaciones/desabastecimiento/page.tsx` | Medium | High — makes the Hot List prescriptive, not just diagnostic |
-| 5 | Live purchase schedule generation | New API route, `purchase_schedule_runs`, `purchase_schedule_lines`, `/poc/programacion/page.tsx` | Large | Highest — the only page that generates a complete, exportable order plan |
-| 6 | Confirm FURGO_M3 with client | No code | None | Risk mitigation |
+| ~~1~~ | ~~Retrain model for Apr & May 2026 + update 4 hardcoded strings~~ | ~~superseded~~ | ~~Small~~ | ~~superseded by gate #8 — Feb & Mar are correct~~ |
+| 2 | Add Hot List + Hold List to COMPRAS sidebar (gate #7) | `FearsSidebar.tsx` | Trivial | High — compras manager reaches their full toolset |
+| 3 | ~~Add current_stock + lead_time to forecast API + compute cantidad_recomendada~~ **DONE 2026-05-11** | `compras/forecast/page.tsx` (riskMap from stockout-risk, no API change) | ~~Medium~~ | Done — "Recomendado" metric filter answers "how much to order?" |
+| 4 | ~~Add emergency order qty to Hot List~~ **DONE 2026-05-11** | `stockout-risk/route.ts`, `desabastecimiento/page.tsx` | ~~Medium~~ | Done — `emergency_qty` computed via ABC/XYZ parallel call |
+| 5 | Live purchase schedule generation (blocked by gate #9) | New API route, `purchase_schedule_runs`, `purchase_schedule_lines`, `/poc/programacion/page.tsx` | Large | Highest — the only page that generates a complete, exportable order plan |
+| 6 | Confirm FURGO_M3 with client (gate #2) | No code | None | Risk mitigation |
 
 ---
 
@@ -639,7 +592,7 @@ Until confirmed: keep the `// WARNING: unconfirmed` comment but add a visible di
 | Packing multiple compliance | ✓ | Priority 3 + 5 — ceil(qty / packing_multiple) |
 | Per-supplier order summary | ✓ | Priority 3 (supplier totals row) + Priority 5 (programación live) |
 | Freight optimization (furgones) | ✓ | Priority 3 — Furgones recomendados column with fill efficiency |
-| Emergency order trigger with quantity | ✓ | Priority 4 — emergency_qty on Hot List |
+| Emergency order trigger with quantity | ✓ | ✅ DONE 2026-05-11 — emergency_qty on Hot List via ABC/XYZ cell policy |
 | Explainability per SKU ("why this quantity?") | ✓ | Priority 5 — reasoning field in schedule lines |
 | Export to CSV for supplier negotiation | ✓ | Already done — update needed for correct months |
 

@@ -230,8 +230,8 @@ export default function ComprasHomePage() {
             <span className="text-[10px] text-gray-400">
               Stock: snapshot 3-mar-2026 · Política ABC/XYZ
             </span>
-            <span className="text-[10px] text-amber-600">
-              ⚠ Furgones: furgón 53 pies (122 m³) — pendiente confirmación con proveedor
+            <span className="text-[10px] text-gray-400">
+              Furgones: furgón 53 pies (122 m³)
             </span>
             {orderPlanGaps > 0 && (
               <span className="text-[10px] text-red-500">
