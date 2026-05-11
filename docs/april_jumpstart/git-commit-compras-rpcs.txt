@@ -1,0 +1,47 @@
+fix: restore demand signal in three RPCs — snapshot-anchored 90-day window
+
+All three RPCs (rpc_stockout_risks, rpc_abc_xyz_classification,
+rpc_stockout_risks_by_warehouse) computed avg_daily_demand using
+CURRENT_DATE - INTERVAL '30 days'. The inventory snapshot is 2026-03-03.
+As of 2026-05-11 that window (April 11 – May 11) has zero rows in
+demand_daily, producing:
+
+  • rpc_stockout_risks / rpc_stockout_risks_by_warehouse: WHERE avg_demand > 0
+    filtered out every product → 0 rows → Excepciones activas = 0,
+    GTQ en riesgo = —, Cobertura promedio = —, Top 5 panel absent.
+
+  • rpc_abc_xyz_classification: avg_daily_demand = 0 for all 980 rows →
+    GTQ inmovilizado formula collapsed to current_stock × unit_cost
+    (entire stock classified as excess) → Q 15,099,815 figure was wrong.
+
+Fix (migration 20260511000001): replace the CURRENT_DATE-relative window
+with a snapshot-anchored 90-day window in all three RPCs:
+
+  DECLARE v_snapshot_date DATE;
+  SELECT MAX(snapshot_date) INTO v_snapshot_date FROM inventory_daily;
+  v_demand_from := v_snapshot_date - INTERVAL '90 days';
+  WHERE dd.demand_date BETWEEN v_demand_from AND v_snapshot_date
+
+Using MAX(snapshot_date) as the anchor means the functions self-adapt
+if a newer snapshot is ever loaded — no hardcoded dates.
+90 days replaces 30: more statistically stable and consistent with the
+order-plan route (DEMAND_WINDOW_DAYS = 90).
+
+Fix (migration 20260511000002): PostgreSQL type mismatch — the risk_level
+CASE expression returns inferred type 'text' but RETURNS TABLE declares
+'character varying'. Previous migrations used CREATE OR REPLACE on an
+existing function and PostgreSQL accepted the implicit coercion. After
+the DROP in 20260511000001, the fresh CREATE exposed it. Fixed by adding
+::VARCHAR to the risk_level CASE and ::NUMERIC to the 9999 literal in
+rpc_stockout_risks and rpc_stockout_risks_by_warehouse.
+rpc_abc_xyz_classification was already correctly cast.
+
+Verified against remote Supabase after both migrations:
+  rpc_stockout_risks    → 747 rows: critico=322 alto=125 medio=21 bajo=279
+  rpc_abc_xyz           → 980 rows: avg_daily_demand > 0 for 747 products
+
+New files:
+  supabase/migrations/20260511000001_fix_rpc_demand_signal.sql
+  supabase/migrations/20260511000002_fix_rpc_risk_level_cast.sql
+  _qci/plan-009-fix-demand-signal-rpc.md
+  changelogs/2026-05-11_fix-demand-signal-rpc.md
