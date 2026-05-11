@@ -306,6 +306,7 @@ export default function ComprasHomePage() {
             blurb: 'Lo que hay que comprarle a Carvajal y Reyma, semana por semana.',
             icon: Truck,
             accent: 'bg-emerald-50 text-emerald-600',
+            disabled: true,
           },
           {
             title: 'Demostración de Valor',
@@ -316,24 +317,36 @@ export default function ComprasHomePage() {
           },
         ].map((c) => {
           const Icon = c.icon;
+          const inner = (
+            <div className="flex items-start gap-4">
+              <div className={`w-11 h-11 rounded-lg flex items-center justify-center flex-shrink-0 ${c.accent}`}>
+                <Icon className="w-5 h-5" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center justify-between gap-2">
+                  <h2 className="font-semibold text-gray-900">{c.title}</h2>
+                  {!('disabled' in c && c.disabled) && (
+                    <ArrowRight className="w-4 h-4 text-gray-300 group-hover:text-emerald-500 transition-colors" />
+                  )}
+                </div>
+                <p className="text-sm text-gray-500 mt-1 leading-relaxed">{c.blurb}</p>
+              </div>
+            </div>
+          );
+          if ('disabled' in c && c.disabled) {
+            return (
+              <div key={c.href} className="bg-white rounded-xl border border-gray-100 p-5 opacity-40 cursor-not-allowed select-none">
+                {inner}
+              </div>
+            );
+          }
           return (
             <Link
               key={c.href}
               href={c.href}
               className="group bg-white rounded-xl border border-gray-200 p-5 hover:border-emerald-400 hover:shadow-sm transition-all"
             >
-              <div className="flex items-start gap-4">
-                <div className={`w-11 h-11 rounded-lg flex items-center justify-center flex-shrink-0 ${c.accent}`}>
-                  <Icon className="w-5 h-5" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between gap-2">
-                    <h2 className="font-semibold text-gray-900">{c.title}</h2>
-                    <ArrowRight className="w-4 h-4 text-gray-300 group-hover:text-emerald-500 transition-colors" />
-                  </div>
-                  <p className="text-sm text-gray-500 mt-1 leading-relaxed">{c.blurb}</p>
-                </div>
-              </div>
+              {inner}
             </Link>
           );
         })}

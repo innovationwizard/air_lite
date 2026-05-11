@@ -47,6 +47,7 @@ interface NavItem {
   href: string;
   icon: React.ComponentType<{ className?: string }>;
   subtitle: string | null;
+  disabled?: boolean;
 }
 
 interface NavGroup {
@@ -112,6 +113,7 @@ const allNavGroups: NavGroup[] = [
         href: '/poc/programacion',
         icon: Truck,
         subtitle: 'Carvajal y Reyma',
+        disabled: true,
       },
     ],
   },
@@ -244,6 +246,7 @@ const allNavGroups: NavGroup[] = [
         href: '/poc/programacion',
         icon: Truck,
         subtitle: 'Carvajal y Reyma — 2 semanas máx.',
+        disabled: true,
       },
     ],
   },
@@ -319,6 +322,22 @@ export function FearsSidebar() {
             )}
             {group.items.map((item) => {
               const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
+              if (item.disabled) {
+                return (
+                  <div
+                    key={item.href}
+                    className="flex items-start gap-3 px-3 py-2.5 rounded-lg text-sm opacity-40 cursor-not-allowed select-none"
+                  >
+                    <item.icon className="w-5 h-5 mt-0.5 flex-shrink-0 text-gray-400" />
+                    <div className="min-w-0">
+                      <div className="font-medium text-gray-600">{item.name}</div>
+                      {item.subtitle && (
+                        <div className="text-xs mt-0.5 text-gray-400">{item.subtitle}</div>
+                      )}
+                    </div>
+                  </div>
+                );
+              }
               return (
                 <Link
                   key={item.href}

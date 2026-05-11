@@ -16,6 +16,8 @@ interface StockoutRisk {
   risk_level: string;
   unit_price: number;
   supplier_name: string | null;
+  abc_class?: string | null;
+  xyz_class?: string | null;
 }
 
 // Per-warehouse row (from /api/kpis/stockout-risk-by-warehouse)
@@ -41,6 +43,20 @@ const RISK_LABELS: Record<string, string> = {
 
 const HOLDING_COST_RATE = 0.18;
 
+const SAFETY_STOCK_DAYS: Record<string, number> = {
+  AX: 3, AY: 7,  AZ: 14,
+  BX: 5, BY: 10, BZ: 14,
+  CX: 7, CY: 10, CZ: 14,
+};
+
+function emergencyQty(r: StockoutRisk): number {
+  if (r.avg_daily_demand <= 0 || r.lead_time_days <= 0) return 0;
+  const cell = (r.abc_class ?? '') + (r.xyz_class ?? '');
+  const ss = SAFETY_STOCK_DAYS[cell] ?? 7;
+  const rop = r.avg_daily_demand * (r.lead_time_days + ss);
+  return Math.max(0, Math.ceil(rop - r.current_stock));
+}
+
 function gtqEnRiesgo(r: StockoutRisk): number {
   const daysShort = Math.max(0, r.lead_time_days - r.days_of_supply);
   return daysShort * r.avg_daily_demand * r.unit_price;
@@ -63,7 +79,7 @@ function exportCSV(rows: (StockoutRisk | WarehouseRisk)[], hasWarehouse: boolean
     'Producto', 'SKU', 'Categoría', 'Proveedor',
     ...(hasWarehouse ? ['Bodega'] : []),
     'Stock actual', 'Demanda diaria', 'Días de inventario', 'Lead time',
-    'GTQ en riesgo', 'Se agota', 'Nivel de riesgo',
+    'GTQ en riesgo', 'Pedido urgente (unidades)', 'Se agota', 'Nivel de riesgo',
   ];
   const lines = rows.map((r) => {
     const base = [
@@ -77,6 +93,7 @@ function exportCSV(rows: (StockoutRisk | WarehouseRisk)[], hasWarehouse: boolean
       r.days_of_supply >= 9999 ? '999+' : r.days_of_supply.toFixed(0),
       r.lead_time_days,
       gtqEnRiesgo(r).toFixed(0),
+      emergencyQty(r) > 0 ? emergencyQty(r).toFixed(0) : '',
       fechaAgotamiento(r),
       RISK_LABELS[r.risk_level] ?? r.risk_level,
     ];
@@ -307,23 +324,25 @@ export default function DesabastecimientoPage() {
                 {isPerWarehouse && (
                   <th className="text-left px-4 py-3 font-medium text-gray-500">Bodega</th>
                 )}
-                <th className="text-right px-4 py-3 font-medium text-gray-500">Días</th>
                 <th className="text-right px-4 py-3 font-medium text-gray-500">Lead time</th>
                 <th className="text-right px-4 py-3 font-medium text-gray-500">GTQ en riesgo</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-500">Se agota</th>
+                {!isPerWarehouse && (
+                  <th className="text-right px-4 py-3 font-medium text-gray-500">Pedido urgente</th>
+                )}
+                <th className="text-right px-4 py-3 font-medium text-gray-500">Se agota</th>
                 <th className="text-center px-4 py-3 font-medium text-gray-500">Riesgo</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
               {loading ? (
                 <tr>
-                  <td colSpan={isPerWarehouse ? 9 : 8} className="px-4 py-8 text-center text-gray-400">
+                  <td colSpan={8} className="px-4 py-8 text-center text-gray-400">
                     Cargando datos...
                   </td>
                 </tr>
               ) : filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={isPerWarehouse ? 9 : 8} className="px-4 py-8 text-center text-gray-400">
+                  <td colSpan={8} className="px-4 py-8 text-center text-gray-400">
                     {risks.length === 0
                       ? 'No hay datos disponibles'
                       : 'No hay resultados para los filtros seleccionados.'}
@@ -351,16 +370,27 @@ export default function DesabastecimientoPage() {
                           <span className="ml-1.5 text-gray-500">{warehouseRow.warehouse_name}</span>
                         </td>
                       )}
-                      <td className="px-4 py-3 text-right text-gray-900">
-                        {risk.days_of_supply >= 9999
-                          ? '999+'
-                          : risk.days_of_supply.toLocaleString('es-GT', { maximumFractionDigits: 0 })}
-                      </td>
                       <td className="px-4 py-3 text-right text-gray-500">{risk.lead_time_days}d</td>
                       <td className="px-4 py-3 text-right font-semibold text-amber-700">
                         {fmtGTQ(gtq)}
                       </td>
-                      <td className="px-4 py-3 text-sm text-gray-600">{fechaAgotamiento(risk)}</td>
+                      {!isPerWarehouse && (() => {
+                        const eQty = emergencyQty(risk);
+                        return (
+                          <td className="px-4 py-3 text-right">
+                            {eQty > 0
+                              ? <span className="font-semibold text-red-700">{eQty.toLocaleString('es-GT')}</span>
+                              : <span className="text-gray-300">—</span>
+                            }
+                          </td>
+                        );
+                      })()}
+                      <td className="px-4 py-3 text-right">
+                        <div className="font-semibold text-gray-900 tabular-nums">
+                          {risk.days_of_supply >= 9999 ? '999+ d' : `${Math.round(risk.days_of_supply)}d`}
+                        </div>
+                        <div className="text-xs text-gray-400">{fechaAgotamiento(risk)}</div>
+                      </td>
                       <td className="px-4 py-3 text-center">
                         <span className={`inline-flex px-2.5 py-0.5 rounded-full text-xs font-medium ${RISK_COLORS[risk.risk_level] || 'bg-gray-100 text-gray-600'}`}>
                           {RISK_LABELS[risk.risk_level] || risk.risk_level}

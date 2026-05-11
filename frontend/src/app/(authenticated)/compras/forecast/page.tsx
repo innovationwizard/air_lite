@@ -99,6 +99,19 @@ function furgoVal(units: number | null, volume_m3: number | null): string {
   return ((units * volume_m3) / FURGO_M3).toFixed(1);
 }
 
+function furgoTotalForSort(r: SkuRow, metric: string): number {
+  if (r.volume_m3 == null || r.volume_m3 === 0) return 0;
+  let units = 0;
+  if (metric === '' || metric === 'compras_ordenadas') {
+    units = (r.purchases_ordered_feb ?? 0) + (r.purchases_ordered_mar ?? 0);
+  } else if (metric === 'compras_recibidas') {
+    units = (r.purchases_received_feb ?? 0) + (r.purchases_received_mar ?? 0);
+  } else if (metric === 'ventas') {
+    units = (r.sales_feb ?? 0) + (r.sales_mar ?? 0);
+  }
+  return (units * r.volume_m3) / FURGO_M3;
+}
+
 function downloadCsv(rows: SkuRow[], filterLabel: string) {
   const headers = [
     'SKU', 'Producto', 'Proveedor', 'Unidad de Medida',
@@ -145,6 +158,9 @@ export default function ComprasForecastPage() {
   const historyTipRef = useRef<HTMLDivElement>(null);
   const [metricFilter, setMetricFilter] = useState<'' | 'ventas' | 'compras_ordenadas' | 'compras_recibidas'>('compras_ordenadas');
   const [urgentItems, setUrgentItems] = useState<StockoutRisk[]>([]);
+  const [urgentSkus, setUrgentSkus] = useState<Set<string>>(new Set());
+  const [urgencyFilter, setUrgencyFilter] = useState<'all' | 'urgent' | 'plan'>('all');
+  const [sortByFurgones, setSortByFurgones] = useState(false);
 
   useEffect(() => {
     Promise.all([
@@ -157,11 +173,12 @@ export default function ComprasForecastPage() {
         const combined: ForecastRow[] = [...(feb.forecasts ?? []), ...(mar.forecasts ?? [])];
         setRaw(combined);
         setPurchaseHistory(hist.history ?? {});
-        const urgent = (Array.isArray(risks) ? risks : [])
-          .filter((r: StockoutRisk) => r.days_of_supply < r.lead_time_days)
-          .sort((a: StockoutRisk, b: StockoutRisk) => a.days_of_supply - b.days_of_supply)
-          .slice(0, 5);
-        setUrgentItems(urgent);
+        const allRisks: StockoutRisk[] = Array.isArray(risks) ? risks : [];
+        const atRisk = allRisks.filter((r) => r.days_of_supply < r.lead_time_days);
+        setUrgentSkus(new Set(atRisk.map((r) => r.sku)));
+        setUrgentItems(
+          atRisk.sort((a, b) => a.days_of_supply - b.days_of_supply).slice(0, 5),
+        );
         setLoading(false);
       })
       .catch((e) => { setErr(String(e)); setLoading(false); });
@@ -225,10 +242,17 @@ export default function ComprasForecastPage() {
     });
   }, [raw]);
 
-  const visible = rows.filter((r) => {
-    if (classFilter && r.supplier_class !== classFilter) return false;
-    return tierFilter.has(getCompletenessTier(r.po_history_real_months));
-  });
+  const visible = useMemo(() => {
+    const filtered = rows.filter((r) => {
+      if (classFilter && r.supplier_class !== classFilter) return false;
+      if (!tierFilter.has(getCompletenessTier(r.po_history_real_months))) return false;
+      if (urgencyFilter === 'urgent' && !urgentSkus.has(r.sku)) return false;
+      if (urgencyFilter === 'plan' && urgentSkus.has(r.sku)) return false;
+      return true;
+    });
+    if (!sortByFurgones) return filtered;
+    return [...filtered].sort((a, b) => furgoTotalForSort(b, metricFilter) - furgoTotalForSort(a, metricFilter));
+  }, [rows, classFilter, tierFilter, urgencyFilter, urgentSkus, sortByFurgones, metricFilter]);
 
   const totals = useMemo(() => {
     const sum = (key: keyof SkuRow) => visible.reduce((a, r) => a + Number(r[key] ?? 0), 0);
@@ -343,6 +367,35 @@ export default function ComprasForecastPage() {
             {label}
           </button>
         ))}
+      </div>
+
+      <div className="flex gap-2 items-center flex-wrap">
+        <span className="text-sm text-gray-600">Urgencia:</span>
+        {([
+          { key: 'all'    as const, label: 'Todos' },
+          { key: 'urgent' as const, label: 'Pedir ahora' },
+          { key: 'plan'   as const, label: 'Planificar' },
+        ]).map(({ key, label }) => (
+          <button
+            key={key}
+            onClick={() => setUrgencyFilter(key)}
+            className={`px-3 py-1 text-sm rounded-lg transition-colors ${
+              urgencyFilter === key
+                ? key === 'urgent' ? 'bg-red-600 text-white' : 'bg-gray-900 text-white'
+                : key === 'urgent' ? 'bg-red-50 text-red-700' : 'bg-gray-100 text-gray-700'
+            }`}
+          >
+            {label}{key === 'urgent' && urgentSkus.size > 0 ? ` (${urgentSkus.size})` : ''}
+          </button>
+        ))}
+        <button
+          onClick={() => setSortByFurgones((v) => !v)}
+          className={`ml-auto px-3 py-1 text-sm rounded-lg transition-colors ${
+            sortByFurgones ? 'bg-emerald-600 text-white' : 'bg-gray-100 text-gray-700'
+          }`}
+        >
+          ↓ Furgones
+        </button>
       </div>
 
       <div className="flex gap-2 items-center flex-wrap">

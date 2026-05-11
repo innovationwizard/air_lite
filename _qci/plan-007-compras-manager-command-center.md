@@ -8,8 +8,11 @@
 - [x] Section 0 — confirmed OK
 - [x] Section 1.1 — confirmed OK
 - [ ] Section 1.2 — NOT independently verified by user (no time for independent research). Review interrupted here by context compaction — resume from this section.
-- [ ] Section 1.3 — rewritten to purely prescriptive + UI capacity notes corrected against real_data/ CSVs. NOT confirmed by user.
-- [ ] Section 2 — pending review
+- [x] Section 1.3 — fully confirmed 2026-05-11. Hard gates for both subsections documented in `_qci/pre-production-requirements.md` (gates #1, #4).
+- [x] Section 2.1 — confirmed 2026-05-11
+- [x] Section 2.2 — confirmed 2026-05-11
+- [ ] Section 2.3 — implemented 2026-05-11 (items 1+2 built, item 3 deferred); pending user confirmation
+- [ ] Section 2.4 — pending review
 - [ ] Section 3 — pending review
 - [ ] Section 4 — pending review
 - [ ] Section 5 — pending review
@@ -172,33 +175,65 @@ The compras manager should open the app and immediately see — without clicking
 - How many SKUs need orders placed THIS WEEK (will breach reorder point within lead time)
 - Average days of supply across all active SKUs
 
+> **UI capacity note — source: `supabase/migrations/20260511000001_fix_rpc_demand_signal.sql` (rpc_stockout_risks lines 80–104) + `compras/page.tsx` lines 104–108:** "Cobertura promedio" is a **simple unweighted arithmetic mean** of `days_of_supply` across all rows returned by `rpc_stockout_risks()`. "Active" is defined by two criteria applied in the RPC: (1) `products.is_active = true` in Odoo; (2) `AVG(demand_daily.quantity_sold) > 0` in the 90-day window before the snapshot. This produces **747 products**; the remaining active products with zero demand in that window are excluded (no demand signal → no meaningful coverage ratio). `days_of_supply` per product is computed as `SUM(inventory_daily.quantity_on_hand)` across **all warehouses** at the snapshot date, divided by company-wide `AVG(demand_daily.quantity_sold)`. A product with 300 units in Bodega 1 and 0 in Bodega 2 shows the same days-of-supply as if stock were evenly distributed — location imbalance is invisible in this metric. The mean is unweighted: a slow-moving CZ product with 400 days of supply contributes equally to the average as a fast-moving AX product with 15 days of supply, biasing the company-wide figure upward. A revenue-weighted or inventory-value-weighted average would be more operationally precise but is not currently implemented. Current observed value: **20d** (2026-05-11). All aggregation is server-side; the metric scales to any active product count without frontend impact.
+
 **Order plan this week:**
 - CARVAJAL: N SKUs to order / Q XXX,XXX / X.X furgones
 - REYMA: N SKUs to order / Q XXX,XXX / X.X furgones
+
+> **UI capacity note — source: `frontend/src/app/api/kpis/order-plan/route.ts` + `products_acid_test_active` table schema:** The order plan panel is **explicitly scoped to 23 demo SKUs** (`is_top_10_in_class = true` in `products_acid_test_active`), grouped into 2 `supplier_class` values: CARVAJAL (11 SKUs) and REYMA (12 SKUs). `supplier_class` is a column that exists **only in `products_acid_test_active`** — it is not present on the general `products` table. The route does not join to any broader product universe; expanding the order plan to cover additional products would require: (1) adding a `supplier_class` field to those products in `products_acid_test_active` or an equivalent table, (2) rebuilding the panel UI with a scrollable supplier list capable of handling all 74 supplier entries with confirmed/received POs in PLASTICENTRO's Odoo (hard gate documented in `_qci/pre-production-requirements.md` §3). Current UI renders 2 rows; the flat layout is adequate for the demo scope and unnavigable beyond ~5 suppliers.
 
 ---
 
 ### 2.2 On the Forecast Page (`/compras/forecast`)
 
-Per SKU, per month (April & May from the March 3 snapshot):
+Per SKU, per month (**February & March** from the March 3 snapshot — confirmed 2026-05-11):
 
-| Column | What it shows | Why the compras manager needs it |
+> **Blind test scope:** The ML model was trained through January 31, 2026. Decision makers have real February & March 2026 outcomes on their screens and are evaluating this system's forecasts against them. Showing Feb & Mar is the correct window: both months are verifiable, which is where trust is built or lost. The current page hardcodes Feb & Mar — this is intentional and correct, not a bug.
+
+#### Design pattern: metric-filter progressive disclosure (mirrors `/gerencia/forecast`)
+
+Rather than a flat 9-column table, the page uses a **metric filter** — the same pattern as the blind test page. The user selects one metric group at a time; only that group's columns are rendered. This keeps the table to 4–5 visible columns in any given view instead of an unnavigable 9-column wall.
+
+**Metric filter buttons** (same pill-button row as the blind test page):
+
+| Filter state | Columns shown | Purpose |
 |---|---|---|
-| SKU / Producto | Identity | Obvious |
-| Proveedor + UoM | CARVAJAL/REYMA + CAJA40/FARDO10/etc. | Order quantities depend on packing unit |
-| Stock actual | Units on hand at March 3 | Starting point for the order calculation |
-| Ventas pronosticadas | Units predicted to sell that month (Prophet output) | Demand signal — the "why" behind the order |
-| Compras recomendadas | Units to order (formula in Section 3) | THE answer to "how much?" |
-| Furgones recomendados | (compras_recomendadas × volume_m3) / 122 | Freight planning — the answer to "can it fit?" |
-| Punto de reorden | ROP = (demand × lead_time) + safety_stock | When to pull the trigger |
-| Cobertura actual | current_stock / avg_daily_demand | Days left before stockout |
-| Calidad del dato | Datos completos / parciales / insuficientes | How much to trust the forecast |
+| **Compras recomendadas** ← default | Feb rec. units · Mar rec. units · Feb furgones rec. · Mar furgones rec. | The primary action: what to put on the PO |
+| **Ventas pronosticadas** | Feb forecast units · Mar forecast units · Feb furgones demanda · Mar furgones demanda | The demand signal: why those quantities |
+| **Todo** | All of the above side by side | Full data dump for power users |
 
-**Per-supplier summary row (CARVAJAL total / REYMA total):**
-- Total Σ compras_recomendadas (units)
-- Total Σ GTQ value (units × unit_cost)
-- Total Σ furgones
-- Truck fill indicator: "89.2 furgones → 89 full trucks + 1 at 20% capacity — consider adding Q X,XXX of product to fill it"
+**Sticky SKU column** (always visible regardless of metric filter — same pattern as blind test page):
+
+| Field | What it shows |
+|---|---|
+| SKU + product name | Identity |
+| Supplier pill + UoM pill | CARVAJAL/REYMA + CAJA40/FARDO10/etc. |
+| Completeness tier pill | Datos completos / parciales / insuficientes (green/amber/red — same logic as blind test page: based on `po_history_real_months`) |
+| Stock actual | Units on hand at March 3 — the starting point |
+| Cobertura actual | `current_stock / avg_daily_demand` in days — urgency signal, visible at all times |
+
+**Supporting context per SKU** (available via `ℹ` popover on click — not a table column):
+- Punto de reorden: `avg_daily_demand × (lead_time_days + safety_stock_days)`
+- Lead time days + safety stock days by ABC/XYZ cell
+- ROP breach status: already past / will breach within 7 days / safe
+
+**Color coding** (mirrors blind test page):
+- Compras recomendadas group → blue (`bg-blue-50/60`, `text-blue-900`)
+- Ventas pronosticadas group → emerald (`bg-emerald-50/60`, `text-emerald-900`)
+- Furgones columns → darker shade of the same hue, `font-semibold`
+
+**Per-supplier totals section** (below the table, not a tfoot row — two supplier blocks side by side):
+
+```
+CARVAJAL (N SKUs)                    REYMA (N SKUs)
+Compras rec.: X,XXX unidades         Compras rec.: X,XXX unidades
+Valor total:  Q XXX,XXX              Valor total:  Q XXX,XXX
+Furgones:     X.X furgones           Furgones:     X.X furgones
+[truck fill indicator if applicable] [truck fill indicator if applicable]
+```
+
+Truck fill indicator: shown when `furgones mod 1 > 0.6` (the last truck is more than 60% empty — worth flagging). Example: "34.8 furgones → 34 completos + 1 al 80% — considera agregar Q X,XXX para completarlo."
 
 ---
 

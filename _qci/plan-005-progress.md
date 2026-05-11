@@ -12,7 +12,7 @@
 | B1 | Read all source files | ✅ Done | All 10 files read; full schema confirmed |
 | B2+B4+B7 | P1+P2+P7 Hot List: GTQ + filters + CSV + migration | ✅ Done | Migration 20260508000001 pushed; page rewritten |
 | B3+B5+B10+B7 | P1+P2+P6+P7 Hold List: GTQ + filters + policy tooltip + CSV + migration | ✅ Done | Migration 20260508000002 pushed; page rewritten |
-| B6 | P3 Días de Inventario: policy badge + cobertura efectiva + GTQ + CSV | 🔄 In progress | |
+| B6 | P3 Días de Inventario: policy badge + cobertura efectiva + GTQ + CSV | ✅ Done | All P3 acceptance criteria confirmed by code review 2026-05-11. Status log was not updated before context compaction. |
 | B7 | P4 Forecast for COMPRAS role + sidebar | ✅ Done | /compras/forecast created; sidebar updated; compras/page.tsx updated |
 | B8 | P5 Inicio Compras command center | ✅ Done | compras/page.tsx rewritten with live KPI cards + Top 5 exceptions |
 | B9 | P5 Inicio Operaciones command center | ✅ Done | operaciones/page.tsx rewritten with live KPIs + distribution bar + Top 5 |

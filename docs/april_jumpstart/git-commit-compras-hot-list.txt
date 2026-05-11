@@ -1,0 +1,35 @@
+feat: Hot List emergency qty + forecast urgency filter + furgones sort + /poc/programacion disabled
+
+Hot List (/preocupaciones/desabastecimiento)
+- stockout-risk API route now fetches rpc_abc_xyz_classification in parallel and
+  joins abc_class/xyz_class onto each row by product_id — no new migration required
+- New emergencyQty() function: max(0, ceil(ROP − current_stock)) using per-cell
+  safety stock days (AX=3 through CZ=14, default 7); SKUs with lead_time=0 or
+  avg_demand=0 return 0
+- New "Pedido urgente" column (company-wide view only — hidden per-warehouse to
+  avoid misleading single-location stock calculations); red bold when > 0, "—" when 0
+- "Días" and "Se agota" columns merged into one cell: bold Xd primary, date secondary
+- CSV export updated with "Pedido urgente (unidades)" column
+
+Forecast (/compras/forecast)
+- Full urgentSkus Set<string> now built from complete stockout-risk fetch (was
+  discarded after slicing top 5 for the banner); basis for the new urgency filter
+- New "Urgencia" filter row: Todos / Pedir ahora (N) / Planificar — red styling on
+  urgent button; badge shows count of at-risk SKUs
+- New "↓ Furgones" sort toggle (right-aligned): sorts visible rows by
+  (feb + mar units × volume_m3) / 122 descending for the active metric
+- visible array converted from plain filter() to useMemo — urgency, class, tier,
+  and sort all applied in one memoized pass
+
+Navigation
+- /poc/programacion disabled at all three UI entry points (FearsSidebar COMPRAS
+  section, FearsSidebar Prueba de Concepto section, compras/page.tsx nav card):
+  renders as opacity-40 cursor-not-allowed <div>, no active href
+- NavItem interface extended with disabled?: boolean
+- Pre-production gates #9 and #10 document what must be built before re-enabling:
+  live run generation, furgones totals, delivery date per line, supplier UoM display,
+  and all Section 3.1/3.2/3.3 items that depend on it
+
+Other
+- New _qci/pre-production-requirements.md — durable record of 10 scale gates
+- changelogs/2026-05-11_hot-list-emergency-qty-forecast-filters.md added
