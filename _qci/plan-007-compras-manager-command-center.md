@@ -11,15 +11,15 @@
 - [x] Section 1.3 — fully confirmed 2026-05-11. Hard gates for both subsections documented in `_qci/pre-production-requirements.md` (gates #1, #4).
 - [x] Section 2.1 — confirmed 2026-05-11
 - [x] Section 2.2 — confirmed 2026-05-11
-- [ ] Section 2.3 — implemented 2026-05-11 (items 1+2 built, item 3 deferred); pending user confirmation
-- [ ] Section 2.4 — assessed 2026-05-11; 1 of 4 items present (reasoning); nav disabled (gate #9); pending user confirmation
+- [x] Section 2.3 — confirmed 2026-05-11. Item 1 (emergency order qty) ✅. Item 2 (days display) ✅. Item 3 (historical alert frequency) deferred ✅.
+- [x] Section 2.4 — deferred 2026-05-11. All 4 items in this section depend on `/poc/programacion` being operational. That page is historical playback only — no live run generation, no delivery date per line, no furgones totals, no supplier UoM. Navigation to the page is disabled (gate #9). This section cannot be completed until gate #9 is resolved. Deferred by user decision — not abandoned, blocked by upstream prerequisite.
 - [x] Section 3.1 — items 1+2 implemented 2026-05-11; item 3 blocked by gate #9; confirmed
 - [x] Section 3.2 — all currently buildable exports done; 2 missing items blocked by upstream features; confirmed
 - [ ] Section 3.3 — assessed 2026-05-11; entirely blocked by gate #9; pending user confirmation
 - [x] Section 4 — stale subsections updated 2026-05-11 (4.1, 4.2, 4.4, 4.6, 4.7); confirmed
-- [ ] Section 5 — pending review
-- [ ] Section 6 — pending review
-- [ ] Section 7 — pending review
+- [x] Section 5 — confirmed 2026-05-11 (P1 struck/superseded; P2/P4/P6 done; P3 unimplemented gate #7; P5 blocked gate #9)
+- [x] Section 6 — confirmed 2026-05-11 (implementation table updated with done/blocked statuses)
+- [x] Section 7 — confirmed 2026-05-11 (emergency_qty row noted done; remaining rows valid future deliverables)
 
 ---
 

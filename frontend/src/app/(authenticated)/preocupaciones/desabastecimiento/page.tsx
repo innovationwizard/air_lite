@@ -187,6 +187,20 @@ export default function DesabastecimientoPage() {
   const critical = risks.filter((r) => r.risk_level === 'critico').length;
   const filteredGtq = useMemo(() => filtered.reduce((s, r) => s + gtqEnRiesgo(r), 0), [filtered]);
 
+  // Build surplus map: sku → warehouse with most surplus (days > lead_time × 3)
+  const surplusMap = useMemo(() => {
+    const map = new Map<string, { warehouse_name: string; days_of_supply: number }>();
+    for (const wr of warehouseRisks) {
+      if (wr.lead_time_days > 0 && wr.days_of_supply > wr.lead_time_days * 3) {
+        const existing = map.get(wr.sku);
+        if (!existing || wr.days_of_supply > existing.days_of_supply) {
+          map.set(wr.sku, { warehouse_name: wr.warehouse_name, days_of_supply: wr.days_of_supply });
+        }
+      }
+    }
+    return map;
+  }, [warehouseRisks]);
+
   const hasFilters = riskFilter !== null || supplierFilter !== 'all' || warehouseFilter !== 'all' || search.trim() !== '';
 
   return (
@@ -376,12 +390,18 @@ export default function DesabastecimientoPage() {
                       </td>
                       {!isPerWarehouse && (() => {
                         const eQty = emergencyQty(risk);
+                        const surplus = surplusMap.get(risk.sku);
                         return (
                           <td className="px-4 py-3 text-right">
                             {eQty > 0
                               ? <span className="font-semibold text-red-700">{eQty.toLocaleString('es-GT')}</span>
                               : <span className="text-gray-300">—</span>
                             }
+                            {eQty > 0 && surplus && (
+                              <div className="text-[10px] text-teal-700 bg-teal-50 border border-teal-100 rounded px-1.5 py-0.5 mt-1 text-left leading-tight whitespace-nowrap">
+                                ↑ Excedente en {surplus.warehouse_name} — trasladar primero
+                              </div>
+                            )}
                           </td>
                         );
                       })()}

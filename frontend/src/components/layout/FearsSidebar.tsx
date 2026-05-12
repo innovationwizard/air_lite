@@ -145,6 +145,18 @@ const allNavGroups: NavGroup[] = [
         icon: Snowflake,
         subtitle: 'Sobrante — no traer más',
       },
+      {
+        name: 'Costos de Almacenamiento',
+        href: '/preocupaciones/costos-almacenamiento',
+        icon: Warehouse,
+        subtitle: 'Inventario lento y muerto',
+      },
+      {
+        name: 'Compras Innecesarias',
+        href: '/preocupaciones/compras-innecesarias',
+        icon: ShoppingCart,
+        subtitle: 'Compras que no debían hacerse',
+      },
     ],
   },
   {

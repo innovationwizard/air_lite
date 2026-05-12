@@ -77,10 +77,42 @@ function coberturaEfectiva(r: DaysOfInventoryRow): { value: number | null; label
   return { value: eff, label: `${eff.toFixed(0)}d`, cls: 'text-gray-700' };
 }
 
-function exportCSV(rows: DaysOfInventoryRow[]) {
+function buildTransferMap(allRows: DaysOfInventoryRow[]) {
+  const skuHot = new Map<string, string[]>();
+  const skuHold = new Map<string, string[]>();
+  for (const r of allRows) {
+    if (r.status === 'hot') {
+      const arr = skuHot.get(r.sku) ?? [];
+      arr.push(r.warehouse_name);
+      skuHot.set(r.sku, arr);
+    } else if (r.status === 'hold') {
+      const arr = skuHold.get(r.sku) ?? [];
+      arr.push(r.warehouse_name);
+      skuHold.set(r.sku, arr);
+    }
+  }
+  const result = new Map<string, { hotWarehouses: string[]; holdWarehouses: string[] }>();
+  for (const [sku, hotWhs] of skuHot.entries()) {
+    const holdWhs = skuHold.get(sku);
+    if (holdWhs && holdWhs.length > 0) {
+      result.set(sku, { hotWarehouses: hotWhs, holdWarehouses: holdWhs });
+    }
+  }
+  return result;
+}
+
+function transferLabel(r: DaysOfInventoryRow, transferMap: Map<string, { hotWarehouses: string[]; holdWarehouses: string[] }>): string | null {
+  const t = transferMap.get(r.sku);
+  if (!t) return null;
+  if (r.status === 'hot') return `← Trasladar desde ${t.holdWarehouses[0]}`;
+  if (r.status === 'hold') return `→ Trasladar a ${t.hotWarehouses[0]}`;
+  return null;
+}
+
+function exportCSV(rows: DaysOfInventoryRow[], tMap: Map<string, { hotWarehouses: string[]; holdWarehouses: string[] }>) {
   const headers = [
     'Producto', 'SKU', 'Bodega', 'Stock', 'Demanda/día', 'Días',
-    'Lead time', 'Cobertura efectiva', 'GTQ en stock', 'vs. Política', 'Estado',
+    'Lead time', 'Cobertura efectiva', 'GTQ en stock', 'vs. Política', 'Estado', 'Acción',
   ];
   const lines = rows.map((r) => {
     const ps = policyStatus(r);
@@ -97,6 +129,7 @@ function exportCSV(rows: DaysOfInventoryRow[]) {
       r.inventory_value_gtq.toFixed(0),
       POLICY_BADGE[ps].label,
       STATUS_STYLE[r.status].label,
+      `"${transferLabel(r, tMap) ?? '—'}"`,
     ].join(',');
   });
   const csv = '﻿' + [headers.join(','), ...lines].join('\n');
@@ -176,6 +209,9 @@ export default function DiasInventarioPage() {
     return pool;
   }, [rows, statusFilter, warehouseFilter, search]);
 
+  // Transfer opportunities: SKUs with hot in one warehouse and hold in another
+  const tMap = useMemo(() => buildTransferMap(rows), [rows]);
+
   const snapshotLabel = rows.length > 0 ? formatDate(rows[0].snapshot_date) : null;
 
   return (
@@ -194,7 +230,7 @@ export default function DiasInventarioPage() {
           )}
         </div>
         <button
-          onClick={() => exportCSV(filtered)}
+          onClick={() => exportCSV(filtered, tMap)}
           className="flex items-center gap-2 px-3 py-2 text-sm border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
         >
           <Download className="w-4 h-4" />
@@ -269,15 +305,16 @@ export default function DiasInventarioPage() {
                 <th className="text-right px-4 py-3 font-medium text-gray-500">GTQ en stock</th>
                 <th className="text-center px-4 py-3 font-medium text-gray-500">vs. Política</th>
                 <th className="text-center px-4 py-3 font-medium text-gray-500">Estado</th>
+                <th className="text-left px-4 py-3 font-medium text-gray-500">Acción</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
               {loading ? (
-                <tr><td colSpan={11} className="px-4 py-8 text-center text-gray-400">Cargando datos…</td></tr>
+                <tr><td colSpan={12} className="px-4 py-8 text-center text-gray-400">Cargando datos…</td></tr>
               ) : error ? (
-                <tr><td colSpan={11} className="px-4 py-8 text-center text-red-500">No se pudieron cargar los datos.</td></tr>
+                <tr><td colSpan={12} className="px-4 py-8 text-center text-red-500">No se pudieron cargar los datos.</td></tr>
               ) : filtered.length === 0 ? (
-                <tr><td colSpan={11} className="px-4 py-8 text-center text-gray-400">No hay resultados para los filtros seleccionados.</td></tr>
+                <tr><td colSpan={12} className="px-4 py-8 text-center text-gray-400">No hay resultados para los filtros seleccionados.</td></tr>
               ) : (
                 filtered.slice(0, PAGE_SIZE).map((r) => {
                   const s = STATUS_STYLE[r.status];
@@ -316,6 +353,14 @@ export default function DiasInventarioPage() {
                           <Icon className="w-3 h-3" />
                           {s.label}
                         </span>
+                      </td>
+                      <td className="px-4 py-3 text-xs font-medium">
+                        {(() => {
+                          const lbl = transferLabel(r, tMap);
+                          return lbl
+                            ? <span className="text-teal-700">{lbl}</span>
+                            : <span className="text-gray-300">—</span>;
+                        })()}
                       </td>
                     </tr>
                   );

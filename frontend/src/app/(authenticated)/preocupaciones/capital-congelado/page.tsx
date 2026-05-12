@@ -23,6 +23,17 @@ interface AbcXyzItem {
   supplier_name: string | null;
 }
 
+interface SlowMovingItem {
+  sku: string;
+  classification: string;
+}
+
+interface WarehouseRiskItem {
+  sku: string;
+  risk_level: string;
+  warehouse_name: string;
+}
+
 const ABC_COLORS: Record<string, string> = {
   A: 'bg-emerald-100 text-emerald-700',
   B: 'bg-blue-100 text-blue-700',
@@ -70,11 +81,22 @@ function fmtGTQ(n: number): string {
   return 'Q ' + n.toLocaleString('es-GT', { maximumFractionDigits: 0 });
 }
 
-function exportCSV(rows: AbcXyzItem[]) {
+function dispositionAction(
+  sku: string,
+  deadSkus: Set<string>,
+  hotWarehouseMap: Map<string, string>,
+): string {
+  const hotWh = hotWarehouseMap.get(sku);
+  if (hotWh) return `→ Trasladar a ${hotWh}`;
+  if (deadSkus.has(sku)) return '→ Evaluar devolución o liquidación';
+  return '→ No reordenar';
+}
+
+function exportCSV(rows: AbcXyzItem[], deadSkus: Set<string>, hotWarehouseMap: Map<string, string>) {
   const headers = [
     'Producto', 'SKU', 'Categoría', 'Proveedor', 'Ingresos', 'ABC', 'XYZ',
     'CV demanda', 'Confianza', 'Stock actual', 'GTQ inmovilizado', 'Costo por día',
-    'Nivel de servicio', 'Stock de seguridad', 'Frecuencia revisión',
+    'Nivel de servicio', 'Stock de seguridad', 'Frecuencia revisión', 'Acción sugerida',
   ];
   const lines = rows.map((item) => {
     const cell = item.abc_class + item.xyz_class;
@@ -95,6 +117,7 @@ function exportCSV(rows: AbcXyzItem[]) {
       policy.serviceLevel,
       policy.safetyStock,
       policy.reviewFreq,
+      `"${dispositionAction(item.sku, deadSkus, hotWarehouseMap)}"`,
     ].join(',');
   });
   const csv = '﻿' + [headers.join(','), ...lines].join('\n');
@@ -109,6 +132,8 @@ function exportCSV(rows: AbcXyzItem[]) {
 
 export default function CapitalCongeladoPage() {
   const [items, setItems] = useState<AbcXyzItem[]>([]);
+  const [slowMoving, setSlowMoving] = useState<SlowMovingItem[]>([]);
+  const [warehouseRisks, setWarehouseRisks] = useState<WarehouseRiskItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [policyTooltip, setPolicyTooltip] = useState<string | null>(null);
 
@@ -120,10 +145,15 @@ export default function CapitalCongeladoPage() {
   const [sortBy, setSortBy] = useState<'gtq' | 'abc' | 'cv'>('gtq');
 
   useEffect(() => {
-    fetch('/api/kpis/abc-xyz')
-      .then((res) => res.json())
-      .then((data) => {
-        setItems(Array.isArray(data) ? data : []);
+    Promise.all([
+      fetch('/api/kpis/abc-xyz').then((r) => r.json()),
+      fetch('/api/kpis/slow-moving').then((r) => r.json()),
+      fetch('/api/kpis/stockout-risk-by-warehouse').then((r) => r.json()),
+    ])
+      .then(([abcData, slowData, warehouseData]) => {
+        setItems(Array.isArray(abcData) ? abcData : []);
+        setSlowMoving(Array.isArray(slowData) ? slowData : []);
+        setWarehouseRisks(Array.isArray(warehouseData) ? warehouseData : []);
         setLoading(false);
       })
       .catch(() => setLoading(false));
@@ -133,6 +163,24 @@ export default function CapitalCongeladoPage() {
     const names = new Set(items.map((i) => i.supplier_name).filter(Boolean) as string[]);
     return Array.from(names).sort();
   }, [items]);
+
+  const deadSkus = useMemo(() => {
+    const s = new Set<string>();
+    for (const sm of slowMoving) {
+      if (sm.classification === 'Inventario muerto') s.add(sm.sku);
+    }
+    return s;
+  }, [slowMoving]);
+
+  const hotWarehouseMap = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const wr of warehouseRisks) {
+      if ((wr.risk_level === 'critico' || wr.risk_level === 'alto') && !m.has(wr.sku)) {
+        m.set(wr.sku, wr.warehouse_name);
+      }
+    }
+    return m;
+  }, [warehouseRisks]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -167,7 +215,7 @@ export default function CapitalCongeladoPage() {
           </p>
         </div>
         <button
-          onClick={() => exportCSV(filtered)}
+          onClick={() => exportCSV(filtered, deadSkus, hotWarehouseMap)}
           className="flex items-center gap-2 px-3 py-2 text-sm border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
         >
           <Download className="w-4 h-4" />
@@ -286,12 +334,13 @@ export default function CapitalCongeladoPage() {
                 <th className="text-right px-4 py-3 font-medium text-gray-500">GTQ inmovilizado</th>
                 <th className="text-right px-4 py-3 font-medium text-gray-500">Costo/día</th>
                 <th className="text-center px-4 py-3 font-medium text-gray-500">Política</th>
+                <th className="text-left px-4 py-3 font-medium text-gray-500">Acción sugerida</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
               {loading ? (
                 <tr>
-                  <td colSpan={9} className="px-4 py-8 text-center text-gray-400">Cargando clasificación...</td>
+                  <td colSpan={10} className="px-4 py-8 text-center text-gray-400">Cargando clasificación...</td>
                 </tr>
               ) : (
                 filtered.slice(0, 100).map((item) => {
@@ -340,6 +389,13 @@ export default function CapitalCongeladoPage() {
                             </div>
                           </div>
                         )}
+                      </td>
+                      <td className={`px-4 py-3 text-xs font-medium ${
+                        hotWarehouseMap.has(item.sku) ? 'text-teal-700' :
+                        deadSkus.has(item.sku) ? 'text-red-700' :
+                        'text-purple-700'
+                      }`}>
+                        {dispositionAction(item.sku, deadSkus, hotWarehouseMap)}
                       </td>
                     </tr>
                   );

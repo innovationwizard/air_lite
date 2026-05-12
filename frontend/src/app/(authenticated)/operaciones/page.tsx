@@ -115,7 +115,7 @@ export default function OperacionesHomePage() {
   const top5Criticos = useMemo(
     () => [...risks]
       .filter((r) => r.risk_level === 'critico' || r.risk_level === 'alto')
-      .sort((a, b) => a.days_of_supply - b.days_of_supply)
+      .sort((a, b) => gtqEnRiesgo(b) - gtqEnRiesgo(a))
       .slice(0, 5),
     [risks],
   );
@@ -223,7 +223,7 @@ export default function OperacionesHomePage() {
             <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
               <h2 className="font-semibold text-gray-900 text-sm flex items-center gap-2">
                 <AlertTriangle className="w-4 h-4 text-red-500" />
-                Top 5 Críticos — Por urgencia
+                Top 5 — Por impacto financiero
               </h2>
               <Link href="/preocupaciones/desabastecimiento" className="text-xs text-emerald-600 hover:underline flex items-center gap-1">
                 Ver todos <ArrowRight className="w-3 h-3" />

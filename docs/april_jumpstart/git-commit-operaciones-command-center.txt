@@ -1,0 +1,54 @@
+feat: Operaciones Manager Command Center — Plan 011
+
+6 priorities, 1 new API route, 7 files updated, 0 new SQL migrations.
+TypeScript: 0 errors.
+
+P1 — Fix financial sort on Operaciones Top 5 panel
+operaciones/page.tsx line 118: sort was days_of_supply ASC (urgency).
+Changed to gtqEnRiesgo DESC (financial impact). gtqEnRiesgo already
+existed in the file; no new code needed. Header updated to "Top 5 —
+Por impacto financiero" to match the sort semantics.
+
+P2 — Costos de Almacenamiento + Compras Innecesarias in OPERACIONES sidebar
+FearsSidebar.tsx: two items appended to the Operaciones nav group.
+Both icons (Warehouse, ShoppingCart) were already imported. The
+CAN_VIEW_OPERACIONES role guard covers them automatically.
+
+P3 — New API route + full Compras Innecesarias page
+/api/kpis/unnecessary-purchases: identifies SKUs received in the
+90-day window (Dec 3 2025 – Mar 3 2026) that are currently over max
+policy (lead_time_days × 3 × avg_daily_demand). Gate #5 compliant:
+avg_daily_demand sourced from revenue_daily metric='sales', not from
+rpc_abc_xyz_classification (known-zero bug). Returns units_received,
+gtq_paid, current_days, max_policy_days, gtq_inmovilizado,
+days_until_policy, sorted by gtq_paid DESC.
+compras-innecesarias/page.tsx rebuilt from redirect stub to full page:
+3 KPI cards, supplier filter, search, 8-column table, CSV export.
+
+P4 — Costos de Almacenamiento upgrade
+Added HOLDING_COST_RATE = 0.18 and costoPorDia helper. Third KPI card
+changed from "Valor total" to "Costo por día" (sum of daily carrying
+costs for all problematic classifications). New table columns: Costo/día
+(orange) and Acción (color-coded: → Evaluar devolución o liquidación /
+→ Promocionar o reubicar / → Revisar política). New classification
+filter chips. Row limit: 50 → 100. colSpan: 6 → 8.
+
+P5 — Transfer opportunity signal (two pages)
+desabastecimiento: surplusMap useMemo built from existing warehouseRisks
+state (no new API call) — sku → warehouse with most excess
+(days_of_supply > lead_time_days × 3). When emergencyQty > 0 and a
+surplus warehouse exists, teal badge shown in the Pedido urgente cell:
+"↑ Excedente en {warehouse} — trasladar primero".
+dias-inventario: buildTransferMap pure function scans all rows for SKUs
+that have both hot and hold status across different warehouses. New 12th
+column "Acción": hot rows → "← Trasladar desde {hold_wh}", hold rows →
+"→ Trasladar a {hot_wh}". CSV export updated. colSpan: 11 → 12.
+
+P6 — Disposition recommendation on Hold List
+capital-congelado: parallel-fetches /api/kpis/slow-moving and
+/api/kpis/stockout-risk-by-warehouse alongside existing abc-xyz call.
+Builds deadSkus Set (classification='Inventario muerto') and
+hotWarehouseMap (first critico/alto warehouse per sku). New 10th column
+"Acción sugerida" via dispositionAction(): transfer > liquidation >
+no-reorder, in that priority order. Teal/red/purple color coding.
+CSV export updated. colSpan: 9 → 10.
