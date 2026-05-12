@@ -199,8 +199,12 @@ export default function ForecastPage() {
     }
     const rect = e.currentTarget.getBoundingClientRect();
     const tooltipWidth = 340;
+    const tooltipHeight = 340; // 12 months × ~20px + header + padding
     const left = Math.min(rect.left, window.innerWidth - tooltipWidth - 8);
-    const top = rect.bottom + 6;
+    const spaceBelow = window.innerHeight - rect.bottom - 8;
+    const top = spaceBelow >= tooltipHeight
+      ? rect.bottom + 6
+      : Math.max(8, rect.top - tooltipHeight - 6);
     setOpenHistoryTip(sku);
     setTipPos({ top, left });
   }, [openHistoryTip]);
@@ -519,7 +523,7 @@ export default function ForecastPage() {
         return (
           <div
             ref={historyTipRef}
-            style={{ position: 'fixed', top: tipPos.top, left: tipPos.left, zIndex: 9999 }}
+            style={{ position: 'fixed', top: tipPos.top, left: tipPos.left, zIndex: 9999, maxHeight: 'calc(100vh - 16px)', overflowY: 'auto' }}
             className="w-[360px] rounded-lg border border-gray-200 bg-white shadow-xl p-3 text-xs"
           >
             <div className="font-semibold text-gray-900 mb-0.5 font-mono">{openHistoryTip}</div>

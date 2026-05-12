@@ -125,28 +125,60 @@ export default function ComprasHomePage() {
       {/* KPI Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div className="bg-red-50 border border-red-100 rounded-xl p-4">
-          <p className="text-xs text-red-700 font-medium">Excepciones activas</p>
+          <div className="flex items-center gap-1">
+            <p className="text-xs text-red-700 font-medium">Excepciones activas</p>
+            <div className="relative group inline-block">
+              <Info className="w-3 h-3 text-red-400 cursor-help" />
+              <div className="absolute z-10 hidden group-hover:block bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 bg-gray-900 text-white text-xs rounded-lg p-3 shadow-lg pointer-events-none">
+                SKUs con nivel de urgencia Crítico o Alto. Incluye riesgo de desabasto, exceso de stock y compras sin justificación de demanda.
+              </div>
+            </div>
+          </div>
           <p className="text-3xl font-bold text-red-700 mt-1">
             {loading ? '—' : excepcionesCount}
           </p>
           <p className="text-xs text-red-500 mt-0.5">Crítico + Alto</p>
         </div>
         <div className="bg-amber-50 border border-amber-100 rounded-xl p-4">
-          <p className="text-xs text-amber-700 font-medium">GTQ en riesgo</p>
+          <div className="flex items-center gap-1">
+            <p className="text-xs text-amber-700 font-medium">GTQ en riesgo</p>
+            <div className="relative group inline-block">
+              <Info className="w-3 h-3 text-amber-400 cursor-help" />
+              <div className="absolute z-10 hidden group-hover:block bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 bg-gray-900 text-white text-xs rounded-lg p-3 shadow-lg pointer-events-none">
+                Valor en quetzales de las ventas proyectadas que se perderían si no se emiten órdenes de compra para los SKUs en desabasto crítico o alto.
+              </div>
+            </div>
+          </div>
           <p className="text-xl font-bold text-amber-700 mt-1 leading-tight">
             {loading ? '—' : fmtGTQ(totalGtqEnRiesgo)}
           </p>
           <p className="text-xs text-amber-500 mt-0.5">Si no se actúa</p>
         </div>
         <div className="bg-blue-50 border border-blue-100 rounded-xl p-4">
-          <p className="text-xs text-blue-700 font-medium">GTQ inmovilizado</p>
+          <div className="flex items-center gap-1">
+            <p className="text-xs text-blue-700 font-medium">GTQ inmovilizado</p>
+            <div className="relative group inline-block">
+              <Info className="w-3 h-3 text-blue-400 cursor-help" />
+              <div className="absolute z-10 hidden group-hover:block bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 bg-gray-900 text-white text-xs rounded-lg p-3 shadow-lg pointer-events-none">
+                Capital en quetzales atrapado en inventario que supera la política de stock máximo. Representa liquidez que podría liberarse reduciendo compras futuras.
+              </div>
+            </div>
+          </div>
           <p className="text-xl font-bold text-blue-700 mt-1 leading-tight">
             {loading ? '—' : fmtGTQ(totalGtqInmovilizado)}
           </p>
           <p className="text-xs text-blue-500 mt-0.5">Sobre política máxima</p>
         </div>
         <div className="bg-white border border-gray-200 rounded-xl p-4">
-          <p className="text-xs text-gray-500 font-medium">Cobertura promedio</p>
+          <div className="flex items-center gap-1">
+            <p className="text-xs text-gray-500 font-medium">Cobertura promedio</p>
+            <div className="relative group inline-block">
+              <Info className="w-3 h-3 text-gray-400 cursor-help" />
+              <div className="absolute z-10 hidden group-hover:block bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 bg-gray-900 text-white text-xs rounded-lg p-3 shadow-lg pointer-events-none">
+                Promedio de días de stock disponible en todos los SKUs activos, considerando la demanda diaria promedio de los últimos 90 días.
+              </div>
+            </div>
+          </div>
           <p className="text-3xl font-bold text-gray-900 mt-1">
             {loading ? '—' : coberturaPromedio !== null ? `${coberturaPromedio.toFixed(0)}d` : '—'}
           </p>
