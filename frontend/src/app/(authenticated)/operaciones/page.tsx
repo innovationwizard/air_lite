@@ -171,45 +171,53 @@ export default function OperacionesHomePage() {
           <p className="text-sm font-medium text-gray-700 mb-3">Distribución de inventario ({total} SKUs)</p>
           <div className="flex rounded-full overflow-hidden h-4 gap-px">
             {distrib.critico > 0 && (
-              <div
-                className="bg-red-500"
+              <Link
+                href="/preocupaciones/desabastecimiento?risk=critico"
+                className="bg-red-500 hover:brightness-110 transition-[filter] cursor-pointer"
                 style={{ width: `${(distrib.critico / total) * 100}%` }}
-                title={`Crítico: ${distrib.critico}`}
+                title={`Crítico: ${distrib.critico} — ver en Hot List`}
               />
             )}
             {distrib.alto > 0 && (
-              <div
-                className="bg-orange-400"
+              <Link
+                href="/preocupaciones/desabastecimiento?risk=alto"
+                className="bg-orange-400 hover:brightness-110 transition-[filter] cursor-pointer"
                 style={{ width: `${(distrib.alto / total) * 100}%` }}
-                title={`Alto: ${distrib.alto}`}
+                title={`Alto: ${distrib.alto} — ver en Hot List`}
               />
             )}
             {distrib.medio > 0 && (
-              <div
-                className="bg-yellow-400"
+              <Link
+                href="/preocupaciones/desabastecimiento?risk=medio"
+                className="bg-yellow-400 hover:brightness-110 transition-[filter] cursor-pointer"
                 style={{ width: `${(distrib.medio / total) * 100}%` }}
-                title={`Medio: ${distrib.medio}`}
+                title={`Medio: ${distrib.medio} — ver en Hot List`}
               />
             )}
             {distrib.bajo > 0 && (
-              <div
-                className="bg-green-400"
+              <Link
+                href="/preocupaciones/desabastecimiento?risk=bajo"
+                className="bg-green-400 hover:brightness-110 transition-[filter] cursor-pointer"
                 style={{ width: `${(distrib.bajo / total) * 100}%` }}
-                title={`Bajo: ${distrib.bajo}`}
+                title={`Bajo: ${distrib.bajo} — ver en Hot List`}
               />
             )}
           </div>
           <div className="flex gap-4 mt-2 text-xs text-gray-500">
             {(['critico', 'alto', 'medio', 'bajo'] as const).map((lvl) => (
               distrib[lvl] > 0 && (
-                <span key={lvl} className="flex items-center gap-1">
+                <Link
+                  key={lvl}
+                  href={`/preocupaciones/desabastecimiento?risk=${lvl}`}
+                  className="flex items-center gap-1 hover:text-gray-800 transition-colors"
+                >
                   <span className={`w-2 h-2 rounded-full inline-block ${
                     lvl === 'critico' ? 'bg-red-500' :
                     lvl === 'alto'    ? 'bg-orange-400' :
                     lvl === 'medio'   ? 'bg-yellow-400' : 'bg-green-400'
                   }`} />
                   {RISK_LABELS[lvl]} ({distrib[lvl]})
-                </span>
+                </Link>
               )
             ))}
           </div>

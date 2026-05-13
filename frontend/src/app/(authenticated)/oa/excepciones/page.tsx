@@ -3,7 +3,7 @@
 export const dynamic = 'force-dynamic';
 
 import { useState, useEffect } from 'react';
-import { ShieldAlert, Filter, Warehouse, Check, Ship } from 'lucide-react';
+import { ShieldAlert, Filter, Warehouse, Check, Ship, Search } from 'lucide-react';
 
 interface HotItem {
   product_id: number;
@@ -56,6 +56,7 @@ export default function ExcepcionesPage() {
   const [loading, setLoading] = useState(true);
   const [supplierFilter, setSupplierFilter] = useState('all');
   const [warehouseFilter, setWarehouseFilter] = useState('all');
+  const [search, setSearch] = useState('');
   const [lastUpdated] = useState(new Date());
 
   useEffect(() => {
@@ -77,13 +78,15 @@ export default function ExcepcionesPage() {
     new Set([...hotRaw, ...holdRaw].map((i) => i.supplier_name).filter(Boolean))
   ).sort();
 
-  const hotList = supplierFilter === 'all'
-    ? hotRaw
-    : hotRaw.filter((i) => i.supplier_name === supplierFilter);
+  const q = search.trim().toLowerCase();
 
-  const holdList = supplierFilter === 'all'
-    ? holdRaw
-    : holdRaw.filter((i) => i.supplier_name === supplierFilter);
+  const hotList = hotRaw
+    .filter((i) => supplierFilter === 'all' || i.supplier_name === supplierFilter)
+    .filter((i) => !q || i.sku.toLowerCase().includes(q) || i.product_name.toLowerCase().includes(q));
+
+  const holdList = holdRaw
+    .filter((i) => supplierFilter === 'all' || i.supplier_name === supplierFilter)
+    .filter((i) => !q || i.sku.toLowerCase().includes(q) || i.product_name.toLowerCase().includes(q));
 
   const totalMonitored = new Set([
     ...hotRaw.map((i) => i.product_id),
@@ -149,6 +152,17 @@ export default function ExcepcionesPage() {
             <option key={s} value={s}>{s}</option>
           ))}
         </select>
+
+        <div className="relative ml-2">
+          <Search className="w-3.5 h-3.5 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="SKU o nombre de producto…"
+            className="border border-gray-300 rounded-lg pl-8 pr-3 py-2 text-sm bg-white w-64 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+          />
+        </div>
       </div>
 
       {/* Hot List */}

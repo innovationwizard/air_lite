@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { AlertTriangle, Download } from 'lucide-react';
 
 // Product-level row (from /api/kpis/stockout-risk)
@@ -109,15 +110,19 @@ function exportCSV(rows: (StockoutRisk | WarehouseRisk)[], hasWarehouse: boolean
   URL.revokeObjectURL(url);
 }
 
-export default function DesabastecimientoPage() {
+function DesabastecimientoInner() {
+  const searchParams = useSearchParams();
   // Product-level data — used for KPI totals (company-wide, no double-counting)
   const [risks, setRisks] = useState<StockoutRisk[]>([]);
   // Per-warehouse data — used when a specific warehouse is selected
   const [warehouseRisks, setWarehouseRisks] = useState<WarehouseRisk[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Filters
-  const [riskFilter, setRiskFilter] = useState<string | null>(null);
+  // Filters — ?risk= URL param sets the initial risk filter from external links
+  const [riskFilter, setRiskFilter] = useState<string | null>(() => {
+    const p = searchParams.get('risk');
+    return p && ['critico', 'alto', 'medio', 'bajo'].includes(p) ? p : null;
+  });
   const [supplierFilter, setSupplierFilter] = useState<string>('all');
   const [warehouseFilter, setWarehouseFilter] = useState<string>('all');
   const [search, setSearch] = useState('');
@@ -431,5 +436,13 @@ export default function DesabastecimientoPage() {
         </p>
       )}
     </div>
+  );
+}
+
+export default function DesabastecimientoPage() {
+  return (
+    <Suspense>
+      <DesabastecimientoInner />
+    </Suspense>
   );
 }

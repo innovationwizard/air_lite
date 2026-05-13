@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
-import { ShoppingCart, AlertTriangle, Snowflake, TrendingUp, Truck, ArrowRight, Package, Info } from 'lucide-react';
+import { AlertTriangle, Snowflake, TrendingUp, Truck, ArrowRight, Package, Info } from 'lucide-react';
 
 interface StockoutRisk {
   product_id: number;
@@ -138,6 +138,7 @@ export default function ComprasHomePage() {
             {loading ? '—' : excepcionesCount}
           </p>
           <p className="text-xs text-red-500 mt-0.5">Crítico + Alto</p>
+          <p className="text-[10px] text-red-300 mt-1">al 3-mar-2026</p>
         </div>
         <div className="bg-amber-50 border border-amber-100 rounded-xl p-4">
           <div className="flex items-center gap-1">
@@ -153,6 +154,7 @@ export default function ComprasHomePage() {
             {loading ? '—' : fmtGTQ(totalGtqEnRiesgo)}
           </p>
           <p className="text-xs text-amber-500 mt-0.5">Si no se actúa</p>
+          <p className="text-[10px] text-amber-300 mt-1">proyección desde 3-mar-2026</p>
         </div>
         <div className="bg-blue-50 border border-blue-100 rounded-xl p-4">
           <div className="flex items-center gap-1">
@@ -168,6 +170,7 @@ export default function ComprasHomePage() {
             {loading ? '—' : fmtGTQ(totalGtqInmovilizado)}
           </p>
           <p className="text-xs text-blue-500 mt-0.5">Sobre política máxima</p>
+          <p className="text-[10px] text-blue-300 mt-1">al 3-mar-2026</p>
         </div>
         <div className="bg-white border border-gray-200 rounded-xl p-4">
           <div className="flex items-center gap-1">
@@ -183,6 +186,7 @@ export default function ComprasHomePage() {
             {loading ? '—' : coberturaPromedio !== null ? `${coberturaPromedio.toFixed(0)}d` : '—'}
           </p>
           <p className="text-xs text-gray-400 mt-0.5">Días de stock</p>
+          <p className="text-[10px] text-gray-300 mt-1">demanda prom. últ. 90d</p>
         </div>
       </div>
 
@@ -339,13 +343,6 @@ export default function ComprasHomePage() {
             icon: Truck,
             accent: 'bg-emerald-50 text-emerald-600',
             disabled: true,
-          },
-          {
-            title: 'Demostración de Valor',
-            href: '/backtest',
-            blurb: 'Cuánto habrías ahorrado si hubieras tenido AI Refill el último año.',
-            icon: ShoppingCart,
-            accent: 'bg-purple-50 text-purple-600',
           },
         ].map((c) => {
           const Icon = c.icon;

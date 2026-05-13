@@ -1,0 +1,24 @@
+feat: UI polish — drill-down bar, KPI tooltips, temporal labels, Excepciones search
+
+compras/page.tsx
+- Add hover (ⓘ) info tooltips to all 4 KPI cards (Excepciones activas,
+  GTQ en riesgo, GTQ inmovilizado, Cobertura promedio)
+- Add temporal context label to each card: "al 3-mar-2026" / "proyección
+  desde 3-mar-2026" / "demanda prom. últ. 90d"
+- Remove Demostración de Valor navigation card + clean up ShoppingCart import
+
+gerencia/forecast/page.tsx
+- Fix history tooltip overflow: flip above row when viewport space below
+  < 340px; add maxHeight + overflowY as safe fallback
+
+operaciones/page.tsx
+- Convert distribution bar segments and legend labels to <Link> pointing
+  to /preocupaciones/desabastecimiento?risk={level} with hover feedback
+
+preocupaciones/desabastecimiento/page.tsx
+- Read ?risk= URL param on mount via useSearchParams to pre-apply filter
+  from bar drill-down; add Suspense boundary required by Next.js
+
+oa/excepciones/page.tsx
+- Add SKU + product name search input (case-insensitive substring);
+  stacks with existing warehouse and supplier filters; KPI counts update live
