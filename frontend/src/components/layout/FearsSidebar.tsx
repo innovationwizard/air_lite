@@ -318,10 +318,7 @@ export function FearsSidebar() {
     <aside className="flex flex-col w-72 bg-white border-r border-gray-200">
       <div className="flex items-center gap-3 px-5 py-4 border-b border-gray-100">
         <Image src="/box.svg" alt="AI Refill" width={32} height={32} />
-        <div>
-          <span className="font-semibold text-gray-900 text-sm">AI Refill</span>
-          <span className="text-gray-400 text-xs ml-1">Lite</span>
-        </div>
+        <span className="font-semibold text-gray-900 text-sm">AI Refill</span>
       </div>
 
       <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">

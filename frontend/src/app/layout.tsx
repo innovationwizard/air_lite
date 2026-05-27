@@ -20,8 +20,7 @@ export const metadata: Metadata = {
     apple: [{ url: '/box.png', type: 'image/png' }],
   },
   // metadataBase resolves relative OG image URLs to absolute (required by WhatsApp)
-  // Update this when custom domain is configured
-  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL || 'https://air-lite-app.vercel.app'),
+  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL || 'https://airefill.app'),
   openGraph: {
     title: 'AI Refill — Optimización Inteligente de Inventarios',
     description:
