@@ -57,10 +57,21 @@ const RISK_LABELS: Record<string, string> = {
   critico: 'Crítico', alto: 'Alto', medio: 'Medio', bajo: 'Bajo',
 };
 
+type SupplierClass = 'REYMA' | 'CARVAJAL' | 'OTHER';
+
+function getSupplierClass(supplier_name: string | null | undefined): SupplierClass {
+  if (!supplier_name) return 'OTHER';
+  const upper = supplier_name.toUpperCase();
+  if (upper.includes('CARVAJAL')) return 'CARVAJAL';
+  if (upper.includes('REYMA')) return 'REYMA';
+  return 'OTHER';
+}
+
 export default function OperacionesHomePage() {
-  const [risks, setRisks] = useState<StockoutRisk[]>([]);
-  const [abcItems, setAbcItems] = useState<AbcXyzItem[]>([]);
+  const [risksRaw, setRisksRaw] = useState<StockoutRisk[]>([]);
+  const [abcItemsRaw, setAbcItemsRaw] = useState<AbcXyzItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [classFilter, setClassFilter] = useState<'' | 'REYMA' | 'CARVAJAL'>('');
 
   useEffect(() => {
     Promise.all([
@@ -68,12 +79,37 @@ export default function OperacionesHomePage() {
       fetch('/api/kpis/abc-xyz').then((r) => r.json()),
     ])
       .then(([riskData, abcData]) => {
-        setRisks(Array.isArray(riskData) ? riskData : []);
-        setAbcItems(Array.isArray(abcData) ? abcData : []);
+        setRisksRaw(Array.isArray(riskData) ? riskData : []);
+        setAbcItemsRaw(Array.isArray(abcData) ? abcData : []);
         setLoading(false);
       })
       .catch(() => setLoading(false));
   }, []);
+
+  // Build sku -> supplier_class map from risks (only source that carries
+  // supplier info). Used to filter abcItems by class even though AbcXyzItem
+  // doesn't carry supplier_name itself.
+  const skuToClass = useMemo(() => {
+    const m = new Map<string, SupplierClass>();
+    for (const r of risksRaw) m.set(r.sku, getSupplierClass(r.supplier_name));
+    return m;
+  }, [risksRaw]);
+
+  // Filtered views — every downstream useMemo consumes these, so changing the
+  // dropdown automatically cascades to KPIs, distribution, top-5s, etc.
+  const risks = useMemo(() => {
+    if (classFilter === '') return risksRaw;
+    return risksRaw.filter((r) => getSupplierClass(r.supplier_name) === classFilter);
+  }, [risksRaw, classFilter]);
+
+  const abcItems = useMemo(() => {
+    if (classFilter === '') return abcItemsRaw;
+    return abcItemsRaw.filter((item) => skuToClass.get(item.sku) === classFilter);
+  }, [abcItemsRaw, classFilter, skuToClass]);
+
+  // Counts for dropdown labels (always based on unfiltered risksRaw).
+  const reymaCount    = useMemo(() => risksRaw.filter((r) => getSupplierClass(r.supplier_name) === 'REYMA').length,    [risksRaw]);
+  const carvajalCount = useMemo(() => risksRaw.filter((r) => getSupplierClass(r.supplier_name) === 'CARVAJAL').length, [risksRaw]);
 
   const hotCount = risks.filter((r) => r.risk_level === 'critico' || r.risk_level === 'alto').length;
 
@@ -135,6 +171,20 @@ export default function OperacionesHomePage() {
         <h1 className="text-3xl font-bold text-gray-900">Panel de Operaciones</h1>
         <p className="text-gray-500 text-lg">Qué hay, cuánto dura, qué viene y qué está comiendo espacio.</p>
       </header>
+
+      <div className="flex gap-2 items-center flex-wrap">
+        <label className="text-sm text-gray-600" htmlFor="filter-proveedor">Proveedor:</label>
+        <select
+          id="filter-proveedor"
+          value={classFilter}
+          onChange={(e) => setClassFilter(e.target.value as '' | 'REYMA' | 'CARVAJAL')}
+          className="border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white"
+        >
+          <option value="">Todos ({risksRaw.length})</option>
+          <option value="REYMA">REYMA ({reymaCount})</option>
+          <option value="CARVAJAL">CARVAJAL ({carvajalCount})</option>
+        </select>
+      </div>
 
       {/* KPI Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
