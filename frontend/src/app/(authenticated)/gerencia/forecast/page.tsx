@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import { TrendingUp, Sparkles, Download, Info } from 'lucide-react';
+import { TrendingUp, Download, Info } from 'lucide-react';
 
 const MONTH_NAMES_ES = [
   'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
@@ -288,14 +288,8 @@ export default function ForecastPage() {
       </div>
 
       <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 text-sm text-emerald-900">
-        <p className="font-semibold flex items-center gap-1.5">
-          <Sparkles className="w-4 h-4" /> Cómo leer esto
-        </p>
-        <p className="mt-1">
-          Cada fila es un SKU del top 23 (12 REYMA + 11 CARVAJAL por Net Sales). Las columnas muestran las
-          cantidades predichas por AI Refill para cada mes, en UdM de stock del producto. Las tres métricas
-          (ventas netas, compras ordenadas, compras recibidas) usan las fórmulas verificadas que
-          reprodujeron los meses históricos con un diferencial del <strong>0%</strong>.
+        <p>
+          Cada fila muestra cuánto predice AI Refill que la empresa va a vender y comprar cada mes.
         </p>
       </div>
 
