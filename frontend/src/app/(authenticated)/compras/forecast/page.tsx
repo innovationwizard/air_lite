@@ -73,8 +73,9 @@ interface StockoutRisk {
 type CompletenessTier = 'green' | 'amber' | 'red';
 
 function getCompletenessTier(months: number | null): CompletenessTier {
+  // 15+ counts as complete — one missing month is normal procurement variance.
   if (months === null) return 'red';
-  if (months === 16) return 'green';
+  if (months >= 15) return 'green';
   if (months >= 3) return 'amber';
   return 'red';
 }
@@ -480,8 +481,8 @@ export default function ComprasForecastPage() {
             red:   'Datos insuficientes',
           };
           const tipText: Record<CompletenessTier, string> = {
-            green: '16/16 meses del período de entrenamiento con al menos una OC confirmada. Máxima calidad de datos.',
-            amber: 'Entre 3 y 15 meses con OC confirmadas. Historial parcial.',
+            green: '15 o 16 meses del período de entrenamiento con al menos una OC confirmada. Calidad de datos suficiente para forecast confiable.',
+            amber: 'Entre 3 y 14 meses con OC confirmadas. Historial parcial.',
             red:   '0 a 2 meses con OC confirmadas. Forecast de compras no confiable para estos SKUs.',
           };
           return (
@@ -563,7 +564,7 @@ export default function ComprasForecastPage() {
                           )}
                           <span className={`text-[10px] px-1.5 py-0.5 rounded ${tierStyle.pill}`}>
                             {tierStyle.pillText}
-                            {r.po_history_real_months !== null && r.po_history_real_months < 16
+                            {r.po_history_real_months !== null && r.po_history_real_months < 15
                               ? ` (${r.po_history_real_months}/16)`
                               : ''}
                           </span>
