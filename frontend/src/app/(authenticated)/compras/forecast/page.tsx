@@ -177,8 +177,12 @@ export default function ComprasForecastPage() {
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
   const [classFilter, setClassFilter] = useState<'' | 'REYMA' | 'CARVAJAL'>('');
-  const [tierFilter, setTierFilter] = useState<Set<CompletenessTier>>(new Set(['green', 'amber', 'red']));
-  const [openTip, setOpenTip] = useState<CompletenessTier | null>(null);
+  // tierFilter kept (still drives the visible-rows filter); setter dropped because
+  // the Historial OC button row below is commented out — all 23 SKUs are GREEN
+  // so the filter is pure noise. Restore the setter + JSX block if the stoplight
+  // ever shows AMBER/RED again.
+  const [tierFilter] = useState<Set<CompletenessTier>>(new Set(['green', 'amber', 'red']));
+  // const [openTip, setOpenTip] = useState<CompletenessTier | null>(null);
   const [purchaseHistory, setPurchaseHistory] = useState<Record<string, Record<string, number>>>({});
   const [openHistoryTip, setOpenHistoryTip] = useState<string | null>(null);
   const [tipPos, setTipPos] = useState<{ top: number; left: number } | null>(null);
@@ -453,6 +457,13 @@ export default function ComprasForecastPage() {
         </button>
       </div>
 
+      {/*
+        Historial OC filter buttons hidden 2026-05-27 — all 23 demo SKUs are
+        Datos completos so the filter row is pure noise. Visible rows still
+        pass through the tierFilter state above (defaults to all three tiers
+        active). Restore this block + the openTip state + setTierFilter
+        destructuring if the stoplight ever shows AMBER/RED again.
+
       <div className="flex gap-2 items-center flex-wrap">
         <span className="text-sm text-gray-600">Historial OC:</span>
         {(['green', 'amber', 'red'] as CompletenessTier[]).map((tier) => {
@@ -509,6 +520,7 @@ export default function ComprasForecastPage() {
           );
         })}
       </div>
+      */}
 
       {err && <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-sm text-red-700">{err}</div>}
       {loading && <div className="text-gray-400">Cargando forecasts…</div>}
