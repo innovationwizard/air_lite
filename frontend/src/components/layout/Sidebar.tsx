@@ -13,13 +13,13 @@ import {
   Users,
   Activity,
   Truck,
-  ClipboardList,
+  // ClipboardList,   // unused while Órdenes Abiertas section is hidden (2026-05-27)
   FileCheck,
   Gauge,
-  Container,
-  AlertOctagon,
-  FileText,
-  Wrench,
+  // Container,       // unused while Órdenes Abiertas section is hidden (2026-05-27)
+  // AlertOctagon,    // unused while Órdenes Abiertas section is hidden (2026-05-27)
+  // FileText,        // unused while Órdenes Abiertas section is hidden (2026-05-27)
+  // Wrench,          // unused while Órdenes Abiertas section is hidden (2026-05-27)
   ScanEye,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -28,7 +28,7 @@ import {
   isAuthorized,
   CAN_VIEW_ADMIN,
   CAN_VIEW_SYSTEM,
-  CAN_VIEW_OA,
+  // CAN_VIEW_OA,    // unused while Órdenes Abiertas section is hidden (2026-05-27)
   CAN_VIEW_COMPRAS,
   CAN_VIEW_OPERACIONES,
   CAN_VIEW_GERENCIA,
@@ -189,6 +189,13 @@ const allNavGroups: NavGroup[] = [
       },
     ],
   },
+  /*
+    Órdenes Abiertas section hidden 2026-05-27 — won't be reached in the
+    demo and the per-page route_permissions for compras on /api/oa/* haven't
+    been audited yet. Restore this object + the CAN_VIEW_OA import + the 5
+    lucide-react icon imports (ClipboardList, Container, AlertOctagon,
+    FileText, Wrench) after the demo if/when OA pages are demo-ready.
+
   {
     section: 'Órdenes Abiertas',
     requiredRoles: CAN_VIEW_OA,
@@ -249,6 +256,7 @@ const allNavGroups: NavGroup[] = [
       },
     ],
   },
+  */
   {
     section: 'Prueba de Concepto',
     requiredRoles: CAN_VIEW_POC,
