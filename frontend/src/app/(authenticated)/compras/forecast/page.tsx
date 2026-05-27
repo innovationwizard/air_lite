@@ -54,7 +54,19 @@ type SkuRow = {
   purchases_received_mar: number | null;
   training_end_date: string | null;
   cantidad_recomendada: number | null;
+  rec_breakdown: RecBreakdown | null;
 };
+
+interface RecBreakdown {
+  abc_xyz: string;             // e.g. "AY" or "—" if unknown
+  avg_daily_demand: number;
+  lead_time_days: number;
+  safety_stock_days: number;
+  current_stock: number;
+  target: number;              // avg × (2×LT + SS)
+  rec_raw: number;             // max(0, target − current_stock)
+  packing_multiple: number;    // from PACKING_MULTIPLES[stock_uom]
+}
 
 interface StockoutRisk {
   product_id: number;
@@ -185,8 +197,10 @@ export default function ComprasForecastPage() {
   // const [openTip, setOpenTip] = useState<CompletenessTier | null>(null);
   const [purchaseHistory, setPurchaseHistory] = useState<Record<string, Record<string, number>>>({});
   const [openHistoryTip, setOpenHistoryTip] = useState<string | null>(null);
+  const [openRecTip, setOpenRecTip] = useState<string | null>(null);
   const [tipPos, setTipPos] = useState<{ top: number; left: number } | null>(null);
   const historyTipRef = useRef<HTMLDivElement>(null);
+  const recTipRef = useRef<HTMLDivElement>(null);
   const [metricFilter, setMetricFilter] = useState<'' | 'ventas' | 'compras_ordenadas' | 'compras_recibidas' | 'recomendado'>('recomendado');
   const [urgentItems, setUrgentItems] = useState<StockoutRisk[]>([]);
   const [urgentSkus, setUrgentSkus] = useState<Set<string>>(new Set());
@@ -220,16 +234,34 @@ export default function ComprasForecastPage() {
   }, []);
 
   useEffect(() => {
-    if (!openHistoryTip) return;
+    if (!openHistoryTip && !openRecTip) return;
     function onDown(e: MouseEvent) {
-      if (historyTipRef.current && !historyTipRef.current.contains(e.target as Node)) {
+      const insideHistory = historyTipRef.current?.contains(e.target as Node);
+      const insideRec = recTipRef.current?.contains(e.target as Node);
+      if (!insideHistory && !insideRec) {
         setOpenHistoryTip(null);
+        setOpenRecTip(null);
         setTipPos(null);
       }
     }
     document.addEventListener('mousedown', onDown);
     return () => document.removeEventListener('mousedown', onDown);
-  }, [openHistoryTip]);
+  }, [openHistoryTip, openRecTip]);
+
+  const handleRecTipClick = useCallback((sku: string, e: React.MouseEvent<HTMLButtonElement>) => {
+    if (openRecTip === sku) {
+      setOpenRecTip(null);
+      setTipPos(null);
+      return;
+    }
+    setOpenHistoryTip(null); // close other tip type
+    const rect = e.currentTarget.getBoundingClientRect();
+    const tooltipWidth = 340;
+    const left = Math.min(rect.left, window.innerWidth - tooltipWidth - 8);
+    const top = rect.bottom + 6;
+    setOpenRecTip(sku);
+    setTipPos({ top, left });
+  }, [openRecTip]);
 
   const handleHistoryTipClick = useCallback((sku: string, e: React.MouseEvent<HTMLButtonElement>) => {
     if (openHistoryTip === sku) {
@@ -237,6 +269,7 @@ export default function ComprasForecastPage() {
       setTipPos(null);
       return;
     }
+    setOpenRecTip(null); // close other tip type
     const rect = e.currentTarget.getBoundingClientRect();
     const tooltipWidth = 340;
     const left = Math.min(rect.left, window.innerWidth - tooltipWidth - 8);
@@ -251,17 +284,24 @@ export default function ComprasForecastPage() {
       const existing = m.get(r.sku) ?? (() => {
         const risk = riskMap.get(r.sku);
         let cantidad_recomendada: number | null = null;
+        let rec_breakdown: RecBreakdown | null = null;
         if (risk && risk.avg_daily_demand > 0 && risk.lead_time_days > 0) {
           const cell = (risk.abc_class ?? '') + (risk.xyz_class ?? '');
           const ss = SAFETY_STOCK_DAYS[cell] ?? DEFAULT_SAFETY_STOCK_DAYS;
           const target = risk.avg_daily_demand * (2 * risk.lead_time_days + ss);
           const rec_raw = Math.max(0, target - risk.current_stock);
-          if (rec_raw === 0) {
-            cantidad_recomendada = 0;
-          } else {
-            const mult = PACKING_MULTIPLES[r.stock_uom ?? ''] ?? 1;
-            cantidad_recomendada = Math.ceil(rec_raw / mult) * mult;
-          }
+          const mult = PACKING_MULTIPLES[r.stock_uom ?? ''] ?? 1;
+          cantidad_recomendada = rec_raw === 0 ? 0 : Math.ceil(rec_raw / mult) * mult;
+          rec_breakdown = {
+            abc_xyz: cell || '—',
+            avg_daily_demand: risk.avg_daily_demand,
+            lead_time_days: risk.lead_time_days,
+            safety_stock_days: ss,
+            current_stock: risk.current_stock,
+            target,
+            rec_raw,
+            packing_multiple: mult,
+          };
         }
         return {
           sku: r.sku,
@@ -276,6 +316,7 @@ export default function ComprasForecastPage() {
           purchases_received_feb: null, purchases_received_mar: null,
           training_end_date: r.training_end_date ?? null,
           cantidad_recomendada,
+          rec_breakdown,
         };
       })();
       const key = r.forecast_month.startsWith('2026-02')
@@ -577,7 +618,18 @@ export default function ComprasForecastPage() {
                       {showRecomendado && (
                         <>
                           <td className="px-2 py-1.5 text-right font-mono font-semibold bg-orange-50/60 text-orange-900">
-                            {r.cantidad_recomendada === null ? '—' : r.cantidad_recomendada === 0 ? <span className="text-green-600 text-xs">✓ OK</span> : fmt(r.cantidad_recomendada)}
+                            <div className="inline-flex items-center justify-end gap-1">
+                              {r.cantidad_recomendada === null ? '—' : r.cantidad_recomendada === 0 ? <span className="text-green-600 text-xs">✓ OK</span> : fmt(r.cantidad_recomendada)}
+                              {r.cantidad_recomendada != null && r.cantidad_recomendada > 0 && r.rec_breakdown && (
+                                <button
+                                  onClick={(e) => handleRecTipClick(r.sku, e)}
+                                  className="text-orange-300 hover:text-orange-600 transition-colors"
+                                  aria-label={`Cómo se calculó la cantidad recomendada: ${r.sku}`}
+                                >
+                                  <Info className="w-3 h-3" />
+                                </button>
+                              )}
+                            </div>
                           </td>
                           <td className="px-2 py-1.5 text-right font-mono font-semibold bg-orange-100/70 text-orange-900">
                             {r.cantidad_recomendada == null || r.cantidad_recomendada === 0 ? '—' : fmtFurgo(r.cantidad_recomendada, r.volume_m3)}
@@ -664,6 +716,80 @@ export default function ComprasForecastPage() {
             </p>
             <button
               onClick={() => { setOpenHistoryTip(null); setTipPos(null); }}
+              className="mt-1.5 text-gray-400 hover:text-gray-600 underline"
+            >
+              Cerrar
+            </button>
+          </div>
+        );
+      })()}
+
+      {openRecTip && tipPos && (() => {
+        const row = rows.find((r) => r.sku === openRecTip);
+        const b = row?.rec_breakdown;
+        if (!b) return null;
+        const ss = b.safety_stock_days;
+        const lt = b.lead_time_days;
+        const add = Math.round(b.avg_daily_demand * 100) / 100;
+        const targetFmt  = Math.round(b.target).toLocaleString('es-GT');
+        const stockFmt   = Math.round(b.current_stock).toLocaleString('es-GT');
+        const rawFmt     = Math.round(b.rec_raw).toLocaleString('es-GT');
+        const finalFmt   = (row.cantidad_recomendada ?? 0).toLocaleString('es-GT');
+        const uomLabel   = row.stock_uom ?? '—';
+        return (
+          <div
+            ref={recTipRef}
+            style={{ position: 'fixed', top: tipPos.top, left: tipPos.left, zIndex: 9999, maxHeight: 'calc(100vh - 16px)', overflowY: 'auto' }}
+            className="w-[360px] rounded-lg border border-gray-200 bg-white shadow-xl p-3 text-xs"
+          >
+            <div className="font-semibold text-gray-900 mb-0.5 font-mono">{openRecTip}</div>
+            <div className="text-gray-500 mb-2 truncate">{row.name}</div>
+            <table className="w-full border-collapse">
+              <tbody>
+                <tr className="border-b border-gray-100">
+                  <td className="py-1 pr-2 text-gray-600">Clase ABC/XYZ</td>
+                  <td className="py-1 text-right font-mono text-gray-900">{b.abc_xyz}</td>
+                </tr>
+                <tr className="border-b border-gray-100">
+                  <td className="py-1 pr-2 text-gray-600">Demanda diaria promedio</td>
+                  <td className="py-1 text-right font-mono text-gray-900">{add} {uomLabel}/día</td>
+                </tr>
+                <tr className="border-b border-gray-100">
+                  <td className="py-1 pr-2 text-gray-600">Lead time (LT)</td>
+                  <td className="py-1 text-right font-mono text-gray-900">{lt} días</td>
+                </tr>
+                <tr className="border-b border-gray-100">
+                  <td className="py-1 pr-2 text-gray-600">Stock de seguridad (SS)</td>
+                  <td className="py-1 text-right font-mono text-gray-900">{ss} días</td>
+                </tr>
+                <tr className="border-b border-gray-100">
+                  <td className="py-1 pr-2 text-gray-600">Objetivo = demanda × (2·LT + SS)</td>
+                  <td className="py-1 text-right font-mono text-gray-900">{targetFmt}</td>
+                </tr>
+                <tr className="border-b border-gray-100">
+                  <td className="py-1 pr-2 text-gray-600">− Stock actual</td>
+                  <td className="py-1 text-right font-mono text-gray-900">{stockFmt}</td>
+                </tr>
+                <tr className="border-b border-gray-100">
+                  <td className="py-1 pr-2 text-gray-600">= Faltante (sin redondear)</td>
+                  <td className="py-1 text-right font-mono text-gray-900">{rawFmt}</td>
+                </tr>
+                <tr className="border-b border-gray-100">
+                  <td className="py-1 pr-2 text-gray-600">Redondeo a múltiplo</td>
+                  <td className="py-1 text-right font-mono text-gray-900">×{b.packing_multiple} ({uomLabel})</td>
+                </tr>
+                <tr>
+                  <td className="py-1 pr-2 text-gray-900 font-semibold">Cantidad recomendada</td>
+                  <td className="py-1 text-right font-mono text-orange-700 font-bold">{finalFmt} {uomLabel}</td>
+                </tr>
+              </tbody>
+            </table>
+            <p className="mt-2 text-gray-400 leading-relaxed">
+              Política de stock de seguridad por clase ABC/XYZ: AX=3, AY=7, AZ=14, BX=5, BY=10, BZ=14, CX=7, CY=10, CZ=14 días.
+              Default 7 días.
+            </p>
+            <button
+              onClick={() => { setOpenRecTip(null); setTipPos(null); }}
               className="mt-1.5 text-gray-400 hover:text-gray-600 underline"
             >
               Cerrar
