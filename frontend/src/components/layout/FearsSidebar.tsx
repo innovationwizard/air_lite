@@ -85,7 +85,7 @@ const allNavGroups: NavGroup[] = [
         subtitle: 'Puedes verificar cada cifra tú mismo',
       },
       {
-        name: 'Forecast a Ciegas',
+        name: 'Forecast',
         href: '/gerencia/forecast',
         icon: BarChart3,
         subtitle: 'Feb + Mar 2026 — 23 SKUs',

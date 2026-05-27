@@ -151,7 +151,7 @@ export default function GapReportPage() {
         </h1>
         {/* <p className="text-gray-500 mt-1">
           Spot-check de los números de la app contra el dashboard del CEO.
-          SKUs en alcance: 23 (top REYMA + CARVAJAL) — mismo universo que el Forecast a Ciegas.
+          SKUs en alcance: 23 (top REYMA + CARVAJAL) — mismo universo que el Forecast.
         </p> */}
       </div>
 

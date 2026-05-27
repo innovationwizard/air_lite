@@ -145,7 +145,7 @@ function downloadCsv(rows: SkuRow[], filterLabel: string) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `forecast-a-ciegas_feb-mar-2026${filterLabel ? '_' + filterLabel : ''}.csv`;
+  a.download = `forecast_feb-mar-2026${filterLabel ? '_' + filterLabel : ''}.csv`;
   a.click();
   URL.revokeObjectURL(url);
 }
@@ -280,10 +280,10 @@ export default function ForecastPage() {
       <div>
         <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
           <TrendingUp className="w-6 h-6 text-emerald-600" />
-          Forecast a Ciegas — Febrero & Marzo 2026
+          Forecast — Febrero & Marzo 2026
         </h1>
         <p className="text-gray-500 mt-1">
-          AI Refill entrenado con datos hasta 31-ene-2026. Predicción a ciegas para feb + mar 2026.
+          AI Refill entrenado con datos hasta 31-ene-2026. Predicción para feb + mar 2026. Compare contra sus cifras reales.
         </p>
       </div>
 
