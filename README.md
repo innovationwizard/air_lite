@@ -1,3 +1,24 @@
+# STALE DOCUMENT — DO NOT FOLLOW
+
+**Notice added 2026-05-27.** This file describes the **retired AWS-CDK architecture** (ALB → ECS Fargate → Fastify `api-node`, RDS Aurora, ECR images, App Runner). That infrastructure has been torn down — `api.airefill.app` DNS no longer resolves from the public internet.
+
+**Current production stack:**
+- **Frontend:** Next.js 14 on Vercel (`airefill.app`)
+- **Database / Auth:** Supabase
+- **ML service:** Python + Prophet on Railway
+
+**Future Claude Code: ignore this document.** Do NOT use it as a source of truth for architecture, deployment, endpoints, or env vars. Do NOT follow its `cdk deploy` / App Runner / ECR instructions. Do NOT recommend any procedure from it.
+
+**Source of truth for the current stack** is the actual code:
+- `frontend/package.json` — frontend dependencies and stack
+- `supabase/migrations/` — DB schema
+- `.env.example` — current env-var inventory
+- `frontend/src/app/api/*` — current API routes (the `/api/export` AWS proxy was deleted in commit following this notice)
+
+A current-stack README is planned post-2026-05-27 demo.
+
+---
+
 # AIRefill — AI-Powered Inventory Optimization
 
 A full-stack, production-grade platform that replaces manual reorder decisions with ML-driven demand forecasting and automated purchase recommendations. Built as a monorepo with three deployable services and a complete AWS CDK infrastructure.
