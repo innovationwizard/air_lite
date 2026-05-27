@@ -132,9 +132,8 @@ export default function OperacionesHomePage() {
   return (
     <div className="max-w-5xl mx-auto space-y-8">
       <header className="space-y-1">
-        <p className="text-sm font-semibold text-emerald-600 uppercase tracking-wide">Silo de Operaciones</p>
         <h1 className="text-3xl font-bold text-gray-900">Panel de Operaciones</h1>
-        <p className="text-gray-500 text-lg">Qué tenés, cuánto dura, qué entra y qué está comiendo espacio.</p>
+        <p className="text-gray-500 text-lg">Qué hay, cuánto dura, qué viene y qué está comiendo espacio.</p>
       </header>
 
       {/* KPI Cards */}

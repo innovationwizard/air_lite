@@ -117,9 +117,8 @@ export default function ComprasHomePage() {
   return (
     <div className="max-w-5xl mx-auto space-y-8">
       <header className="space-y-1">
-        <p className="text-sm font-semibold text-emerald-600 uppercase tracking-wide">Silo de Compras</p>
         <h1 className="text-3xl font-bold text-gray-900">Panel de Compras</h1>
-        <p className="text-gray-500 text-lg">Todo lo que necesitás para decidir qué comprar, cuánto y cuándo.</p>
+        <p className="text-gray-500 text-lg">Todo lo necesario para decidir qué comprar, cuánto y cuándo.</p>
       </header>
 
       {/* KPI Cards */}

@@ -100,7 +100,7 @@ const allNavGroups: NavGroup[] = [
         name: 'Inicio Compras',
         href: '/compras',
         icon: ShoppingCart,
-        subtitle: 'Resumen del silo de Compras',
+        subtitle: 'Resumen de Compras',
       },
       {
         name: 'Forecast de Compras',
@@ -125,7 +125,7 @@ const allNavGroups: NavGroup[] = [
         name: 'Inicio Operaciones',
         href: '/operaciones',
         icon: Warehouse,
-        subtitle: 'Resumen del silo de Operaciones',
+        subtitle: 'Resumen de Operaciones',
       },
       {
         name: 'Días de Inventario',
