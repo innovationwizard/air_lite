@@ -302,7 +302,7 @@ const allNavGroups: NavGroup[] = [
 
 const GERENCIA_DEMO_SECTIONS = new Set<string | null>([null, 'Gerencia']);
 
-export function FearsSidebar() {
+export function Sidebar() {
   const pathname = usePathname();
   const { profile } = useUserRole();
   const userRole = profile?.role;

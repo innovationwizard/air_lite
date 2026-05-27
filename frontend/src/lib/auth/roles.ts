@@ -34,7 +34,6 @@ export const CAN_VIEW_SYSTEM: Role[] = ['superuser'];
 /** Roles that can view admin pages (user management, etc.) */
 export const CAN_VIEW_ADMIN: Role[] = ['superuser', 'admin'];
 
-/** All roles can view backtest results and fear pages */
 export const CAN_VIEW_OPERATIONAL: Role[] = [
   'superuser', 'admin', 'gerencia', 'compras', 'ventas', 'inventario', 'financiero', 'testuser', 'operaciones',
 ];
@@ -59,7 +58,6 @@ export const CAN_VIEW_GERENCIA: Role[] = [
   'superuser', 'admin', 'gerencia',
 ];
 
-/** Roles that can only see backtest + POC (no fear pages, no admin) */
 export const CAN_VIEW_POC_ONLY: Role[] = ['testuser'];
 
 /**
