@@ -300,7 +300,8 @@ The compras manager should see:
 
 The app shows what's wrong (Hot List), shows what's excessive (Hold List), and shows a historical demo of what a purchase schedule looks like (Programación). But the compras manager **cannot generate a new purchase plan from today's data**.
 
-The `purchase_schedule_runs` table and the POC algorithm already exist and work. What's needed is:
+The `purchase_schedule_runs` table and the POC algorithm already exist and work. 
+What's needed is:
 1. A "Generar plan" button that triggers a new run via the existing algorithm
 2. The run executes against the March 3 snapshot data
 3. The result appears as the "current week's" plan

@@ -111,3 +111,6 @@ supabase/.temp/
 # Large raw Odoo extracts and prod backups — too big for git
 docs/reconciliation/odoo_extract_*.json
 docs/reconciliation/backup_*.json
+
+# Documentation / working notes — kept local, not version-controlled
+docs/
