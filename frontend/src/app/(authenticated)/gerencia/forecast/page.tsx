@@ -299,48 +299,38 @@ export default function ForecastPage() {
       </div>
 
       <div className="flex gap-2 items-center flex-wrap">
-        <span className="text-sm text-gray-600">Proveedor:</span>
-        <button onClick={() => setClassFilter('')}
-          className={`px-3 py-1 text-sm rounded-lg ${classFilter === '' ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-700'}`}>
-          Todos ({rows.length})
-        </button>
-        <button onClick={() => setClassFilter('REYMA')}
-          className={`px-3 py-1 text-sm rounded-lg ${classFilter === 'REYMA' ? 'bg-emerald-600 text-white' : 'bg-emerald-50 text-emerald-700'}`}>
-          REYMA ({rows.filter((r) => r.supplier_class === 'REYMA').length})
-        </button>
-        <button onClick={() => setClassFilter('CARVAJAL')}
-          className={`px-3 py-1 text-sm rounded-lg ${classFilter === 'CARVAJAL' ? 'bg-sky-600 text-white' : 'bg-sky-50 text-sky-700'}`}>
-          CARVAJAL ({rows.filter((r) => r.supplier_class === 'CARVAJAL').length})
-        </button>
-        <div className="ml-auto">
-          <button
-            onClick={() => downloadCsv(visible, classFilter)}
-            className="flex items-center gap-1.5 px-3 py-1 text-sm rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors"
-          >
-            <Download className="w-3.5 h-3.5" />
-            Descargar CSV
-          </button>
-        </div>
-      </div>
+        <label className="text-sm text-gray-600" htmlFor="filter-proveedor">Proveedor:</label>
+        <select
+          id="filter-proveedor"
+          value={classFilter}
+          onChange={(e) => setClassFilter(e.target.value as '' | 'REYMA' | 'CARVAJAL')}
+          className="border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white"
+        >
+          <option value="">Todos ({rows.length})</option>
+          <option value="REYMA">REYMA ({rows.filter((r) => r.supplier_class === 'REYMA').length})</option>
+          <option value="CARVAJAL">CARVAJAL ({rows.filter((r) => r.supplier_class === 'CARVAJAL').length})</option>
+        </select>
 
-      <div className="flex gap-2 items-center flex-wrap">
-        <span className="text-sm text-gray-600">Forecast:</span>
-        {([
-          { key: '' as const,                    label: 'Todo' },
-          { key: 'ventas' as const,              label: 'Ventas' },
-          { key: 'compras_ordenadas' as const,   label: 'Compras Ordenadas' },
-          { key: 'compras_recibidas' as const,   label: 'Compras Recibidas' },
-        ]).map(({ key, label }) => (
-          <button
-            key={key}
-            onClick={() => setMetricFilter(key)}
-            className={`px-3 py-1 text-sm rounded-lg transition-colors ${
-              metricFilter === key ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-700'
-            }`}
-          >
-            {label}
-          </button>
-        ))}
+        <label className="text-sm text-gray-600 ml-2" htmlFor="filter-forecast">Forecast:</label>
+        <select
+          id="filter-forecast"
+          value={metricFilter}
+          onChange={(e) => setMetricFilter(e.target.value as '' | 'ventas' | 'compras_ordenadas' | 'compras_recibidas')}
+          className="border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white"
+        >
+          <option value="">Todo</option>
+          <option value="ventas">Ventas</option>
+          <option value="compras_ordenadas">Compras Ordenadas</option>
+          <option value="compras_recibidas">Compras Recibidas</option>
+        </select>
+
+        <button
+          onClick={() => downloadCsv(visible, classFilter)}
+          className="ml-auto flex items-center gap-1.5 px-3 py-1 text-sm rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors"
+        >
+          <Download className="w-3.5 h-3.5" />
+          Descargar CSV
+        </button>
       </div>
 
       {/*

@@ -565,27 +565,17 @@ export default function ForecastDiagnosticPage() {
 
       <div className="bg-white border border-gray-200 rounded-xl p-4 flex flex-wrap items-center gap-4">
         <div>
-          <label className="block text-xs font-medium text-gray-600 mb-1">Clase</label>
-          <div className="inline-flex rounded-lg border border-gray-300 overflow-hidden">
-            {([
-              { v: '', label: 'Todas' },
-              { v: 'REYMA', label: 'REYMA' },
-              { v: 'CARVAJAL', label: 'CARVAJAL' },
-            ] as const).map((opt, i) => (
-              <button
-                key={opt.v}
-                type="button"
-                onClick={() => setClassFilter(opt.v)}
-                className={`px-3 py-2 text-sm ${i > 0 ? 'border-l border-gray-300' : ''} ${
-                  classFilter === opt.v
-                    ? 'bg-emerald-600 text-white font-medium'
-                    : 'bg-white text-gray-700 hover:bg-gray-50'
-                }`}
-              >
-                {opt.label}
-              </button>
-            ))}
-          </div>
+          <label className="block text-xs font-medium text-gray-600 mb-1" htmlFor="filter-clase">Clase</label>
+          <select
+            id="filter-clase"
+            value={classFilter}
+            onChange={(e) => setClassFilter(e.target.value as '' | 'REYMA' | 'CARVAJAL')}
+            className="border border-gray-300 rounded-lg px-3 py-2 text-sm"
+          >
+            <option value="">Todas</option>
+            <option value="REYMA">REYMA</option>
+            <option value="CARVAJAL">CARVAJAL</option>
+          </select>
         </div>
 
         <div>
