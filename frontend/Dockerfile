@@ -4,7 +4,7 @@
 # ==============================================================================
 # Stage 1: Dependencies
 # ==============================================================================
-FROM node:18-alpine AS deps
+FROM node:22-alpine AS deps
 RUN apk add --no-cache libc6-compat
 WORKDIR /app
 
@@ -17,7 +17,7 @@ RUN npm ci
 # ==============================================================================
 # Stage 2: Builder
 # ==============================================================================
-FROM node:18-alpine AS builder
+FROM node:22-alpine AS builder
 WORKDIR /app
 
 # Copy dependencies from deps stage
@@ -37,7 +37,7 @@ RUN npm run build
 # ==============================================================================
 # Stage 3: Runner
 # ==============================================================================
-FROM node:18-alpine AS runner
+FROM node:22-alpine AS runner
 WORKDIR /app
 
 # Set NODE_ENV to production
