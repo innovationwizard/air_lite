@@ -5,7 +5,8 @@
 >
 > Legend: `[ ]` not started · `[~]` in progress · `[x]` done & verified · `[!]` blocked/needs Jorge
 
-**Last updated:** 2026-07-01 — **Phase 2 RECONCILED (rev. 2)** to the **two-account split-plane** AWS migration (client data plane + Jorge ML plane; Tracks M/D/H). None started; M0 is a decision gate. ✅ **ALL 6 TECH-DEBT BATCHES COMPLETE, VERIFIED, AND COMMITTED:** `6d1566d` (Node 22) · `54cb226` (ESLint 9 + docs) · `fb76f2e` (Jest 30) · `fac698d` (recharts + Python caps) · `1d3aac4` (ML env: python 3.12 + numpy 2.x + prophet pin). Tech-debt remediation from DEPENDENCIES_AND_TECH_DEBT.md delivered in full (except the deliberately-deferred frontend major pass). Forecasts proven bit-identical.
+**Last updated:** 2026-07-01 — Phase 2 underway. **M0 decisions all locked** (D-ACCESS / D-AUTHZ / D-CUTOVER) + **H1 (test coverage) COMPLETE & committed** — the first Phase-2 batch shipped. Recent commits: `cb77590` (gitignore/.env* security) · `721de37` (H1 tests + CI floors) · `0334845` (Phase 2 plan reconcile + M0 decisions). Remaining M0 = external prereqs only (2 AWS accts + cross-acct role, WorkOS, Odoo creds §6.4).
+**Phase 1 (tech debt) — ✅ ALL 6 BATCHES COMPLETE & COMMITTED:** `6d1566d` (Node 22) · `54cb226` (ESLint 9 + docs) · `fb76f2e` (Jest 30) · `fac698d` (recharts + Python caps) · `1d3aac4` (ML env: python 3.12 + numpy 2.x + prophet pin). Forecasts proven bit-identical.
 **Git note:** Claude does not commit. Each `[x]` batch is handed to Jorge to commit. "Committed?" column tracks that.
 
 ---
@@ -196,7 +197,7 @@ _**RECONCILED 2026-07-01 (rev. 2)** to `Full-AWS-architecture-for-Air-3_0.md` (+
 | D2 | Weight persistence serving | Deliver | ⚠️ forecast | `[ ]` | M7, M9 |
 | D3 | Odoo sync Feb–Jun | Deliver | data | `[ ]` | Odoo creds §6.4 |
 | D4 | Acid Test 2 + sign baseline | Deliver | none | `[ ]` | D1–D3 + actuals |
-| H1 | Test coverage (gate) | Harden | none | `[x]` done & verified | — (done before M6) |
+| H1 | Test coverage (gate) | Harden | none | `[x]` done & verified | ☑ committed `721de37` |
 | H2 | Pandas 3.0 (golden-backtest gated) | Harden | ⚠️ medium (CoW) | `[ ]` | H1 |
 | H3 | Frontend major pass (React19/Next16/TW4…) | Harden | none | `[ ]` | H1 |
 
@@ -225,7 +226,7 @@ _[J] Jorge's acct (ML plane) · [C] client `plasticentro` acct (data plane) · [
 - [ ] D4 — Acid Test 2: Feb/Mar actuals → predicted-vs-actual report → gain-sharing backtest → present → sign baseline (§6.1)
 
 ## Track H — Hardening
-- [x] H1 — Test coverage **COMPLETE & verified** (all 5 sub-batches)
+- [x] H1 — Test coverage **COMPLETE & verified & committed `721de37`** (all 5 sub-batches)
   - [x] H1.1 — Coverage audit: targets = census_filter (moat), derived-ratio Tukey, get_prophet_config, roles.ts matrix. Baseline was 10 FE + 1 ML smoke.
   - [x] H1.2 — ML tests: `test_census_filter.py` (10), `test_derived_ratio.py` (5), `test_forecast_config.py` (3). census_filter **100% cov**. Bare imports via new `ml/conftest.py` (matches api.py). Verified: ruff clean, 19 pytest pass.
   - [x] H1.3 — Data-sync tests (mocked Odoo mapping): extracted 2 pure helpers from `odoo_sync_oa_v2.py` (`index_odoo_products_by_sku`, `compute_product_patch` — behavior-preserving) + `test_odoo_sync.py` (16 tests). Fixtures model real Odoo quirks (empty=`False`, absent `x_studio_*`, PostgREST string-numeric). Live-capture attempted but the Odoo dev instance was hibernated (404); tests grounded in the code's defensive handling instead. **Finding:** the Odoo dev instance also has an SSL cert hostname mismatch (`*.odoo.com` vs 3-label dev host) — verify cert handling before D3.
@@ -252,6 +253,7 @@ _[J] Jorge's acct (ML plane) · [C] client `plasticentro` acct (data plane) · [
 - **2026-07-01** — Added **Phase 2 (P1–P6)** to the plan + this tracker: the post-remediation sequencing Jorge specified (deliver 1-2-3, harden 4-5-6). Batches + sub-batches broken out with Verify steps and dependency/forecast-risk flags. Provisional; none started.
 - **2026-07-01** — **Phase 2 RECONCILED** after Jorge added `Full-AWS-architecture-for-Air-3_0.md` + `Best-UX-for-B2B-SaaS-auth.md` and chose **full AWS migration, all at once** + **reconcile-plan-first**. Restructured P1–P6 → Tracks **M** (M0–M12 AWS migration), **D** (D1–D4 delivery), **H** (H1–H3 hardening). Measured the Supabase surface (133 client calls, 57 fns, 37 RLS policies) + flagged M0 decisions (D-ACCESS/D-AUTHZ/D-CUTOVER) + AIR3 §1/§7 contradictions. Nothing implemented — awaiting M0.
 - **2026-07-01** — **H1 (test coverage) COMPLETE** — first Phase-2 implementation done. 34 new tests: FE RBAC matrix (12, D-AUTHZ safety net incl. cross-privilege negatives) + ML census-filter moat (100% cov), Tukey ratio, Prophet config, Odoo-sync mapping (extracted 2 pure helpers). CI floors added (drop `--passWithNoTests`; FE roles.ts threshold; ML `--cov-fail-under=95`); `pytest-cov`; conftest for bare imports; coverage artifacts gitignored. Attempted read-only Odoo fixture capture (authorized, .env3) — dev instance hibernated (404) + SSL cert mismatch noted for D3. All green: FE 22, ML 35, ruff clean.
+- **2026-07-01** — Committed + pushed the Phase-2-so-far work in 3 commits: `cb77590` (gitignore .env* security + coverage artifacts) · `721de37` (H1 tests + CI floors) · `0334845` (Phase 2 plan reconcile to two-account split-plane + M0 decisions). `.env3` confirmed never tracked. Documentation updated to reflect landed state.
 - **2026-07-01** — **D-CUTOVER LOCKED = blue-green short-freeze.** Security-of-data first + app is read-heavy/business-hours (47 reads vs ~16 writes, 7 write routes) → no need for risky cross-cloud dual-run. Pre-built green → short off-hours freeze → delta sync → checksum + golden-backtest 0-delta gates before flip → blue warm for rollback → decommission after soak; WorkOS users pre-provisioned. Baked into plan M12. **M0 decision gate CLOSED (all 3 locked); only external prereqs remain.**
 - **2026-07-01** — **D-AUTHZ LOCKED = defense-in-depth, DB-enforced tenant+role isolation** (Jorge's criteria: client-data + moat security first, then enterprise best practice; effort irrelevant). Corrects an earlier least-change rec. Enforce at every layer: WorkOS server-verified → single DAL matrix gate → real Aurora RLS w/ per-request session context + tenant isolation → least-privilege connection (no BYPASSRLS in serving) → Secrets Manager → scoped/rotatable ML API cred + audit. **Fixes an active _THE_RULES violation** (74× RLS-bypassing service-role usage + deprecated `SUPABASE_SERVICE_ROLE_KEY`; local `.env` holds service keys). M5 grows deliberately; baked into plan M4/M5/M6.
 - **2026-07-01** — **D-ACCESS LOCKED = (b) Direct-Postgres DAL rewrite.** Grounding scan: data access is ~97% server-side (79 server vs 2 browser clients) in ~40 route handlers; authz already app-layer (74 service-role/RLS-bypassing usages, coarse RLS). So (b) is cheaper than "133 calls" and the only path to managed Aurora+WorkOS. Baked reasoning into plan M0 + M6. D-AUTHZ leaning app-layer-primary (pending lock-in); D-CUTOVER open.

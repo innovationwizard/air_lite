@@ -7,6 +7,18 @@
 
 ---
 
+> ### 📌 AMENDMENT 2026-07-01 — architecture + delivery superseded below
+>
+> Per this document's own rule ("all changes to scope, timeline, or architecture are amendments to this document"), the following sections are **superseded** by the reconciled Phase-2 plan in [TECH_DEBT_REMEDIATION_PLAN.md](./TECH_DEBT_REMEDIATION_PLAN.md) → "Phase 2 — Full AWS Migration" and tracked in [TECH_DEBT_PROGRESS.md](./TECH_DEBT_PROGRESS.md):
+>
+> - **§1 (Split-Plane) → literal two-account AWS split-plane.** Client account (`plasticentro`): frontend App Runner + **Aurora Serverless v2** + Secrets Manager (their card, they pay directly). Jorge's account: ML API App Runner + S3 weights + Lambda/EventBridge training + ECR/CloudWatch/SES. Cross-account deploy IAM; moats (Census Filter + weights) never enter the client account.
+> - **§1 "keep Supabase for now" + "keep Vercel" → reversed.** Migrating to **Aurora** (DB), **WorkOS** (auth), and **App Runner** (frontend). §7's "Aurora migration NOT included" no longer holds.
+> - **§5 billing → client pays their own AWS bill directly** (no $500-budget invoicing); Jorge absorbs the ML plane into SaaS margin. The escrow/IP framing simplifies — the client account holds **zero moats** by construction.
+> - **M0 decisions locked (2026-07-01):** data access = direct-Postgres DAL rewrite; authz = defense-in-depth DB-enforced tenant/role isolation (least-privilege, real RLS); cutover = blue-green short-freeze with checksum + golden-backtest parity gates.
+> - **Tech-debt remediation (§3) → DONE** (all 6 batches shipped; see the tracker). **Phase-2 hardening H1 (test coverage) → DONE & committed** (`721de37`).
+>
+> The prose below is retained as the original record of intent; where it conflicts with this amendment, the amendment governs.
+
 ## 1. Architecture Decision: Split-Plane SaaS
 
 Air 3.0 operates as two independent planes connected by API.
