@@ -115,6 +115,7 @@ export default function RecepcionPage() {
   useEffect(() => {
     loadData();
     setSuccessMsg('');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedDate, warehouseFilter]);
 
   const handleStart = async (truck: TruckRow) => {

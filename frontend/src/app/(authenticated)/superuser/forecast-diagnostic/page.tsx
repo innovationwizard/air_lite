@@ -178,7 +178,10 @@ export default function ForecastDiagnosticPage() {
     }
   }
 
-  useEffect(() => { load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [classFilter]);
+  useEffect(() => {
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [classFilter]);
 
   // ─── Panel A: ratio bars ───────────────────────────────────────────────────
   const panelAOption = useMemo(() => {

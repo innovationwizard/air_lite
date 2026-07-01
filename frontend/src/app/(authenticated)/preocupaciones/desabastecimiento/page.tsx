@@ -42,8 +42,6 @@ const RISK_LABELS: Record<string, string> = {
   bajo:    'Bajo',
 };
 
-const HOLDING_COST_RATE = 0.18;
-
 const SAFETY_STOCK_DAYS: Record<string, number> = {
   AX: 3, AY: 7,  AZ: 14,
   BX: 5, BY: 10, BZ: 14,

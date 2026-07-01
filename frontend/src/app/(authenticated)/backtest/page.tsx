@@ -88,18 +88,6 @@ export default function BacktestPage() {
       const res = await fetch(`/api/backtest/${run.id}`);
       const data = await res.json();
       setCurrentDetail(data);
-
-      // Calculate cumulative savings up to this point
-      let cumulative = 0;
-      for (let i = 0; i <= index; i++) {
-        // We need savings for each run — fetch them or estimate
-        if (i === index && data.savings) {
-          cumulative += data.savings.total_savings_gtq || 0;
-        } else {
-          // For previous runs, we'll accumulate as user clicks through
-          cumulative += 0; // Will be tracked via state
-        }
-      }
     } catch {
       // ignore
     }

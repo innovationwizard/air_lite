@@ -46,12 +46,6 @@ const XYZ_COLORS: Record<string, string> = {
   Z: 'bg-red-100 text-red-700',
 };
 
-const CONFIDENCE_COLORS: Record<string, string> = {
-  'Alta confianza':      'text-emerald-600',
-  'Confianza media':     'text-yellow-600',
-  'Datos insuficientes': 'text-gray-400',
-};
-
 // Policy parameters per ABC×XYZ cell
 const CELL_POLICY: Record<string, { serviceLevel: string; safetyStock: string; reviewFreq: string }> = {
   AX: { serviceLevel: '99%', safetyStock: '3 días', reviewFreq: 'Semanal' },
@@ -135,7 +129,6 @@ export default function CapitalCongeladoPage() {
   const [slowMoving, setSlowMoving] = useState<SlowMovingItem[]>([]);
   const [warehouseRisks, setWarehouseRisks] = useState<WarehouseRiskItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [policyTooltip, setPolicyTooltip] = useState<string | null>(null);
 
   // Filters
   const [abcFilter, setAbcFilter] = useState<string | null>(null);

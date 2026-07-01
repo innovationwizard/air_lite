@@ -3,7 +3,7 @@
 export const dynamic = 'force-dynamic';
 
 import { useEffect, useState } from 'react';
-import { Users, Plus, Trash2, Shield } from 'lucide-react';
+import { Plus, Trash2, Shield } from 'lucide-react';
 import { ROLE_LABELS, Role } from '@/lib/auth/roles';
 
 interface UserRecord {

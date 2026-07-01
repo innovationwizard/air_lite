@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
-import { AlertTriangle, Snowflake, TrendingUp, Truck, ArrowRight, Package, Info } from 'lucide-react';
+import { AlertTriangle, Snowflake, TrendingUp, Truck, ArrowRight, Info } from 'lucide-react';
 
 interface StockoutRisk {
   product_id: number;
