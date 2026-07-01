@@ -182,3 +182,94 @@ _Added 2026-06-30 by Jorge. With all 6 tech-debt batches shipped, this is the se
 6. **Coordinated frontend pass (React 19 / Next 16 / Tailwind 4 / etc.)** — Last. Largest blast radius, zero client-visible value, and you need the test coverage from step 4 to do it safely. Tailwind 4 alone is a config rewrite (JS → CSS `@theme`). React 19 removes APIs you might be using. This is a dedicated sprint after delivery stabilizes. _(The deferred major pass; also carries N8 — migrate `next lint` → ESLint CLI.)_
 
 **Rationale in one line:** ship the value the client is paying for (1-2-3), then build the safety net and take on the high-blast-radius upgrades (4-5-6) — with step 4 as the hard gate before 5 and 6.
+
+---
+
+## Phase 2 — Full AWS Migration + Delivery + Hardening
+
+> **RECONCILED 2026-07-01 (rev. 2).** Jorge added `Full-AWS-architecture-for-Air-3_0.md` (+ addendum) + `Best-UX-for-B2B-SaaS-auth.md` and chose **full AWS migration, all at once**. The addendum makes the target a **literal two-account split-plane** (superseding the single-account `aid-saas-prod` draft). **This section replaces P1–P6 with three tracks:**
+>
+> - **Track M — AWS migration** (M0–M12): stand up the two-account split-plane. **Replaces old P1.**
+> - **Track D — Forecasting delivery** (D1–D4): old P2 → D1–D3, old P3 → D4.
+> - **Track H — Hardening** (H1–H3): old P4 → H1, old P5 → H2, old P6 → H3.
+>
+> **Two-account split-plane (the target):**
+>
+> | Account | Owner / billing | Holds |
+> |---|---|---|
+> | **CLIENT** (`plasticentro`) | Their card, ~$100–150/mo, **no invoicing** | Frontend App Runner · Aurora Serverless v2 (their data) · Secrets Manager |
+> | **JORGE** (SaaS margin) | His cost, ~$60–120/mo | ML API App Runner (Census Filter + serving) · S3 weights (all tenants) · Lambda/EventBridge training · ECR · CloudWatch · SES |
+>
+> **Cross-account control:** the client grants Jorge's CI/CD a **deployment IAM role**; CI pushes container images + infra into their account. They see/pay their running services; they **cannot** modify the code (it lives in Jorge's repo) or reach the moats (Census Filter + weights never enter their account). Exit = revoke the ML API key; they keep their account + data + the frontend (their perpetual license anyway).
+>
+> **AIR3 reconciliation (flag per Rule 3 — amend AIR3 or annotate superseded):** §1 "keep Supabase/Vercel" + §7 "no Aurora" are **reversed**. §5 billing changes from "$500 budget, invoiced to client" → **client pays their own AWS bill directly**; Jorge absorbs the ML plane. The escrow/IP tension **resolves** — the client account contains **zero moats** by construction, which is *more* protective than the prior split-plane framing.
+
+### ⚠️ Leaving Supabase is not "Aurora instead of Postgres"
+
+Supabase bundles Postgres **+ PostgREST (the REST API `@supabase/supabase-js` calls) + GoTrue (auth) + RLS keyed on `auth.uid()` + Storage + Realtime**. Aurora is only Postgres. Measured surface to replace (2026-07-01):
+
+| Dependency | Count | Replacement |
+|---|---|---|
+| Frontend `.from()` | 71 | Aurora data access (see M0 decision) |
+| Frontend `.rpc()` | 25 | + 57 Postgres functions to port to Aurora |
+| Frontend auth | 16 | → WorkOS |
+| Frontend storage | 3 | → S3 |
+| Realtime | **0** | none (not used) |
+| ML `supabase.table/.rpc` | 21 | Aurora data access |
+| DB objects | 38 tables · 42 migrations · 57 functions · **37 RLS policies** | port + re-architect authz |
+
+**Forecast guard still applies:** D1/D2 and H2 touch/recompile the forecasting path → gate with the golden-backtest harness (`ml/_baselines/`). All data-migration batches (M2/M3/M6) are parity-checked (row counts + checksums) before any cutover. **Live paying client** — "all at once" still cuts over in a staged, parity-gated way (M12), not a big-bang switch.
+
+### M0 — Prerequisites & pivotal decisions _(decision gate — resolve before M2/M4/M6)_
+
+**External prereqs (Jorge / AIR3 §6):** **two** AWS accounts — Jorge's (ML plane) + the client's `plasticentro` (data plane, §6.5/§6.6) — plus a **cross-account deployment IAM role** the client grants Jorge's CI; **WorkOS account**; Odoo creds (§6.4). The IP/escrow addendum (§6.7) is simpler now (client account holds zero moats) but still worth formalizing.
+
+**Pivotal architectural decisions:**
+- **D-ACCESS — ✅ DECIDED 2026-07-01: (b) Direct-Postgres DAL rewrite.** Drop `@supabase/supabase-js`; talk to Aurora with a typed data layer (`pg`/Drizzle/Kysely) inside the server handlers. `.from()` → typed query; `.rpc('fn')` → `SELECT fn(...)` (the 57 functions still live in Aurora).
+  - **Reasoning:** (1) It's the only option that actually reaches the stated **managed Aurora + WorkOS** end-state — (a) self-host PostgREST and (c) self-host full Supabase both re-host Supabase pieces we're trying to shed, and both need a throwaway GoTrue→WorkOS JWT bridge. (2) The migration is **much cheaper than "133 calls" implies**: data access is **~97% server-side already** (79 server-client vs 2 browser-client usages), concentrated in ~40 `src/app/api/**/route.ts` handlers + `src/lib/auth/server.ts` — so there is no server/API layer to invent, just handlers to convert + 2 browser spots to move behind routes. (3) Lowest steady-state ops (no PostgREST/GoTrue to run/patch). (4) Typed queries catch what the untyped SDK hides. (5) It composes cleanly with WorkOS (auth) + app-layer authz (below). Cost is front-loaded and de-risked by **H1 coverage first → per-page parity vs Supabase → golden-backtest harness proving ML reads identical on Aurora.**
+- **D-AUTHZ — ✅ DECIDED 2026-07-01: defense-in-depth, database-enforced tenant + role isolation.** _Criteria (Jorge): client-data + moat security first, then world-class enterprise practice — effort/current-state explicitly irrelevant._ Enforce at **every** layer:
+  1. **Identity:** WorkOS, JWT **server-verified every request** (never trust the cookie — per _THE_RULES NEXT.JS pattern).
+  2. **App gate:** one typed role matrix through a **single DAL entry point** (`verifySession`+`getUser`, cached) — every route handler/server action (per _THE_RULES + global "centralized authorization").
+  3. **DB gate (Aurora RLS as a *real* boundary):** DAL sets per-request session context (`SET LOCAL app.tenant_id/app.user_id/app.role` from the verified identity); RLS enforces **tenant isolation** (`row.tenant_id = app.tenant_id`) + role scoping. DB refuses unauthorized/cross-tenant rows even if the app layer has a bug.
+  4. **Least-privilege connection:** app traffic uses a role **subject to RLS** (no `BYPASSRLS`); a privileged role is reserved **only** for system jobs (migrations, training) — never serving. **Eliminates the current 74× RLS-bypassing service-role anti-pattern** (and the deprecated `SUPABASE_SERVICE_ROLE_KEY` usage flagged in _THE_RULES).
+  5. **Tenant isolation first-class:** `tenant_id` a first-class column; RLS guarantees tenant A can never read tenant B (multi-tenant: per-tenant S3 weights, client #2 coming).
+  6. **Moat (auth):** ML API authenticates callers with a **scoped, rotatable, per-tenant credential** (prefer short-lived signed tokens over a static key); secrets in **Secrets Manager, not `.env`**; cross-account IAM least-privilege; ML API access **audit-logged** to CloudWatch; Census Filter + weights never leave Jorge's account.
+  - **Consequence:** **M5 grows deliberately** (real per-tenant/role RLS + session-context + removing service-role-from-serving); M4/M6 wire the session context + least-privilege role. Reinforces D-ACCESS **(b)** — the direct-DAL is where per-request context + the single authz gate live.
+- **D-CUTOVER — ✅ DECIDED 2026-07-01: blue-green with a short freeze + verified delta + warm rollback.** Build the entire green stack ahead of time and test it against a recent snapshot; at cutover → **short off-hours freeze** (minutes) → incremental **delta sync** of rows changed since the snapshot → **row-count + checksum parity gate** → **golden-backtest harness on Aurora must be 0-delta** → flip → keep blue (Supabase/Railway/Vercel) **warm for a rollback window** (hours–days) → decommission after soak.
+  - **Reasoning (security-of-data first, per Jorge):** the app is **read-heavy / low-write / business-hours** (47 reads vs ~16 writes, 7 write routes, no 24/7 stream), so continuous dual-run buys zero-downtime we don't need at the cost of the **highest integrity/exposure risk** (cross-cloud CDC drift/split-brain + long-lived replication creds spanning both accounts + auth can't be shadowed anyway). Blue-green gives a **single clean, point-in-time-consistent, checksum-verified, harness-proven copy before any traffic hits Aurora**, a **short** exposure window, and a **fast, safe rollback** — the most defensible for client-data integrity and the enterprise standard. **Auth note:** WorkOS users are pre-provisioned before the flip (Supabase Auth ↔ WorkOS can't be dual-run); users re-authenticate once.
+
+### Track M — Migration to the two-account split-plane
+
+_Account tags: **[J]** = Jorge's account (ML plane), **[C]** = client `plasticentro` account (data plane), **[X]** = cross-account._
+
+- **M1 — AWS foundation (both accounts + cross-account trust).** **[J]** Jorge's account: IAM + GitHub OIDC (CI deploy role, no long-lived keys), ECR repos (frontend + ml), CloudWatch baseline, SES, AWS Budgets alarm. **[C]** Client account: bootstrap + **[X]** a cross-account deployment role trusting Jorge's CI (least-privilege: App Runner, Aurora, Secrets only). _Verify:_ CI assumes the client role + pushes to ECR; both budget alarms armed. _(Client account setup is the client's action — Jorge's CI just needs the granted role.)_
+- **M2 — Aurora Serverless v2 + schema [C].** In the **client account**: provision cluster (scale-to-zero); port 38 tables + extensions + all 57 functions/RPCs; establish an Aurora-native migration flow from the 42 existing migrations. _Verify:_ schema diff vs Supabase = 0 objects missing; all 57 functions create cleanly.
+- **M3 — Data migration [C].** Dump Supabase → load Aurora (client account); **row-count + checksum parity** per table; Supabase stays authoritative until M12. _Verify:_ every table row-count + checksum matches; spot-check `revenue_daily_for_ml` (the ML source).
+- **M4 — Auth → WorkOS [C/ext]** _(per D-AUTHZ)_. WorkOS wired to the client-account frontend: SSO (SAML+OIDC), organization/tenant model, session; rewrite the DAL `verifySession()`/`getUser()` as the **single authz entry point** (JWT server-verified every request, cached) + the 16 auth sites. _Verify:_ login end-to-end; sessions server-verified (no cookie-trust); DAL is the sole gate.
+- **M5 — Authz / RLS re-architecture [C]** _(depends M4; defense-in-depth per D-AUTHZ — grows deliberately)_. Establish **least-privilege DB roles** (app role **subject to RLS**, no `BYPASSRLS`; privileged role only for migrations/training). Add `tenant_id` as first-class; DAL sets per-request `SET LOCAL app.tenant_id/app.user_id/app.role`; author **real** Aurora RLS enforcing tenant isolation + role scoping (replaces the coarse 37-policy set). Preserve the centralized typed role matrix. **Remove all service-role-from-serving usage.** _Verify:_ role-matrix tests pass; a `CAN_VIEW_COMPRAS`-only user sees exactly what they did before; a cross-tenant query returns **zero** rows at the DB even with app checks disabled (negative test); no serving path uses a BYPASSRLS role.
+- **M6 — Data-access layer [C]** _(the big code batch, per D-ACCESS (b))_. Rewrite 71 `.from` + 25 `.rpc` (FE, concentrated in ~40 server handlers) + 21 ML calls + 3 storage→S3 to **typed Aurora queries via the least-privilege connection** (each request through the DAL session-context); move the 2 browser-client spots behind routes. _Verify:_ per-page parity vs Supabase; ML reads (`revenue_daily_for_ml`) identical (golden-backtest harness on Aurora → 0 delta); no direct DB access outside the DAL.
+- **M7 — ML API on App Runner [J].** In **Jorge's account**: build `ml/` image via ECR (python 3.12); S3 `air3-weights` bucket (all tenants; versioning, `{tenant}/{sku}/{version}/`) + IAM; env via Secrets Manager; `/health`, autoscaling; client access via the revocable **ML API key**. _Verify:_ `/health` 200; prediction parity vs Railway (harness). _(Moats stay here — never enter the client account.)_
+- **M8 — Frontend on App Runner [C].** In the **client account** (via cross-account deploy role): standalone image (N6) from Jorge's ECR; env via Secrets Manager. _Verify:_ app serves; auth + data paths work against Aurora/WorkOS.
+- **M9 — Training pipeline + scheduler [J].** In **Jorge's account**: Lambda/Fargate job fits Prophet + ratios → serializes 5 artifacts to S3 per `{tenant}/{sku}/{version}/`; EventBridge cron (weekly/nightly). Reads client training data via the same path the ML API uses. _Verify:_ scheduled run trains 23 SKUs; artifacts land; serving loads them (ties to D2).
+- **M10 — Email (SES) [J] + Storage (S3).** SES in **Jorge's account** for transactional email; move the 3 storage sites to S3 (tenant-scoped). _Verify:_ test email delivered; storage read/write works.
+- **M11 — Observability (CloudWatch) [J+C].** ML-plane logs/metrics/alarms in **Jorge's account**; data-plane (App Runner + Aurora) in the **client account** (cross-account dashboard optional). Alarms: 5xx, latency, training failure. _Verify:_ alarms fire on induced failure; dashboards live.
+- **M12 — Cutover & decommission [X]** _(blue-green short-freeze, per D-CUTOVER)_. Green stack pre-built + tested vs a recent snapshot; pre-provision WorkOS users. Cutover: **short off-hours freeze** → **delta sync** (rows changed since snapshot) → **row-count + checksum parity gate** → **golden-backtest harness on Aurora = 0-delta** → flip DNS/config → keep **blue warm for a rollback window** (hours–days) → retire **Railway + Vercel + Supabase** after soak. _Verify:_ parity + harness gates pass **before** flip; frontend+data on the client account, ML on Jorge's account; rollback rehearsed; old providers off only after soak; each bill within budget.
+
+**Track M done when:** Air 3.0 runs on the two-account split-plane (client: frontend App Runner + Aurora + WorkOS; Jorge: ML App Runner + S3/training + SES/CloudWatch/ECR), parity-verified, old providers decommissioned, moats isolated in Jorge's account.
+
+### Track D — Forecasting delivery _(overlaps Track M's ML plane)_
+
+- **D1 — Derived-ratio: verify/finish.** `forecast_purchases_derived.py` + `/forecast/purchases-derived` endpoint are **already built**; verify against the harness + confirm `route.ts` Pass-1/Pass-2 orchestration. Add Tier-3 fallback (supplier-class median ratio, CARVAJAL/REYMA) for the 6 insufficient-data SKUs. _Verify:_ purchase-forecast error collapses from +1,069% to ±15% on samples; 6 fallback SKUs return a documented ratio. _(was P2.1–P2.2)_
+- **D2 — Weight persistence serving** _(depends M7/M9)_. Serving endpoint loads stored model from S3 (cached) → ms latency; matches fresh train within tolerance. _Verify:_ served == fresh within tolerance; latency ms. _(was P2.3–P2.4)_
+- **D3 — Odoo sync Feb–Jun 2026** _(post-sale; respect pre-production gates in `_qci/`)_. _Verify:_ `revenue_daily_for_ml` + demand updated through Jun; blind-test cutoff discipline preserved. _(was P2.5–P2.6)_
+- **D4 — Acid Test 2 & validation.** Assemble Feb/Mar actuals; predicted-vs-actual report per SKU/metric; gain-sharing backtest; present; **sign the baseline document** (§6.1). _Verify:_ Acid Test 2 scored, baseline signed. _(was P3)_
+
+### Track H — Hardening _(H1 is the gate before H2/H3, and before the M6 rewrite ideally)_
+
+- **H1 — Test coverage expansion** _(addendum N2; hard gate)_. Critical paths: prediction pipeline (`forecast_revenue`), Census Filter, derived-ratio, auth/DAL, data sync. Drop `--passWithNoTests`; set a CI coverage floor. _Verify:_ critical paths covered; CI enforces floor. _(was P4)_ **Especially valuable before M6 — a rewrite of 133 call sites needs a regression net.**
+- **H2 — Pandas 3.0** _(golden-backtest gated)_. Build pandas-3.0 image (mirror `_baselines/Dockerfile.target`); CoW audit of `ml/*.py`; diff vs baseline; fix CoW sites; apply to `ml/requirements.txt`. _Verify:_ diff within tolerance, prod image green. _(was P5 / deferred Batch 5.4)_
+- **H3 — Coordinated frontend major pass** _(last; needs H1 coverage)_. React 18→19 · Next 15→16 (+ `next lint`→ESLint CLI, N8) · Tailwind 3→4 · zustand 4→5 · date-fns 3→4 · echarts 5→6 · lucide→1.x · TS→6 · ESLint→10. One major at a time, gated by tests. _Verify:_ build+test green per bump; full regression + deploy. _(was P6)_
+
+**Sequencing note:** M1 → (M2‖H1) → M3 → M4 → M5 → M6 → M7/M8 → M9 → M10/M11 → M12; Track D interleaves once M7/M9 exist (D1 can start immediately — mostly built); H1 should precede M6; H2/H3 after cutover stabilizes. Deliver-first still holds: get the client value (D-track + Acid Test 2) provable even as the migration proceeds.
+
+_(The original P2–P6 specs are superseded by Tracks D and H above. Mapping: P2 → D1–D3, P3 → D4, P4 → H1, P5 → H2, P6 → H3. The forecast-guard, harness reuse, and Verify steps carried over verbatim into the D/H batches.)_

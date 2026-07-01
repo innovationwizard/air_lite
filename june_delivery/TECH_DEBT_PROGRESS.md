@@ -5,7 +5,7 @@
 >
 > Legend: `[ ]` not started · `[~]` in progress · `[x]` done & verified · `[!]` blocked/needs Jorge
 
-**Last updated:** 2026-06-30 — ✅ **ALL 6 BATCHES COMPLETE, VERIFIED, AND COMMITTED.** `6d1566d` (Node 22) · `54cb226` (ESLint 9 + docs) · `fb76f2e` (Jest 30) · `fac698d` (recharts + Python caps) · `1d3aac4` (ML env: python 3.12 + numpy 2.x + prophet pin). Tech-debt remediation from DEPENDENCIES_AND_TECH_DEBT.md delivered in full (except the deliberately-deferred frontend major pass). Forecasts proven bit-identical.
+**Last updated:** 2026-07-01 — **Phase 2 RECONCILED (rev. 2)** to the **two-account split-plane** AWS migration (client data plane + Jorge ML plane; Tracks M/D/H). None started; M0 is a decision gate. ✅ **ALL 6 TECH-DEBT BATCHES COMPLETE, VERIFIED, AND COMMITTED:** `6d1566d` (Node 22) · `54cb226` (ESLint 9 + docs) · `fb76f2e` (Jest 30) · `fac698d` (recharts + Python caps) · `1d3aac4` (ML env: python 3.12 + numpy 2.x + prophet pin). Tech-debt remediation from DEPENDENCIES_AND_TECH_DEBT.md delivered in full (except the deliberately-deferred frontend major pass). Forecasts proven bit-identical.
 **Git note:** Claude does not commit. Each `[x]` batch is handed to Jorge to commit. "Committed?" column tracks that.
 
 ---
@@ -167,6 +167,77 @@
 
 ---
 
+# PHASE 2 — Full AWS Migration + Delivery + Hardening
+
+_**RECONCILED 2026-07-01 (rev. 2)** to `Full-AWS-architecture-for-Air-3_0.md` (+addendum) + `Best-UX-for-B2B-SaaS-auth.md`: **literal two-account split-plane.** **[C] client `plasticentro` account** (their card): frontend App Runner + Aurora + Secrets. **[J] Jorge's account** (SaaS margin): ML API App Runner + S3 weights + Lambda/EventBridge training + ECR + CloudWatch + SES. Cross-account **[X]** deploy role; moats (Census Filter + weights) never enter the client account. Old P1 → **Track M**; P2 → D1–D3; P3 → D4; P4 → H1; P5 → H2; P6 → H3. **None started.** Full specs + M0 decisions in [TECH_DEBT_REMEDIATION_PLAN.md](./TECH_DEBT_REMEDIATION_PLAN.md) → "Phase 2". Resume from the first unchecked `[ ]`._
+
+**⚠️ Leaving Supabase ≠ "Aurora instead of Postgres."** Measured surface (2026-07-01): FE 71 `.from` + 25 `.rpc` + 16 auth + 3 storage across 39 files · ML 21 calls · DB 38 tables / 42 migrations / **57 functions** / **37 RLS policies**. Realtime = 0 (unused). PostgREST + GoTrue + RLS(`auth.uid()`) all need replacing.
+
+**M0 decisions:** `D-ACCESS` — ✅ **LOCKED (b) Direct-Postgres DAL rewrite** (2026-07-01): drop `supabase-js`, typed layer (`pg`/Drizzle) inside the ~40 server handlers; `.rpc`→`SELECT fn()`. Cheaper than "133 calls" — data access is **~97% server-side already** (79 server vs 2 browser clients), so no server layer to invent. `D-AUTHZ` — ✅ **LOCKED: defense-in-depth, DB-enforced tenant+role isolation** (Jorge's criteria: security of client data + moats first, then enterprise best practice — effort irrelevant): WorkOS server-verified → single DAL role-matrix gate → **real Aurora RLS** (per-request `SET LOCAL app.tenant_id/role`, tenant isolation) → **least-privilege connection, no BYPASSRLS in serving** (kills the 74× service-role anti-pattern) → secrets in Secrets Manager → scoped/rotatable ML API credential + audit logs. `D-CUTOVER` — ✅ **LOCKED: blue-green short-freeze** (security-of-data first; app is read-heavy/business-hours so no need for risky cross-cloud dual-run): pre-built+tested green → short off-hours freeze → delta sync → checksum + harness 0-delta parity gates → flip → blue warm for rollback → decommission after soak. WorkOS users pre-provisioned. **M0 decision gate CLOSED** — only external prereqs remain.
+
+## Phase 2 status board
+
+| Batch | Title | Track | Risk | State | Blocked by |
+|---|---|---|---|---|---|
+| M0 | Prereqs (decisions ALL locked) | Migrate | — | `[!]` | external only: 2 AWS accts + cross-acct role, WorkOS acct, Odoo creds §6.4 |
+| M1 | AWS foundation (both accts + cross-acct trust) | [J]+[C]+[X] | none | `[ ]` | M0 |
+| M2 | Aurora Serverless v2 + schema (38 tbl / 57 fn) | [C] | data | `[ ]` | M1 |
+| M3 | Data migration (row-count + checksum parity) | [C] | data | `[ ]` | M2 |
+| M4 | Auth → WorkOS (SSO + DAL + 16 sites) | [C]/ext | authz | `[ ]` | M1, WorkOS acct |
+| M5 | Authz/RLS re-architecture (37 policies) | [C] | authz | `[ ]` | M4 |
+| M6 | Data-access layer (71+25 FE + 21 ML + 3 storage) | [C] | ⚠️ big code | `[ ]` | M2, D-ACCESS; H1 first |
+| M7 | ML API on App Runner + S3 + IAM (+ ML API key) | [J] | forecast (parity) | `[ ]` | M1 |
+| M8 | Frontend on App Runner (via cross-acct deploy) | [C] | none | `[ ]` | M1, M6 |
+| M9 | Training pipeline (Lambda/Fargate) + EventBridge | [J] | forecast | `[ ]` | M7 |
+| M10 | SES email + Storage → S3 | [J] | none | `[ ]` | M1 |
+| M11 | Observability (CloudWatch, per account) | [J]+[C] | none | `[ ]` | M1 |
+| M12 | Cutover + decommission Railway/Vercel/Supabase | [X] | ⚠️ live client | `[ ]` | M2–M11 |
+| D1 | Derived-ratio verify/finish (**mostly built**) + Tier-3 | Deliver | ⚠️ forecast (harness) | `[ ]` | — (can start now) |
+| D2 | Weight persistence serving | Deliver | ⚠️ forecast | `[ ]` | M7, M9 |
+| D3 | Odoo sync Feb–Jun | Deliver | data | `[ ]` | Odoo creds §6.4 |
+| D4 | Acid Test 2 + sign baseline | Deliver | none | `[ ]` | D1–D3 + actuals |
+| H1 | Test coverage (gate) | Harden | none | `[x]` done & verified | — (done before M6) |
+| H2 | Pandas 3.0 (golden-backtest gated) | Harden | ⚠️ medium (CoW) | `[ ]` | H1 |
+| H3 | Frontend major pass (React19/Next16/TW4…) | Harden | none | `[ ]` | H1 |
+
+**Sequence:** M1 → (M2‖H1) → M3 → M4 → M5 → M6 → M7/M8 → M9 → M10/M11 → M12. D1 startable now; D2 after M7/M9; H1 before M6; H2/H3 after cutover. Deliver-first still holds (D-track + Acid Test 2 provable during migration).
+
+## Track M — Migration to the two-account split-plane
+_[J] Jorge's acct (ML plane) · [C] client `plasticentro` acct (data plane) · [X] cross-account_
+- [~] M0 — Decisions **ALL LOCKED**: D-ACCESS ✅ (b) direct-DAL · D-AUTHZ ✅ defense-in-depth DB-enforced · D-CUTOVER ✅ blue-green short-freeze. **Remaining = external prereqs only:** 2 AWS accts + client-granted cross-acct deploy role, WorkOS acct, Odoo creds §6.4
+- [ ] M1 — [J]+[C]+[X] Foundation: Jorge acct (IAM+OIDC, ECR fe+ml, CloudWatch, SES, budget) + client acct bootstrap + cross-acct deploy role (least-priv) → CI assumes role + pushes ECR
+- [ ] M2 — [C] Aurora Serverless v2 (client acct): provision + port 38 tables + 57 functions + migration flow → schema diff 0
+- [ ] M3 — [C] Data migration: Supabase → Aurora; row-count + checksum parity per table
+- [ ] M4 — [C]/ext Auth → WorkOS: SSO + org/tenant + session; DAL as **single authz gate** (JWT server-verified, cached) + 16 sites
+- [ ] M5 — [C] Authz defense-in-depth: least-privilege DB roles (app **subject to RLS**, no BYPASSRLS; privileged only for migrations/training) + `tenant_id` first-class + per-request `SET LOCAL app.*` + **real RLS** (tenant isolation + role scoping) + keep typed matrix + **remove service-role-from-serving**. Verify: cross-tenant query → 0 rows at DB even with app checks off
+- [ ] M6 — [C] Data-access (b/direct-DAL): swap 71 `.from` + 25 `.rpc` (FE, concentrated in ~40 server handlers) + 21 ML + 3 storage→S3 to typed Aurora queries; move 2 browser-client spots behind routes; per-page parity; harness 0-delta on Aurora
+- [ ] M7 — [J] ML API on App Runner (ECR) + S3 `air3-weights` (all tenants) + IAM + `/health` + autoscaling + revocable ML API key; prediction parity. **Moats stay here.**
+- [ ] M8 — [C] Frontend on App Runner (standalone/N6, from Jorge ECR via cross-acct deploy) + Secrets env
+- [ ] M9 — [J] Training: Lambda/Fargate fit→serialize 5 artifacts to S3; EventBridge cron; 23-SKU run
+- [ ] M10 — [J] SES email + move 3 storage sites → S3 (tenant-scoped)
+- [ ] M11 — [J]+[C] CloudWatch per account: ML-plane (Jorge) + data-plane (client); alarms 5xx/latency/training-fail
+- [ ] M12 — [X] Cutover (blue-green short-freeze): pre-provision WorkOS users → short off-hours freeze → delta sync → **checksum + harness 0-delta parity gates before flip** → flip → blue warm for rollback → retire Railway + Vercel + Supabase after soak; each bill within budget
+
+## Track D — Forecasting delivery
+- [ ] D1 — Derived-ratio: **verify** existing `forecast_purchases_derived.py` + `/forecast/purchases-derived` + `route.ts` orchestration against harness; add Tier-3 fallback (CARVAJAL/REYMA) for 6 SKUs → +1,069%→±15%
+- [ ] D2 — Weight persistence serving: load from S3 (cached) → ms; matches fresh train (depends M7/M9)
+- [ ] D3 — Odoo sync Feb–Jun 2026 (post-sale; blind-test cutoff discipline; respect `_qci/` gates)
+- [ ] D4 — Acid Test 2: Feb/Mar actuals → predicted-vs-actual report → gain-sharing backtest → present → sign baseline (§6.1)
+
+## Track H — Hardening
+- [x] H1 — Test coverage **COMPLETE & verified** (all 5 sub-batches)
+  - [x] H1.1 — Coverage audit: targets = census_filter (moat), derived-ratio Tukey, get_prophet_config, roles.ts matrix. Baseline was 10 FE + 1 ML smoke.
+  - [x] H1.2 — ML tests: `test_census_filter.py` (10), `test_derived_ratio.py` (5), `test_forecast_config.py` (3). census_filter **100% cov**. Bare imports via new `ml/conftest.py` (matches api.py). Verified: ruff clean, 19 pytest pass.
+  - [x] H1.3 — Data-sync tests (mocked Odoo mapping): extracted 2 pure helpers from `odoo_sync_oa_v2.py` (`index_odoo_products_by_sku`, `compute_product_patch` — behavior-preserving) + `test_odoo_sync.py` (16 tests). Fixtures model real Odoo quirks (empty=`False`, absent `x_studio_*`, PostgREST string-numeric). Live-capture attempted but the Odoo dev instance was hibernated (404); tests grounded in the code's defensive handling instead. **Finding:** the Odoo dev instance also has an SSL cert hostname mismatch (`*.odoo.com` vs 3-label dev host) — verify cert handling before D3.
+  - [x] H1.4 — Frontend auth tests: `src/lib/auth/__tests__/roles.test.ts` (12) — role matrix invariants + cross-privilege negative tests + getDefaultPage. **Security net for D-AUTHZ.** Verified: lint clean, 22 jest pass.
+  - [x] H1.5 — CI floors: dropped `--passWithNoTests`; FE `npm run test:coverage` enforces `roles.ts` threshold (75/90/90/90); ML `pytest --cov=census_filter --cov-fail-under=95` (at 100%); added `pytest-cov`. Ratchet outward as coverage grows.
+
+**Verification log (H1, 2026-07-01):** FE `test:coverage` → 22 pass, roles.ts threshold met (exit 0). ML container (py3.12 + full deps) → ruff clean, **35 pass** (1 smoke + 10 census + 5 ratio + 3 config + 16 odoo-sync), census_filter 100% ≥ 95% gate. **Files:** `ml/conftest.py`, `ml/tests/test_{census_filter,derived_ratio,forecast_config,odoo_sync}.py`, `ml/odoo_sync_oa_v2.py` (extracted 2 pure helpers), `ml/requirements-dev.txt` (+pytest-cov), `frontend/src/lib/auth/__tests__/roles.test.ts`, `frontend/jest.config.mjs`, `.github/workflows/ci.yml`, `.gitignore` (coverage artifacts). **34 new tests** total (12 FE + 22 ML).
+- [ ] H2 — Pandas 3.0: build image (mirror `Dockerfile.target`) → CoW audit → golden-backtest diff → apply + persist
+- [ ] H3 — Frontend majors: React 18→19 · Next 15→16 (+`next lint`→ESLint CLI, N8) · Tailwind 3→4 · zustand/date-fns/echarts/lucide/TS/ESLint, one at a time, gated by tests
+
+---
+
 ## Change log (append-only)
 
 - **2026-06-30** — Plan + addendum + this ledger created. Drift check: no commits since base audit (last commit `8aa5c99`, 2026-05-27). Lint backlog measured = 12 warnings / 0 errors. Batch 1 started.
@@ -178,3 +249,10 @@
 - **2026-06-30** — Batch 6 (non-forecast Python caps) COMPLETE. gunicorn <23→<27 (resolves 26.0.0), pytest <9→<10 (resolves 9.1.1), ruff floor →0.11 (installed 0.15.20). Verified via full ML Docker image build (Prophet+cmdstan OK) + CI-mirrored pytest/ruff. Committed `fac698d` (with Batch 4). 
 - **2026-06-30** — Batch 5 (ML environment) COMPLETE via approach (b) offline read-only harness. Built `ml/_baselines/golden_backtest.py` (hermetic, DB-read-only, seeded). Baseline numpy 1.26.4 captured (92/92 ok). Determinism self-check = 0 delta. **numpy 1.26.4→2.4.6 diff = 0 delta. python3.12+numpy2.5 target diff = 0 delta.** Applied to production: prophet pinned, numpy `>=1.26,<3.0`, Dockerfile py3.12, CI py3.12. Real prod image builds+boots (/health 200). pandas held <3.0 (deferred). **ALL FORECASTS BIT-IDENTICAL.** Committed `1d3aac4`. `ml/_baselines/` gitignored (local-only).
 - **2026-06-30** — 🏁 **REMEDIATION COMPLETE.** All 6 batches shipped across 5 commits. Only remaining tech debt = the deliberately-deferred coordinated frontend major upgrade (React 19 / Next 16 / Tailwind 4 …), which needs its own sign-off per the pre-production gates.
+- **2026-07-01** — Added **Phase 2 (P1–P6)** to the plan + this tracker: the post-remediation sequencing Jorge specified (deliver 1-2-3, harden 4-5-6). Batches + sub-batches broken out with Verify steps and dependency/forecast-risk flags. Provisional; none started.
+- **2026-07-01** — **Phase 2 RECONCILED** after Jorge added `Full-AWS-architecture-for-Air-3_0.md` + `Best-UX-for-B2B-SaaS-auth.md` and chose **full AWS migration, all at once** + **reconcile-plan-first**. Restructured P1–P6 → Tracks **M** (M0–M12 AWS migration), **D** (D1–D4 delivery), **H** (H1–H3 hardening). Measured the Supabase surface (133 client calls, 57 fns, 37 RLS policies) + flagged M0 decisions (D-ACCESS/D-AUTHZ/D-CUTOVER) + AIR3 §1/§7 contradictions. Nothing implemented — awaiting M0.
+- **2026-07-01** — **H1 (test coverage) COMPLETE** — first Phase-2 implementation done. 34 new tests: FE RBAC matrix (12, D-AUTHZ safety net incl. cross-privilege negatives) + ML census-filter moat (100% cov), Tukey ratio, Prophet config, Odoo-sync mapping (extracted 2 pure helpers). CI floors added (drop `--passWithNoTests`; FE roles.ts threshold; ML `--cov-fail-under=95`); `pytest-cov`; conftest for bare imports; coverage artifacts gitignored. Attempted read-only Odoo fixture capture (authorized, .env3) — dev instance hibernated (404) + SSL cert mismatch noted for D3. All green: FE 22, ML 35, ruff clean.
+- **2026-07-01** — **D-CUTOVER LOCKED = blue-green short-freeze.** Security-of-data first + app is read-heavy/business-hours (47 reads vs ~16 writes, 7 write routes) → no need for risky cross-cloud dual-run. Pre-built green → short off-hours freeze → delta sync → checksum + golden-backtest 0-delta gates before flip → blue warm for rollback → decommission after soak; WorkOS users pre-provisioned. Baked into plan M12. **M0 decision gate CLOSED (all 3 locked); only external prereqs remain.**
+- **2026-07-01** — **D-AUTHZ LOCKED = defense-in-depth, DB-enforced tenant+role isolation** (Jorge's criteria: client-data + moat security first, then enterprise best practice; effort irrelevant). Corrects an earlier least-change rec. Enforce at every layer: WorkOS server-verified → single DAL matrix gate → real Aurora RLS w/ per-request session context + tenant isolation → least-privilege connection (no BYPASSRLS in serving) → Secrets Manager → scoped/rotatable ML API cred + audit. **Fixes an active _THE_RULES violation** (74× RLS-bypassing service-role usage + deprecated `SUPABASE_SERVICE_ROLE_KEY`; local `.env` holds service keys). M5 grows deliberately; baked into plan M4/M5/M6.
+- **2026-07-01** — **D-ACCESS LOCKED = (b) Direct-Postgres DAL rewrite.** Grounding scan: data access is ~97% server-side (79 server vs 2 browser clients) in ~40 route handlers; authz already app-layer (74 service-role/RLS-bypassing usages, coarse RLS). So (b) is cheaper than "133 calls" and the only path to managed Aurora+WorkOS. Baked reasoning into plan M0 + M6. D-AUTHZ leaning app-layer-primary (pending lock-in); D-CUTOVER open.
+- **2026-07-01 (rev. 2)** — Jorge updated `Full-AWS-*` with an **addendum: literal two-account split-plane** (client account = frontend App Runner + Aurora + Secrets, their card/no invoicing; Jorge account = ML App Runner + S3 + training + ECR/CloudWatch/SES; cross-account deploy IAM role). Re-tagged all Track-M batches by account **[J]/[C]/[X]**, added cross-account foundation to M1, ML API key to M7. This **resolves** the escrow/IP tension (client account holds zero moats) and **changes AIR3 §5 billing** (direct-to-client-card, not invoiced $500 budget). Still awaiting M0.
