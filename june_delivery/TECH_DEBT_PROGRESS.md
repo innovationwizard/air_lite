@@ -5,7 +5,7 @@
 >
 > Legend: `[ ]` not started · `[~]` in progress · `[x]` done & verified · `[!]` blocked/needs Jorge
 
-**Last updated:** 2026-06-30 — Batches 1 (`6d1566d`) & 2 + docs relocation (`54cb226`) committed; Batch 3 COMPLETE & verified (awaiting commit); Batch 4 next
+**Last updated:** 2026-06-30 — Batches 1–3 committed (`6d1566d`/`54cb226`/`fb76f2e`); Batches 4 & 6 COMPLETE & verified (awaiting commit); Batch 5 (numpy 2.x, backtest-gated) is the only one left — needs the golden-baseline harness decision
 **Git note:** Claude does not commit. Each `[x]` batch is handed to Jorge to commit. "Committed?" column tracks that.
 
 ---
@@ -16,12 +16,14 @@
 |---|---|---|---|
 | 1 | Frontend runtime pin (Node 22) | `[x]` done & verified | ☑ committed `6d1566d` |
 | 2 | Re-enable ESLint + ESLint 9 | `[x]` done & verified | ☑ committed `54cb226` |
-| 3 | Jest 30 alignment | `[x]` done & verified | ☐ pending Jorge |
-| 4 | Remove recharts | `[ ]` | — |
+| 3 | Jest 30 alignment | `[x]` done & verified | ☑ committed `fb76f2e` |
+| 4 | Remove recharts | `[x]` done & verified | ☐ pending Jorge |
 | 5 | ML environment (gated) | `[!]` blocked on numpy decision | — |
-| 6 | Non-forecast Python caps | `[ ]` | — |
+| 6 | Non-forecast Python caps | `[x]` done & verified | ☐ pending Jorge |
 
-**OPEN DECISION (Jorge):** numpy — widen `>=1.26,<3.0` (adopt 2.x only if backtest matches) **vs.** hold `<2.0` through blind test. Blocks Batch 5 only.
+**DECISION (Jorge, 2026-06-30):** numpy → **widen to 2.x now, gated by golden-backtest diff** (`numpy>=1.26,<3.0`; adopt only if Prophet output unchanged within tolerance, else roll back). Batch 5 unblocked. Prophet stays.
+
+**⚠️ Batch 5 dependency surfaced:** the golden backtest (`ml/backtest_engine.py`) requires a **live Supabase service-role client** and **writes** to `backtest_runs`/`backtest_results`/`backtest_savings` (not a pure local computation). Establishing the baseline needs credentials + a non-polluting harness — see Batch 5.0 notes.
 
 ---
 
@@ -112,9 +114,13 @@
 
 ## BATCH 4 — Remove recharts
 
-- [ ] 4.1 — Re-confirm 0 `recharts` imports in `src`
-- [ ] 4.2 — `npm remove recharts`
-- [ ] 4.3 — `npm run build` green
+- [x] 4.1 — Re-confirmed 0 `recharts` references in `src` (guard against post-audit usage)
+- [x] 4.2 — `npm remove recharts` → removed 33 packages; gone from `package.json` + lockfile (0 `node_modules/recharts` entries)
+- [x] 4.3 — `npm run build` green (standalone emitted) + `lint` 0/0 + `test` 10/10
+
+**Files changed in Batch 4 (for Jorge's commit):**
+- `frontend/package.json` (removed `recharts`; npm also re-sorted the dependency list alphabetically)
+- `frontend/package-lock.json` (−33 packages)
 
 ---
 
@@ -133,9 +139,18 @@
 
 ## BATCH 6 — Non-forecast Python caps
 
-- [ ] 6.1 — gunicorn `<23` → `<27` + ML image boots
-- [ ] 6.2 — pytest `<9` → `<10` + suite green
-- [ ] 6.3 — Refresh stale floors (hygiene) + ruff/pytest green
+- [x] 6.1 — gunicorn `<23` → `<27` (in `requirements.txt`) — verified via full ML Docker image build (see log below)
+- [x] 6.2 — pytest `<9` → `<10` — resolves to **pytest 9.1.1**; smoke test passes in CI-mirrored container (repo root + `-w /repo/ml`)
+- [x] 6.3 — ruff floor `>=0.4.0` → `>=0.11.0` (cosmetic; installed ruff already latest **0.15.20**) — `ruff check .` → All checks passed
+
+**Verification log (Batch 6) — 2026-06-30, python:3.11-slim (prod base):**
+- Dev-deps (CI-mirrored): `pytest 9.1.1` → 1 passed; `ruff 0.15.20` → clean
+- ML image build (exit 0, 2.68 GB): `gunicorn` resolved to **26.0.0** (was <23); `gunicorn --version` inside image = 26.0.0; `Prophet + cmdstan OK` (prophet 1.3.0, cmdstanpy 1.3.0, numpy 1.26.4, pandas 2.3.3)
+- **Reference for Batch 5:** current resolved forecast stack = prophet **1.3.0**, numpy **1.26.4**, pandas **2.3.3**. Note prophet already resolves to 1.3.0, so Batch 5.1's pin is behaviorally a no-op (pure reproducibility guard). This image (`air-ml:b6`, python 3.11 / numpy 1.x) is the **"before"** for the numpy-2.x diff.
+
+**Files changed in Batch 6 (for Jorge's commit):**
+- `ml/requirements.txt` (`gunicorn<27`)
+- `ml/requirements-dev.txt` (`pytest<10`, `ruff>=0.11.0`)
 
 ---
 
@@ -145,4 +160,6 @@
 - **2026-06-30** — Batch 1 (Node 22 runtime pin) COMPLETE & verified green on Node 22 (build + 10 tests). Handed to Jorge for commit.
 - **2026-06-30** — Docker smoke test run (daemon now up). Exposed pre-existing bug N6 (Dockerfile expects standalone output that config never emitted). Jorge confirmed App Runner image is real → fixed via `output: 'standalone'`. Full image now builds (465 MB) + boots + serves on `node:22-alpine`. N6 closed. Committed `6d1566d`.
 - **2026-06-30** — Batch 2 (re-enable ESLint + ESLint 9) COMPLETE. Cleared 12 warnings, removed build suppression, enforced `--max-warnings 0` (gate proven via negative test), upgraded ESLint 8→9 + tseslint 7→8 (no flat-config migration needed). tseslint v8 found + fixed 1 empty-interface error (N7). Logged `next lint` deprecation for the deferred Next-16 pass (N8). Committed `54cb226` (with docs relocation to root `june_delivery/`).
-- **2026-06-30** — Batch 3 (Jest 30 alignment) COMPLETE. jest+@types/jest→30; RTL left at 15 (React 18). Real mismatch was jest-environment-jsdom locked at 30.3.0 → `clearMocksOnScope` crash; aligned to 30.4.1. All four Jest packages now 30.4.x, 10/10 tests pass, lint+build green. Handed to Jorge for commit.
+- **2026-06-30** — Batch 3 (Jest 30 alignment) COMPLETE. jest+@types/jest→30; RTL left at 15 (React 18). Real mismatch was jest-environment-jsdom locked at 30.3.0 → `clearMocksOnScope` crash; aligned to 30.4.1. All four Jest packages now 30.4.x, 10/10 tests pass, lint+build green. Committed `fb76f2e`.
+- **2026-06-30** — Batch 4 (remove recharts) COMPLETE. 0 src references confirmed; `npm remove recharts` dropped 33 packages; build+lint+test green. Handed to Jorge for commit.
+- **2026-06-30** — Batch 6 (non-forecast Python caps) COMPLETE. gunicorn <23→<27 (resolves 26.0.0), pytest <9→<10 (resolves 9.1.1), ruff floor →0.11 (installed 0.15.20). Verified via full ML Docker image build (Prophet+cmdstan OK) + CI-mirrored pytest/ruff. Handed to Jorge for commit. **All forecast-safe tech debt now done; only Batch 5 (numpy 2.x) remains.**
