@@ -54,6 +54,10 @@ credentials.json
 .aws/
 *.env
 !example.env
+# Catch every dotenv variant (.env, .env3, .env.prod, …) so no secrets leak.
+.env*
+!.env.example
+!**/.env.example
 .env.local
 .env.*.local
 **/.env.local
@@ -117,3 +121,9 @@ docs/
 
 # Tech-debt golden-backtest harness + client-derived forecast baselines — local only
 ml/_baselines/
+
+# Python test/coverage artifacts
+.coverage
+.coverage.*
+.pytest_cache/
+htmlcov/
