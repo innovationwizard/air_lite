@@ -5,7 +5,7 @@
 >
 > Legend: `[ ]` not started · `[~]` in progress · `[x]` done & verified · `[!]` blocked/needs Jorge
 
-**Last updated:** 2026-06-30 — Batch 1 committed (`6d1566d`); Batch 2 COMPLETE & verified (awaiting commit); Batch 3 next
+**Last updated:** 2026-06-30 — Batches 1 (`6d1566d`) & 2 + docs relocation (`54cb226`) committed; Batch 3 COMPLETE & verified (awaiting commit); Batch 4 next
 **Git note:** Claude does not commit. Each `[x]` batch is handed to Jorge to commit. "Committed?" column tracks that.
 
 ---
@@ -15,8 +15,8 @@
 | Batch | Title | State | Committed? |
 |---|---|---|---|
 | 1 | Frontend runtime pin (Node 22) | `[x]` done & verified | ☑ committed `6d1566d` |
-| 2 | Re-enable ESLint + ESLint 9 | `[x]` done & verified | ☐ pending Jorge |
-| 3 | Jest 30 alignment | `[ ]` | — |
+| 2 | Re-enable ESLint + ESLint 9 | `[x]` done & verified | ☑ committed `54cb226` |
+| 3 | Jest 30 alignment | `[x]` done & verified | ☐ pending Jorge |
 | 4 | Remove recharts | `[ ]` | — |
 | 5 | ML environment (gated) | `[!]` blocked on numpy decision | — |
 | 6 | Non-forecast Python caps | `[ ]` | — |
@@ -93,9 +93,20 @@
 
 ## BATCH 3 — Jest 30 alignment
 
-- [ ] 3.1 — `jest` + `@types/jest` → `^30`
-- [ ] 3.2 — `@testing-library/react` peer reconcile (bump to 16 only if required)
-- [ ] 3.3 — `npm test --ci` green under Jest 30
+- [x] 3.1 — `jest` `^29.7.0`→`^30.4.2`, `@types/jest` `^29.5.12`→`^30.0.0`
+- [x] 3.2 — `@testing-library/react` **left at `^15.0.7`** — bump to 16 NOT required (RTL 15 peers React ^18, which we're staying on; RTL is Jest-version-agnostic). Deferred to the React-19 pass.
+- [x] 3.3 — `npm test --ci` → **10/10 pass** under Jest 30
+
+**Extra sub-item discovered during 3.3 (the actual "mismatch" fix):**
+- [x] 3.4 — Aligned `jest-environment-jsdom` `^30.3.0`→`^30.4.1`. Bumping only `jest`→30.4.2 first produced a runtime crash (`this._moduleMocker.clearMocksOnScope is not a function`) because the locked `jest-environment-jsdom@30.3.0` pulled an older `jest-mock` lacking that method. Aligning jsdom to 30.4.1 (its latest; Jest didn't republish it at .4.2) brings `jest-mock@30.4.1`, which matches `jest-runtime@30.4.2`. **This was the real "major mismatch" the audit warned about** — now resolved with all four Jest packages on 30.4.x.
+
+**Verification log (Batch 3) — 2026-06-30:**
+- Aligned versions: `jest 30.4.2`, `jest-runtime 30.4.2`, `jest-environment-jsdom 30.4.1`, `jest-mock 30.4.1`
+- `npm test --ci` → 10/10 pass · `npm run lint` → 0/0 · `npm run build` → green, standalone emitted
+
+**Files changed in Batch 3 (for Jorge's commit):**
+- `frontend/package.json` (`jest ^30.4.2`, `@types/jest ^30.0.0`, `jest-environment-jsdom ^30.4.1`)
+- `frontend/package-lock.json`
 
 ---
 
@@ -133,4 +144,5 @@
 - **2026-06-30** — Plan + addendum + this ledger created. Drift check: no commits since base audit (last commit `8aa5c99`, 2026-05-27). Lint backlog measured = 12 warnings / 0 errors. Batch 1 started.
 - **2026-06-30** — Batch 1 (Node 22 runtime pin) COMPLETE & verified green on Node 22 (build + 10 tests). Handed to Jorge for commit.
 - **2026-06-30** — Docker smoke test run (daemon now up). Exposed pre-existing bug N6 (Dockerfile expects standalone output that config never emitted). Jorge confirmed App Runner image is real → fixed via `output: 'standalone'`. Full image now builds (465 MB) + boots + serves on `node:22-alpine`. N6 closed. Committed `6d1566d`.
-- **2026-06-30** — Batch 2 (re-enable ESLint + ESLint 9) COMPLETE. Cleared 12 warnings, removed build suppression, enforced `--max-warnings 0` (gate proven via negative test), upgraded ESLint 8→9 + tseslint 7→8 (no flat-config migration needed). tseslint v8 found + fixed 1 empty-interface error (N7). Logged `next lint` deprecation for the deferred Next-16 pass (N8). Handed to Jorge for commit.
+- **2026-06-30** — Batch 2 (re-enable ESLint + ESLint 9) COMPLETE. Cleared 12 warnings, removed build suppression, enforced `--max-warnings 0` (gate proven via negative test), upgraded ESLint 8→9 + tseslint 7→8 (no flat-config migration needed). tseslint v8 found + fixed 1 empty-interface error (N7). Logged `next lint` deprecation for the deferred Next-16 pass (N8). Committed `54cb226` (with docs relocation to root `june_delivery/`).
+- **2026-06-30** — Batch 3 (Jest 30 alignment) COMPLETE. jest+@types/jest→30; RTL left at 15 (React 18). Real mismatch was jest-environment-jsdom locked at 30.3.0 → `clearMocksOnScope` crash; aligned to 30.4.1. All four Jest packages now 30.4.x, 10/10 tests pass, lint+build green. Handed to Jorge for commit.
