@@ -114,3 +114,6 @@ docs/reconciliation/backup_*.json
 
 # Documentation / working notes — kept local, not version-controlled
 docs/
+
+# Tech-debt golden-backtest harness + client-derived forecast baselines — local only
+ml/_baselines/

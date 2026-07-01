@@ -5,7 +5,7 @@
 >
 > Legend: `[ ]` not started · `[~]` in progress · `[x]` done & verified · `[!]` blocked/needs Jorge
 
-**Last updated:** 2026-06-30 — Batches 1–3 committed (`6d1566d`/`54cb226`/`fb76f2e`); Batches 4 & 6 COMPLETE & verified (awaiting commit); Batch 5 (numpy 2.x, backtest-gated) is the only one left — needs the golden-baseline harness decision
+**Last updated:** 2026-06-30 — Batches 1–4 & 6 committed; **Batch 5 (numpy 2.x + python 3.12) COMPLETE & verified — forecasts bit-identical.** ALL 6 BATCHES DONE. `_baselines/` gitignored (local-only). Batch 5 awaiting commit — then the entire tech-debt remediation is delivered.
 **Git note:** Claude does not commit. Each `[x]` batch is handed to Jorge to commit. "Committed?" column tracks that.
 
 ---
@@ -17,9 +17,9 @@
 | 1 | Frontend runtime pin (Node 22) | `[x]` done & verified | ☑ committed `6d1566d` |
 | 2 | Re-enable ESLint + ESLint 9 | `[x]` done & verified | ☑ committed `54cb226` |
 | 3 | Jest 30 alignment | `[x]` done & verified | ☑ committed `fb76f2e` |
-| 4 | Remove recharts | `[x]` done & verified | ☐ pending Jorge |
-| 5 | ML environment (gated) | `[!]` blocked on numpy decision | — |
-| 6 | Non-forecast Python caps | `[x]` done & verified | ☐ pending Jorge |
+| 4 | Remove recharts | `[x]` done & verified | ☑ committed `fac698d` |
+| 5 | ML environment (numpy 2.x + py3.12) | `[x]` done & verified | ☐ pending Jorge |
+| 6 | Non-forecast Python caps | `[x]` done & verified | ☑ committed `fac698d` |
 
 **DECISION (Jorge, 2026-06-30):** numpy → **widen to 2.x now, gated by golden-backtest diff** (`numpy>=1.26,<3.0`; adopt only if Prophet output unchanged within tolerance, else roll back). Batch 5 unblocked. Prophet stays.
 
@@ -126,14 +126,27 @@
 
 ## BATCH 5 — ML environment (forecast-critical, gated) ⚠️
 
-- [!] 5.0 — Golden backtest baseline on CURRENT env → `ml/_baselines/backtest_golden_2026-06-30.json` _(can start once unblocked; do FIRST)_
-- [!] 5.1 — Pin `prophet>=1.3.0,<1.4.0` + diff vs golden (identical)
-- [!] 5.2 — Python 3.11→3.12 (Dockerfile + CI) + diff vs golden
-- [!] 5.3 — numpy per Jorge's decision (A widen / B hold) + diff vs golden
-- [!] 5.4 — pandas cap (coupled to 5.3) + diff vs golden
-- [!] 5.5 — Final ML rebuild + ruff + pytest + golden diff documented
+**Approach (b), per Jorge:** offline **read-only** harness (`ml/_baselines/golden_backtest.py`) — writes nothing to Supabase, unlike `backtest_engine.py`. Hermetic: data pulled ONCE to a cache; both numpy runs fit from identical inputs so numpy is the only variable. Work-set = **23 SKUs × 4 metrics = 92 triples** (frozen), production window (train 2024-10-01→2026-01-31, predict →2026-03-31), numpy seeded before each predict for reproducible MC intervals.
 
-**Blocked:** awaiting numpy decision. Golden baseline (5.0) is the mandatory first step regardless of A/B.
+- [x] 5.0 — Harness built + **golden baseline captured** on current env (numpy 1.26.4): `ml/_baselines/baseline_numpy1.json` — **92/92 triples status=ok**, forecasting 2026-02/03. Input cache `_input_cache.json` (1.29 MB, 23,561 rows, read-only pull).
+- [x] 5.0b — Determinism self-check: re-fit in same numpy-1.26 env → diff = **0.000e+00** (bit-identical). Seed reproducibility confirmed, so any numpy-2.x delta is purely numpy, not RNG. (`diff_determinism.json`)
+- [x] 5.3 — numpy widen to 2.x (Option A): isolated test `air-ml:np2` (python 3.11 + pandas 2.3.3 constant, numpy 1.26.4→**2.4.6** only). Diff vs baseline = **0.000e+00 across all 92 triples, 0 violations, WITHIN TOLERANCE**. numpy 2.x does not change any forecast. ✅ Persisted: `baseline_numpy2.json`, `diff_numpy1_vs_numpy2.json`.
+- [x] 5.2 — Python 3.11→3.12 validation: full-target image (**python 3.12.13 + numpy 2.5.0 + prophet 1.3.0**, pandas 2.3.3) → fit → diff vs baseline = **0.000e+00 across all 92 triples, 0 violations**. Python 3.12 + numpy 2.x together leave every forecast bit-identical. ✅ Persisted: `baseline_target.json`, `diff_baseline_vs_target.json`.
+- [x] 5.1 — Pinned `prophet>=1.3.0,<1.4.0` in `ml/requirements.txt` (resolves to 1.3.0 — reproducibility guard, no output change; confirmed by the 0-delta diffs).
+- [x] 5.3applied — Widened `numpy>=1.24.0,<2.0.0` → `numpy>=1.26,<3.0` in `ml/requirements.txt` (resolves to 2.5.0).
+- [x] 5.2applied — `ml/Dockerfile` `python:3.11-slim`→`python:3.12-slim`; CI `python-version` `3.11`→`3.12`.
+- [ ] 5.4 — pandas **HELD** at `<3.0` deliberately (pandas 3.0 CoW is a bigger change; separate gated step, not in the blind-test window). Logged as a future item.
+- [x] 5.5 — Final verification COMPLETE. Real production `ml/Dockerfile` + `ml/requirements.txt` build (exit 0) → **python 3.12.13 | prophet 1.3.0 | numpy 2.5.0 | pandas 2.3.3 | gunicorn 26.0.0**; `Prophet + cmdstan OK`; gunicorn boots, `/health` → **HTTP 200**. Dev gates on py3.12: ruff 0.15.20 clean, pytest 9.1.1 → 1 passed.
+
+**Files changed in Batch 5 (for Jorge's commit):**
+- `ml/requirements.txt` (`prophet>=1.3.0,<1.4.0`, `numpy>=1.26,<3.0`)
+- `ml/Dockerfile` (`python:3.12-slim`)
+- `.github/workflows/ci.yml` (ML `python-version: '3.12'`)
+- `.gitignore` — added `ml/_baselines/` (Jorge's call: the whole harness + baselines + diffs + `_input_cache.json` are **local-only**, not committed — they contain client-derived forecast values + raw quantities). Artifacts persist on disk for reproducibility but stay out of git, like `docs/`.
+
+**Batch 5 result:** numpy 1.26.4→2.5.0 AND python 3.11→3.12 both proven to leave all 92 SKU×metric forecasts **bit-identical** (0.000e+00). Critical #2 (numpy), #3 (prophet pin), #6 (python EOL) all closed. pandas widen (#8) deliberately deferred.
+
+**Status:** unblocked (numpy → widen 2.x, gated). Baseline done; numpy-2.x diff in progress. Persisting: `baseline_numpy1.json`, `baseline_numpy2.json` (pending), `diff_numpy1_vs_numpy2.json` (pending).
 
 ---
 
@@ -162,4 +175,5 @@
 - **2026-06-30** — Batch 2 (re-enable ESLint + ESLint 9) COMPLETE. Cleared 12 warnings, removed build suppression, enforced `--max-warnings 0` (gate proven via negative test), upgraded ESLint 8→9 + tseslint 7→8 (no flat-config migration needed). tseslint v8 found + fixed 1 empty-interface error (N7). Logged `next lint` deprecation for the deferred Next-16 pass (N8). Committed `54cb226` (with docs relocation to root `june_delivery/`).
 - **2026-06-30** — Batch 3 (Jest 30 alignment) COMPLETE. jest+@types/jest→30; RTL left at 15 (React 18). Real mismatch was jest-environment-jsdom locked at 30.3.0 → `clearMocksOnScope` crash; aligned to 30.4.1. All four Jest packages now 30.4.x, 10/10 tests pass, lint+build green. Committed `fb76f2e`.
 - **2026-06-30** — Batch 4 (remove recharts) COMPLETE. 0 src references confirmed; `npm remove recharts` dropped 33 packages; build+lint+test green. Handed to Jorge for commit.
-- **2026-06-30** — Batch 6 (non-forecast Python caps) COMPLETE. gunicorn <23→<27 (resolves 26.0.0), pytest <9→<10 (resolves 9.1.1), ruff floor →0.11 (installed 0.15.20). Verified via full ML Docker image build (Prophet+cmdstan OK) + CI-mirrored pytest/ruff. Handed to Jorge for commit. **All forecast-safe tech debt now done; only Batch 5 (numpy 2.x) remains.**
+- **2026-06-30** — Batch 6 (non-forecast Python caps) COMPLETE. gunicorn <23→<27 (resolves 26.0.0), pytest <9→<10 (resolves 9.1.1), ruff floor →0.11 (installed 0.15.20). Verified via full ML Docker image build (Prophet+cmdstan OK) + CI-mirrored pytest/ruff. Committed `fac698d` (with Batch 4). 
+- **2026-06-30** — Batch 5 (ML environment) COMPLETE via approach (b) offline read-only harness. Built `ml/_baselines/golden_backtest.py` (hermetic, DB-read-only, seeded). Baseline numpy 1.26.4 captured (92/92 ok). Determinism self-check = 0 delta. **numpy 1.26.4→2.4.6 diff = 0 delta. python3.12+numpy2.5 target diff = 0 delta.** Applied to production: prophet pinned, numpy `>=1.26,<3.0`, Dockerfile py3.12, CI py3.12. Real prod image builds+boots (/health 200). pandas held <3.0 (deferred). **ALL FORECASTS BIT-IDENTICAL — safe to ship.** Awaiting commit.
