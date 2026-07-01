@@ -5,7 +5,7 @@
 >
 > Legend: `[ ]` not started · `[~]` in progress · `[x]` done & verified · `[!]` blocked/needs Jorge
 
-**Last updated:** 2026-06-30 — Batches 1–4 & 6 committed; **Batch 5 (numpy 2.x + python 3.12) COMPLETE & verified — forecasts bit-identical.** ALL 6 BATCHES DONE. `_baselines/` gitignored (local-only). Batch 5 awaiting commit — then the entire tech-debt remediation is delivered.
+**Last updated:** 2026-06-30 — ✅ **ALL 6 BATCHES COMPLETE, VERIFIED, AND COMMITTED.** `6d1566d` (Node 22) · `54cb226` (ESLint 9 + docs) · `fb76f2e` (Jest 30) · `fac698d` (recharts + Python caps) · `1d3aac4` (ML env: python 3.12 + numpy 2.x + prophet pin). Tech-debt remediation from DEPENDENCIES_AND_TECH_DEBT.md delivered in full (except the deliberately-deferred frontend major pass). Forecasts proven bit-identical.
 **Git note:** Claude does not commit. Each `[x]` batch is handed to Jorge to commit. "Committed?" column tracks that.
 
 ---
@@ -18,7 +18,7 @@
 | 2 | Re-enable ESLint + ESLint 9 | `[x]` done & verified | ☑ committed `54cb226` |
 | 3 | Jest 30 alignment | `[x]` done & verified | ☑ committed `fb76f2e` |
 | 4 | Remove recharts | `[x]` done & verified | ☑ committed `fac698d` |
-| 5 | ML environment (numpy 2.x + py3.12) | `[x]` done & verified | ☐ pending Jorge |
+| 5 | ML environment (numpy 2.x + py3.12) | `[x]` done & verified | ☑ committed `1d3aac4` |
 | 6 | Non-forecast Python caps | `[x]` done & verified | ☑ committed `fac698d` |
 
 **DECISION (Jorge, 2026-06-30):** numpy → **widen to 2.x now, gated by golden-backtest diff** (`numpy>=1.26,<3.0`; adopt only if Prophet output unchanged within tolerance, else roll back). Batch 5 unblocked. Prophet stays.
@@ -176,4 +176,5 @@
 - **2026-06-30** — Batch 3 (Jest 30 alignment) COMPLETE. jest+@types/jest→30; RTL left at 15 (React 18). Real mismatch was jest-environment-jsdom locked at 30.3.0 → `clearMocksOnScope` crash; aligned to 30.4.1. All four Jest packages now 30.4.x, 10/10 tests pass, lint+build green. Committed `fb76f2e`.
 - **2026-06-30** — Batch 4 (remove recharts) COMPLETE. 0 src references confirmed; `npm remove recharts` dropped 33 packages; build+lint+test green. Handed to Jorge for commit.
 - **2026-06-30** — Batch 6 (non-forecast Python caps) COMPLETE. gunicorn <23→<27 (resolves 26.0.0), pytest <9→<10 (resolves 9.1.1), ruff floor →0.11 (installed 0.15.20). Verified via full ML Docker image build (Prophet+cmdstan OK) + CI-mirrored pytest/ruff. Committed `fac698d` (with Batch 4). 
-- **2026-06-30** — Batch 5 (ML environment) COMPLETE via approach (b) offline read-only harness. Built `ml/_baselines/golden_backtest.py` (hermetic, DB-read-only, seeded). Baseline numpy 1.26.4 captured (92/92 ok). Determinism self-check = 0 delta. **numpy 1.26.4→2.4.6 diff = 0 delta. python3.12+numpy2.5 target diff = 0 delta.** Applied to production: prophet pinned, numpy `>=1.26,<3.0`, Dockerfile py3.12, CI py3.12. Real prod image builds+boots (/health 200). pandas held <3.0 (deferred). **ALL FORECASTS BIT-IDENTICAL — safe to ship.** Awaiting commit.
+- **2026-06-30** — Batch 5 (ML environment) COMPLETE via approach (b) offline read-only harness. Built `ml/_baselines/golden_backtest.py` (hermetic, DB-read-only, seeded). Baseline numpy 1.26.4 captured (92/92 ok). Determinism self-check = 0 delta. **numpy 1.26.4→2.4.6 diff = 0 delta. python3.12+numpy2.5 target diff = 0 delta.** Applied to production: prophet pinned, numpy `>=1.26,<3.0`, Dockerfile py3.12, CI py3.12. Real prod image builds+boots (/health 200). pandas held <3.0 (deferred). **ALL FORECASTS BIT-IDENTICAL.** Committed `1d3aac4`. `ml/_baselines/` gitignored (local-only).
+- **2026-06-30** — 🏁 **REMEDIATION COMPLETE.** All 6 batches shipped across 5 commits. Only remaining tech debt = the deliberately-deferred coordinated frontend major upgrade (React 19 / Next 16 / Tailwind 4 …), which needs its own sign-off per the pre-production gates.

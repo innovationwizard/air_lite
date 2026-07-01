@@ -162,3 +162,23 @@ This plan is split into **6 batches**, each batch into **small numbered sub-batc
 - Test-coverage expansion (addendum N2) — logged as debt, not dependency-remediation scope.
 - The `forecast_purchases_derived.py` / weight-persistence work — AIR3 delivery scope, not tech debt.
 - Supabase floor bumps (`supabase-js`, `@supabase/ssr`) — same-major, low concern; fold into a future hygiene sweep unless prioritized.
+
+---
+
+## Recommended order for the following steps (post-remediation)
+
+_Added 2026-06-30 by Jorge. With all 6 tech-debt batches shipped, this is the sequencing for what comes next. Short version: **deliver first (1-2-3), then harden (4-5-6).**_
+
+1. **Infrastructure migration (Railway → AWS App Runner + S3)** — Completes Chapter 1. Enables everything that follows. Without this, weight persistence has nowhere to land and you're still paying Railway for a service that should be on your SaaS plane.
+
+2. **Derived-ratio refactor + weight persistence + Odoo sync** — Chapter 2. The single biggest client-visible improvement. Purchase forecast errors go from +1,069% to ±15%. Predictions go from minutes to milliseconds. This is the demo that justifies the gain-sharing payments.
+
+3. **Acid Test 2** — Chapter 3. Proves value with signed evidence. Locks the baseline document.
+
+4. **Test coverage expansion** — This is the gate for everything below. You have 10 tests covering a codebase that serves production predictions for a paying client. Before you touch React, Next, Tailwind, pandas, or anything that could introduce regressions, you need enough coverage to catch them. Target: critical paths (prediction pipeline, Census Filter, derived-ratio computation, auth, data sync). _(Addresses addendum N2.)_
+
+5. **Pandas 3.0** — Same golden-backtest approach that worked for numpy. CoW changes how DataFrame mutations propagate, so any code that does chained assignment on slices could silently break. Gated, proven, then applied. Lower risk than the frontend pass because the backtest harness already exists (`ml/_baselines/`, local-only). _(This is Batch 5.4, deliberately deferred.)_
+
+6. **Coordinated frontend pass (React 19 / Next 16 / Tailwind 4 / etc.)** — Last. Largest blast radius, zero client-visible value, and you need the test coverage from step 4 to do it safely. Tailwind 4 alone is a config rewrite (JS → CSS `@theme`). React 19 removes APIs you might be using. This is a dedicated sprint after delivery stabilizes. _(The deferred major pass; also carries N8 — migrate `next lint` → ESLint CLI.)_
+
+**Rationale in one line:** ship the value the client is paying for (1-2-3), then build the safety net and take on the high-blast-radius upgrades (4-5-6) — with step 4 as the hard gate before 5 and 6.
