@@ -42,7 +42,7 @@ jobs:
         run: npm run build
 
       - name: Test
-        run: npm test -- --ci --passWithNoTests
+        run: npm run test:coverage -- --ci
 
   # ─── ML SERVICE ──────────────────────────────────────────────────────────
   ml:
@@ -68,4 +68,4 @@ jobs:
         run: ruff check .
 
       - name: Test
-        run: pytest tests/ --tb=short -q
+        run: pytest tests/ --tb=short -q --cov=census_filter --cov-report=term-missing --cov-fail-under=95

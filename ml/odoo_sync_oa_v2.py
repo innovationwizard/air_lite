@@ -95,6 +95,60 @@ def supabase_get_all(path):
     return results
 
 
+def index_odoo_products_by_sku(odoo_products):
+    """Index Odoo product records by SKU (``default_code``), keeping only those
+    with usable volume/weight/dimension data.
+
+    Pure function (no I/O) so it can be unit-tested. Handles Odoo's convention of
+    returning ``False`` (not ``None``/``''``/``0``) for empty fields, and custom
+    ``x_studio_*`` fields being absent entirely. Products with a falsy SKU are
+    skipped; a later duplicate SKU overwrites an earlier one.
+    """
+    odoo_by_sku = {}
+    for p in odoo_products:
+        sku = p.get('default_code')
+        if not sku:
+            continue
+        has_data = (
+            (p.get('volume') and p['volume'] > 0) or
+            (p.get('weight') and p['weight'] > 0) or
+            (p.get('x_studio_alto') and p['x_studio_alto'] > 0)
+        )
+        if has_data:
+            odoo_by_sku[sku] = p
+    return odoo_by_sku
+
+
+def compute_product_patch(odoo_p, supa_p):
+    """Compute the Supabase patch for one matched (Odoo, Supabase) product pair.
+
+    Pure function (no I/O). Only includes a field when the Odoo value is present
+    and positive AND differs from the current Supabase value beyond a float
+    tolerance (volume 1e-6, dimensions 1e-4). An empty patch means "already
+    current" → the caller skips the write.
+    """
+    patch = {}
+
+    # Volume
+    if odoo_p.get('volume') and odoo_p['volume'] > 0:
+        current_vol = float(supa_p['volume_m3']) if supa_p.get('volume_m3') else 0
+        if abs(current_vol - odoo_p['volume']) > 0.000001:
+            patch['volume_m3'] = odoo_p['volume']
+
+    # Dimensions (Alto/Ancho/Largo → height_m/width_m/length_m)
+    for odoo_field, supa_field in [
+        ('x_studio_alto', 'height_m'),
+        ('x_studio_ancho', 'width_m'),
+        ('x_studio_largo', 'length_m'),
+    ]:
+        if odoo_p.get(odoo_field) and odoo_p[odoo_field] > 0:
+            current = float(supa_p[supa_field]) if supa_p.get(supa_field) else 0
+            if abs(current - odoo_p[odoo_field]) > 0.0001:
+                patch[supa_field] = odoo_p[odoo_field]
+
+    return patch
+
+
 def sync_product_volumes(execute_kw):
     """Pull product volumes and dimensions from Odoo, match by SKU, update Supabase."""
     logger.info('--- SYNCING PRODUCT VOLUMES & DIMENSIONS ---')
@@ -111,19 +165,8 @@ def sync_product_volumes(execute_kw):
     )
     logger.info('Odoo: %d total products fetched', len(odoo_products))
 
-    # Index by SKU — only products with volume or dimensions
-    odoo_by_sku = {}
-    for p in odoo_products:
-        sku = p.get('default_code')
-        if not sku:
-            continue
-        has_data = (
-            (p.get('volume') and p['volume'] > 0) or
-            (p.get('weight') and p['weight'] > 0) or
-            (p.get('x_studio_alto') and p['x_studio_alto'] > 0)
-        )
-        if has_data:
-            odoo_by_sku[sku] = p
+    # Index by SKU — only products with volume/weight/dimension data
+    odoo_by_sku = index_odoo_products_by_sku(odoo_products)
 
     with_vol = sum(1 for p in odoo_by_sku.values() if p.get('volume') and p['volume'] > 0)
     with_dims = sum(1 for p in odoo_by_sku.values() if p.get('x_studio_alto') and p['x_studio_alto'] > 0)
@@ -147,24 +190,7 @@ def sync_product_volumes(execute_kw):
     logger.info('Matched by SKU: %d / %d Supabase products', len(matchable), len(supa_products))
 
     for i, (supa_p, odoo_p) in enumerate(matchable):
-        patch = {}
-
-        # Volume
-        if odoo_p.get('volume') and odoo_p['volume'] > 0:
-            current_vol = float(supa_p['volume_m3']) if supa_p.get('volume_m3') else 0
-            if abs(current_vol - odoo_p['volume']) > 0.000001:
-                patch['volume_m3'] = odoo_p['volume']
-
-        # Dimensions (Alto/Ancho/Largo → height_m/width_m/length_m)
-        for odoo_field, supa_field in [
-            ('x_studio_alto', 'height_m'),
-            ('x_studio_ancho', 'width_m'),
-            ('x_studio_largo', 'length_m'),
-        ]:
-            if odoo_p.get(odoo_field) and odoo_p[odoo_field] > 0:
-                current = float(supa_p[supa_field]) if supa_p.get(supa_field) else 0
-                if abs(current - odoo_p[odoo_field]) > 0.0001:
-                    patch[supa_field] = odoo_p[odoo_field]
+        patch = compute_product_patch(odoo_p, supa_p)
 
         if not patch:
             skipped += 1

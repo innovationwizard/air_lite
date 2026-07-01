@@ -22,6 +22,17 @@ const config = {
     '!src/**/*.stories.{js,jsx,ts,tsx}',
     '!src/**/__tests__/**',
   ],
+  // Coverage floor scoped to critical, security-relevant modules (ratchet
+  // outward as coverage grows — H1). The auth role matrix is the regression
+  // net for the WorkOS + Aurora RLS migration (D-AUTHZ); do not let it drop.
+  coverageThreshold: {
+    './src/lib/auth/roles.ts': {
+      statements: 75,
+      branches: 90,
+      functions: 90,
+      lines: 90,
+    },
+  },
   testMatch: [
     '<rootDir>/src/**/__tests__/**/*.{js,jsx,ts,tsx}',
     '<rootDir>/src/**/*.{spec,test}.{js,jsx,ts,tsx}',
