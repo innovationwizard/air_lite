@@ -52,7 +52,7 @@ _Swap this section per project._
 - Always use UUIDv7 for all identifiers. Never default to v4.
 
 ### SUPABASE
-- Deprecated: SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY — do not use.
+- API keys (migration completed 2026-07-13): use `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` (publishable `sb_publishable_…`, client-side) and `SUPABASE_SECRET_KEY` (secret `sb_secret_…`, server-side, bypasses RLS). Legacy JWT anon/service_role keys are **disabled** in the dashboard — do not re-enable or reference `SUPABASE_ANON_KEY` / `SUPABASE_SERVICE_ROLE_KEY` / `SUPABASE_SERVICE_KEY`.
 - Connection options: Direct (no IPv4), Transaction pooler (no IPv4), Session pooler (IPv4 only).
 
 ### NEXT.JS 16

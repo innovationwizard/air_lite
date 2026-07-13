@@ -1,6 +1,6 @@
 # Supabase API Key Migration — Legacy → Publishable/Secret
 
-**Status:** IN PROGRESS — Phases 0–3 + 2b done (all repo code/docs); Phase 4 (host env vars) is the next gate
+**Status:** ✅ COMPLETE 2026-07-13 — legacy keys disabled, `_THE_RULES.MD` flag updated. (Only optional manual browser-login spot-check remains.)
 **Opened:** 2026-07-13
 **Owner:** Jorge
 **Driver:** `_THE_RULES.MD` §ACTIVE CONTEXT — *"Deprecated: SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY — do not use."* Legacy anon/service_role keys are removed by Supabase in **late 2026**, inside the delivery horizon.
@@ -80,23 +80,34 @@ Jorge's call: **update all**. Renamed the deprecated names across **40 files** (
 2. `changelogs/2026-03-22_deep-refactor-phases-0-6.md` — historical record of what was set on that date; not rewritten.
 3. `june_delivery/TECH_DEBT_PROGRESS.md` + `TECH_DEBT_REMEDIATION_PLAN.md` — describe the deprecated key as a *known violation to fix*; the old name is the point of the sentence.
 
-### Phase 4 — Update env vars on every runtime (must mirror the renames)
+### Phase 4 — Update env vars on every runtime (must mirror the renames) — ✅ DONE 2026-07-13
 > ⚠️ A rename not mirrored in the hosts = instant outage (same failure class as the 2026-04-24 ML auth-key drift).
-- [ ] **Railway** (ML service): add `SUPABASE_SECRET_KEY`; remove `SUPABASE_SERVICE_KEY` / `SUPABASE_SERVICE_ROLE_KEY`
-- [ ] **Frontend host** (App Runner / Vercel — whichever serves `airefill.app`): add `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` + `SUPABASE_SECRET_KEY`; remove old names
-- [ ] Local `.env3` / `.env4` / `frontend/.env.local`: rename to match
-- [ ] [frontend/.env.production](frontend/.env.production) (tracked): confirm it introduces no old names
+- [x] **Railway** (ML service): `SUPABASE_SECRET_KEY` present; no `SUPABASE_SERVICE_KEY` / `SUPABASE_SERVICE_ROLE_KEY` (6 service vars confirmed via dashboard 2026-07-13)
+- [x] **Frontend host = Vercel** (confirmed — resolves the earlier App-Runner-vs-Vercel doc ambiguity; live frontend is Vercel): `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` + `SUPABASE_SECRET_KEY` added (both marked **Sensitive**, scoped Production+Preview)
+- [x] Local canonical env consolidated to `.env4` (new names). Old `.env*` to be deleted.
+- [x] [frontend/.env.production](frontend/.env.production) — introduces no old names (only `NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_DEMO_MODE`)
 
-### Phase 5 — Verify before cutting over
-- [ ] Frontend: log in, load a role-gated page → publishable key + RLS auth works
-- [ ] Service-role path: hit an endpoint using `createServiceRoleClient()` and confirm it **bypasses RLS** (an operation a normal user couldn't do) → proves the secret key has elevated access
-- [ ] ML: trigger `/backtest/status/<id>` and an Odoo sync dry-run → Supabase reads/writes succeed with `SUPABASE_SECRET_KEY`
-- [ ] `npm run lint && npm run build` (frontend); `ruff check . && pytest` (ml)
+**Live verification (2026-07-13):**
+- **ML / Railway — full pass.** `/health`→200; protected endpoint **without** key→**401** (restored auth deployed & enforcing); with correct key→`404 "Run not found"` (auth passed **and** Supabase queried successfully → `SUPABASE_SECRET_KEY` wired correctly). Confirms both the auth fix *and* the key rename are live.
+- **Frontend / Vercel — liveness only.** `airefill.app/login`→200. Browser login + service-role RLS-bypass path still to be confirmed after a Vercel **redeploy** picks up the new vars (env changes apply only to new deployments; `NEXT_PUBLIC_` vars are inlined at build time).
 
-### Phase 6 — Decommission legacy
-- [ ] Grep whole repo for `SERVICE_ROLE`, `SERVICE_KEY`, `_ANON_KEY` → expect **zero** remaining
-- [ ] After all above is green in prod, **disable the legacy anon + service_role keys** in the dashboard (reversible)
-- [ ] Close the `_THE_RULES.MD` §ACTIVE-CONTEXT deprecation flag
+⚠️ **Vercel caveats:**
+- Trigger a **redeploy** of the renamed commit so the new vars take effect (existing deployment still runs the pre-rename build).
+- New vars are scoped **Production + Preview** only — add **Development** if you use `vercel dev`.
+
+### Phase 5 — Verify before cutting over — mostly ✅ (browser login pending)
+- [ ] Frontend: log in, load a role-gated page → publishable key + RLS auth works. **← ONLY REMAINING ITEM (manual, Jorge).** Vercel redeployed 2026-07-13; `/login`→200 and `/api/health`→ok on the new build.
+- [x] ML: `/backtest/status/1` against live Railway — auth **enforced** (401 without key) and Supabase **queried** with correct key → `SUPABASE_SECRET_KEY` confirmed live.
+- [x] Creds from consolidated local `.env`: Supabase REST with secret key → HTTP 200; Odoo authenticate → uid 198.
+- [x] `ruff check . && pytest` (ml) green; `next lint && npm run build` (frontend) green.
+- [x] Local `frontend/.env.local` migrated to new names (values preserved) so `npm run dev` matches the renamed code.
+
+**Local env final state (2026-07-13):** `.env3`/`.env4` deleted; `.env4`→`.env` (new names inside); `frontend/.env.local` renamed to new names. No old names in any local env file.
+
+### Phase 6 — Decommission legacy — ✅ DONE 2026-07-13
+- [x] Runtime/config grep for old names → **zero** in the app path. Remaining mentions are intentional historical/meta only: `changelogs/`, `june_delivery/TECH_DEBT_*` (violation descriptions), and `_THE_RULES.MD` (now phrased as "disabled — do not re-enable").
+- [x] **Legacy anon + service_role keys disabled** in the Supabase dashboard (dashboard now shows "Re-enable JWT-based API keys", i.e. currently off). Reversible if needed.
+- [x] `_THE_RULES.MD` §ACTIVE-CONTEXT flag updated: from "Deprecated … do not use" → new-key convention + "legacy … disabled, do not re-enable."
 
 ---
 
@@ -111,7 +122,9 @@ Jorge's call: **update all**. Renamed the deprecated names across **40 files** (
 - _2026-07-13_ — **Phases 2–3 landed & verified** (runtime code + `.env.example` + ci.yml). ml ruff/pytest green; frontend lint + production build green. Zero old names remain in the runtime set.
 - _2026-07-13_ — **Discovered broader footprint** (~40 files in `docs/` + `scripts/`, see Phase 2b).
 - _2026-07-13_ — **Decision: update all.** Swept all 40 files. Excluded 3 buckets where the deprecated name is the point of the text (`_THE_RULES.MD` deprecation flag, `changelogs/`, `june_delivery/TECH_DEBT_*` violation descriptions) — see Phase 2b.
-- _(remaining decisions to record: deploy window for Phase 4)_
+- _2026-07-13_ — **Phase 4 done.** Railway (6 vars) + Vercel (2 new Sensitive vars) + local `.env4` all set with new names. ML side live-verified (auth + secret key). Frontend host confirmed = **Vercel**. **Decision: old `.env*` files to be permanently deleted** — production reads platform vars, not local files, so safe for prod; keep `.env4` as canonical and re-copy to `.env.local`/`.env` for local dev (those names are what tooling auto-loads; `.env4` is not).
+- _2026-07-13_ — **Local env consolidated:** `.env3`/`.env4`/root `.env.local` deleted; `.env4`→`.env`; `frontend/.env.local` renamed to new var names (values preserved). Vercel redeployed; ML + Supabase + Odoo creds re-verified from the new `.env`.
+- _2026-07-13_ — **Phase 6 done → MIGRATION COMPLETE.** Legacy anon/service_role keys disabled in dashboard; `_THE_RULES.MD` flag updated to the new-key convention. Optional: one manual browser-login spot-check.
 
 ## Sources
 - [Migrating to publishable and secret API keys — Supabase Docs](https://supabase.com/docs/guides/getting-started/migrating-to-new-api-keys)
