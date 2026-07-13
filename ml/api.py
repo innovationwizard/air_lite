@@ -4,8 +4,9 @@ Deployed on Railway. Exposes HTTP endpoints for the Next.js frontend to trigger
 backtest cycles and check status.
 """
 
-import os
+import hmac
 import logging
+import os
 import threading
 
 from flask import Flask, request, jsonify
@@ -33,12 +34,16 @@ def get_supabase():
 def verify_api_key():
     """Verify the shared API key from the request header.
 
-    TEMPORARY BYPASS 2026-04-24 for Acid Test 2 demo: Railway env var state
-    drifted from Vercel; restoring takes longer than the demo window. Bypass
-    ALL auth on this Flask service. Risk window = demo duration.
-    RESTORE this function after the demo (revert this commit).
+    Compares the caller-supplied ``X-API-Key`` header against the configured
+    ``ML_SERVICE_API_KEY`` using a constant-time comparison. Fails closed: if no
+    key is configured on the service, every request is rejected rather than
+    silently allowed through.
     """
-    return True
+    if not ML_SERVICE_API_KEY:
+        logger.error('ML_SERVICE_API_KEY is not configured; rejecting request')
+        return False
+    provided = request.headers.get('X-API-Key', '')
+    return hmac.compare_digest(provided, ML_SERVICE_API_KEY)
 
 
 @app.before_request
