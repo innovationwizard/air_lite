@@ -24,23 +24,23 @@ URL="${NEXT_PUBLIC_SUPABASE_URL}"
 
 # Expect: 14 runs
 curl -s -X POST "${URL}/rest/v1/rpc/rpc_gerencia_validation_runs" \
-  -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
-  -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
+  -H "apikey: ${SUPABASE_SECRET_KEY}" \
+  -H "Authorization: Bearer ${SUPABASE_SECRET_KEY}" \
   -H "Content-Type: application/json" -d '{}' \
   | python3 -c "import json,sys; print(len(json.load(sys.stdin)),'runs')"
 
 # Expect: 36 SKUs
 curl -s -X POST "${URL}/rest/v1/rpc/rpc_gerencia_validation" \
-  -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
-  -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
+  -H "apikey: ${SUPABASE_SECRET_KEY}" \
+  -H "Authorization: Bearer ${SUPABASE_SECRET_KEY}" \
   -H "Content-Type: application/json" \
   -d '{"p_run_id": 58, "p_carvajal_reyma_only": true}' \
   | python3 -c "import json,sys; print(len(json.load(sys.stdin)),'SKUs')"
 
 # Expect: {"capacity_m3": 10007.28}
 curl -s "${URL}/rest/v1/warehouses?select=id,name,capacity_m3&id=eq.1" \
-  -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
-  -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}"
+  -H "apikey: ${SUPABASE_SECRET_KEY}" \
+  -H "Authorization: Bearer ${SUPABASE_SECRET_KEY}"
 ```
 
 - [ ] `14 runs` returned.
@@ -83,8 +83,8 @@ If you don't know whether a gerencia user exists, verify:
 ```
 set -a && source .env.local && set +a
 curl -s "${NEXT_PUBLIC_SUPABASE_URL}/rest/v1/user_profiles?select=display_name,role&role=in.(gerencia,superuser,admin)&order=role" \
-  -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
-  -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" | python3 -m json.tool
+  -H "apikey: ${SUPABASE_SECRET_KEY}" \
+  -H "Authorization: Bearer ${SUPABASE_SECRET_KEY}" | python3 -m json.tool
 ```
 
 **Verified 2026-04-22 evening:** only `superuser Jorge Contreras` exists in these three roles. No `gerencia` or `admin` user. So Option 2A resolves to "log in as Jorge's superuser account" and that account does reach `/gerencia/validacion`.

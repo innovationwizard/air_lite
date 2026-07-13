@@ -7,7 +7,7 @@ Usage:
 
 Or set environment variables:
     SUPABASE_URL=https://your-project.supabase.co
-    SUPABASE_SERVICE_KEY=your-service-role-key
+    SUPABASE_SECRET_KEY=your-service-role-key
 """
 
 import csv
@@ -870,13 +870,13 @@ def run_ingestion(supabase: Client) -> None:
 def main():
     parser = argparse.ArgumentParser(description='AI Refill Lite — Data Ingestion')
     parser.add_argument('--supabase-url', default=os.environ.get('SUPABASE_URL'))
-    parser.add_argument('--supabase-key', default=os.environ.get('SUPABASE_SERVICE_KEY'))
+    parser.add_argument('--supabase-key', default=os.environ.get('SUPABASE_SECRET_KEY'))
     args = parser.parse_args()
 
     if not args.supabase_url or not args.supabase_key:
-        print('Error: SUPABASE_URL and SUPABASE_SERVICE_KEY must be set')
+        print('Error: SUPABASE_URL and SUPABASE_SECRET_KEY must be set')
         print('  Either pass --supabase-url and --supabase-key')
-        print('  Or set SUPABASE_URL and SUPABASE_SERVICE_KEY environment variables')
+        print('  Or set SUPABASE_URL and SUPABASE_SECRET_KEY environment variables')
         sys.exit(1)
 
     supabase = create_client(args.supabase_url, args.supabase_key)

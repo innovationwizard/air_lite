@@ -9,7 +9,7 @@ database IDs but same SKUs.
 
 Usage:
     ODOO_URL=... ODOO_DB=... ODOO_USERNAME=... ODOO_API_KEY=... \
-    SUPABASE_URL=... SUPABASE_SERVICE_ROLE_KEY=... \
+    SUPABASE_URL=... SUPABASE_SECRET_KEY=... \
     python ml/odoo_sync_oa_v2.py
 """
 
@@ -29,7 +29,7 @@ ODOO_DB = os.environ.get('ODOO_DB', '')
 ODOO_USERNAME = os.environ.get('ODOO_USERNAME', '')
 ODOO_API_KEY = os.environ.get('ODOO_API_KEY', '')
 SUPABASE_URL = os.environ.get('SUPABASE_URL', os.environ.get('NEXT_PUBLIC_SUPABASE_URL', ''))
-SUPABASE_KEY = os.environ.get('SUPABASE_SERVICE_ROLE_KEY', '')
+SUPABASE_KEY = os.environ.get('SUPABASE_SECRET_KEY', '')
 
 RETRY_ATTEMPTS = 3
 RETRY_DELAY_SECS = 3
@@ -216,7 +216,7 @@ def main():
     uid, execute_kw = connect_odoo()
 
     if not SUPABASE_URL or not SUPABASE_KEY:
-        logger.error('Missing Supabase env vars: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY')
+        logger.error('Missing Supabase env vars: SUPABASE_URL, SUPABASE_SECRET_KEY')
         sys.exit(1)
 
     logger.info('=== OA v3 SYNC STARTED ===')

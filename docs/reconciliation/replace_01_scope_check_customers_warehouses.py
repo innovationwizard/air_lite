@@ -33,7 +33,7 @@ def load_env():
 load_env()
 
 SUPA = os.environ['NEXT_PUBLIC_SUPABASE_URL']
-KEY = os.environ['SUPABASE_SERVICE_ROLE_KEY']
+KEY = os.environ['SUPABASE_SECRET_KEY']
 OURL = os.environ['ODOO_URL']
 ODB = os.environ['ODOO_DB']
 OUSER = os.environ['ODOO_USERNAME']

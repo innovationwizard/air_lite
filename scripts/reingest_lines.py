@@ -16,9 +16,9 @@ from ingest import (
 
 def main():
     url = os.environ.get('NEXT_PUBLIC_SUPABASE_URL')
-    key = os.environ.get('SUPABASE_SERVICE_ROLE_KEY')
+    key = os.environ.get('SUPABASE_SECRET_KEY')
     if not url or not key:
-        print('Set NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY')
+        print('Set NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SECRET_KEY')
         sys.exit(1)
 
     supabase = create_client(url, key)

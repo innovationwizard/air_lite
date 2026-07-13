@@ -1012,12 +1012,12 @@ When `NEXT_PUBLIC_DEMO_MODE=true`:
 | Variable | Required | Purpose |
 |----------|----------|---------|
 | `NEXT_PUBLIC_SUPABASE_URL` | Yes | Supabase project URL |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Yes | Supabase anonymous key (client-side) |
+| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Yes | Supabase publishable key (client-side; RLS-enforced) |
 | `NEXT_PUBLIC_API_URL` | Yes | Backend API URL (e.g., `https://api.airefill.app`) |
 | `NEXT_PUBLIC_DEMO_MODE` | No | Enable data anonymization (`true`/`false`) |
 | `ML_SERVICE_URL` | Yes | Railway ML service URL (server-side only) |
 | `ML_SERVICE_API_KEY` | Yes | Shared secret for ML service auth |
-| `SUPABASE_SERVICE_ROLE_KEY` | Yes | Service role key (server-side, bypasses RLS) |
+| `SUPABASE_SECRET_KEY` | Yes | Supabase secret key (server-side, bypasses RLS) |
 
 ### API (`api-node`)
 
@@ -1039,7 +1039,7 @@ When `NEXT_PUBLIC_DEMO_MODE=true`:
 | Variable | Required | Purpose |
 |----------|----------|---------|
 | `SUPABASE_URL` | Yes | Supabase project URL |
-| `SUPABASE_SERVICE_KEY` | Yes | Service role key |
+| `SUPABASE_SECRET_KEY` | Yes | Supabase secret key |
 | `API_KEY` | Yes | Shared secret (must match `ML_SERVICE_API_KEY`) |
 
 ---

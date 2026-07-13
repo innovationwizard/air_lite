@@ -392,7 +392,7 @@ Cubicaje math is no longer "bodega aggregate with a hardcoded 67 m³ furgón." I
 
 ### 11.3 Prod-DB state as of 2026-04-22 evening (Revision 3)
 
-Direct probe of Supabase project `plirrpkasyytpgzwwztl` via REST + `SUPABASE_SERVICE_ROLE_KEY`:
+Direct probe of Supabase project `plirrpkasyytpgzwwztl` via REST + `SUPABASE_SECRET_KEY`:
 
 | Table | Count | Relevance |
 |---|---|---|

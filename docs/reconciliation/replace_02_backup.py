@@ -38,7 +38,7 @@ def load_env():
 load_env()
 
 SUPA = os.environ['NEXT_PUBLIC_SUPABASE_URL']
-KEY = os.environ['SUPABASE_SERVICE_ROLE_KEY']
+KEY = os.environ['SUPABASE_SECRET_KEY']
 PRODUCT_ID = 33
 TS = datetime.now().strftime('%Y%m%d_%H%M%S')
 OUT = Path(f'/Users/jorgeluiscontrerasherrera/Documents/_git/air_lite/docs/reconciliation/backup_77201046_product33_{TS}.json')

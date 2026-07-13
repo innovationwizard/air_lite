@@ -24,11 +24,11 @@ app = Flask(__name__)
 
 ML_SERVICE_API_KEY = os.environ.get('ML_SERVICE_API_KEY', '')
 SUPABASE_URL = os.environ.get('SUPABASE_URL', '')
-SUPABASE_SERVICE_KEY = os.environ.get('SUPABASE_SERVICE_KEY', '')
+SUPABASE_SECRET_KEY = os.environ.get('SUPABASE_SECRET_KEY', '')
 
 
 def get_supabase():
-    return create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
+    return create_client(SUPABASE_URL, SUPABASE_SECRET_KEY)
 
 
 def verify_api_key():

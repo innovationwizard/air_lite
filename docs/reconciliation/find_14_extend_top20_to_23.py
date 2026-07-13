@@ -54,7 +54,7 @@ DB = os.environ['ODOO_DB']
 USER = os.environ['ODOO_USERNAME']
 KEY = os.environ['ODOO_API_KEY']
 SUPA = os.environ['NEXT_PUBLIC_SUPABASE_URL']
-SUPA_KEY = os.environ['SUPABASE_SERVICE_ROLE_KEY']
+SUPA_KEY = os.environ['SUPABASE_SECRET_KEY']
 
 print("Auth Odoo...")
 common = xmlrpc.client.ServerProxy(f'{URL}/xmlrpc/2/common', allow_none=True)

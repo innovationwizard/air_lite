@@ -29,7 +29,7 @@ def load_env():
 load_env()
 
 SUPA = os.environ['NEXT_PUBLIC_SUPABASE_URL']
-KEY = os.environ['SUPABASE_SERVICE_ROLE_KEY']
+KEY = os.environ['SUPABASE_SECRET_KEY']
 MIGRATION = Path('/Users/jorgeluiscontrerasherrera/Documents/_git/air_lite/supabase/migrations/20260423000001_aggregate_demand_daily_for_product.sql')
 
 sql = MIGRATION.read_text()

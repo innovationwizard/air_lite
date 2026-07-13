@@ -74,7 +74,7 @@ def load_env():
 load_env()
 
 SUPA = os.environ['NEXT_PUBLIC_SUPABASE_URL']
-KEY = os.environ['SUPABASE_SERVICE_ROLE_KEY']
+KEY = os.environ['SUPABASE_SECRET_KEY']
 
 def supa_request(method, path, body=None, prefer=None):
     data = json.dumps(body).encode() if body is not None else None

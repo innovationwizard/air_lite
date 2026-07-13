@@ -351,12 +351,12 @@ Next.js + Supabase SSR doesn't auto-protect against CSRF. For POST/PATCH/DELETE,
 
 #### 4.E Key rotation
 - Quarterly rotation: `SERVER_TO_SERVER_API_KEY`, `ML_SERVICE_API_KEY`
-- Annual rotation: `SUPABASE_SERVICE_ROLE_KEY` (regenerate from Supabase dashboard, redeploy)
+- Annual rotation: `SUPABASE_SECRET_KEY` (regenerate from Supabase dashboard, redeploy)
 - Document rotation runbook in `docs/security/RUNBOOK_KEY_ROTATION.md` (separate doc, not yet written)
 - Calendar event in 90 days
 
 #### 4.F Vercel deployment hygiene
-- Ensure `SUPABASE_SERVICE_ROLE_KEY` is marked **Sensitive** in Vercel (does not appear in build logs)
+- Ensure `SUPABASE_SECRET_KEY` is marked **Sensitive** in Vercel (does not appear in build logs)
 - Lock Vercel project to GitHub-Actions-deployed only (no manual deploys)
 - Enable Vercel SSO for dashboard access
 

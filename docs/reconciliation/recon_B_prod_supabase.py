@@ -32,7 +32,7 @@ def load_env():
 
 env = load_env()
 URL = env['NEXT_PUBLIC_SUPABASE_URL']
-KEY = env['SUPABASE_SERVICE_ROLE_KEY']
+KEY = env['SUPABASE_SECRET_KEY']
 
 OUT = Path('/Users/jorgeluiscontrerasherrera/Documents/_git/air_lite/docs/reconciliation/recon_B_prod_supabase_results.json')
 SKU = '77201046'

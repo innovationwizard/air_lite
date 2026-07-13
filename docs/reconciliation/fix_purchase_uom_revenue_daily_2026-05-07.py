@@ -70,7 +70,7 @@ def load_env():
 
 load_env()
 SUPA = os.environ['NEXT_PUBLIC_SUPABASE_URL']
-KEY  = os.environ['SUPABASE_SERVICE_ROLE_KEY']
+KEY  = os.environ['SUPABASE_SECRET_KEY']
 
 # ── helpers ───────────────────────────────────────────────────────────────────
 

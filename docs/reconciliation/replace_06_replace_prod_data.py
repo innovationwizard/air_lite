@@ -48,7 +48,7 @@ def load_env():
 load_env()
 
 SUPA = os.environ['NEXT_PUBLIC_SUPABASE_URL']
-KEY = os.environ['SUPABASE_SERVICE_ROLE_KEY']
+KEY = os.environ['SUPABASE_SECRET_KEY']
 PRODUCT_ID = 33
 EXTRACT = Path('/Users/jorgeluiscontrerasherrera/Documents/_git/air_lite/docs/reconciliation/odoo_extract_77201046_latest.json')
 OUT = Path(f'/Users/jorgeluiscontrerasherrera/Documents/_git/air_lite/docs/reconciliation/replace_06_output.json')

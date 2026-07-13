@@ -34,7 +34,7 @@ def load_env():
 
 load_env()
 SUPA     = os.environ['NEXT_PUBLIC_SUPABASE_URL']
-SUPA_KEY = os.environ['SUPABASE_SERVICE_ROLE_KEY']
+SUPA_KEY = os.environ['SUPABASE_SECRET_KEY']
 ML_URL   = os.environ['ML_SERVICE_URL']
 ML_KEY   = os.environ['ML_SERVICE_API_KEY']
 
