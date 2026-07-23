@@ -103,6 +103,12 @@ const allNavGroups: NavGroup[] = [
         subtitle: 'Resumen de Compras',
       },
       {
+        name: 'Reabastecimiento',
+        href: '/compras/reabastecimiento',
+        icon: Warehouse,
+        subtitle: 'Sugerido por bodega y proveedor',
+      },
+      {
         name: 'Forecast de Compras',
         href: '/compras/forecast',
         icon: BarChart3,
