@@ -10,11 +10,14 @@ Design decisions (docs/compras/REABASTECIMIENTO_LIVE_PROGRESS.md B2):
     computed DISPLAY aggregate across ALL physical warehouses (+ patio), per
     Wilmer: "todo el inventario de todas las bodegas físicas... también patio".
   - Patio = the `<WH>/Entrada` locations (confirmed 2026-07-28).
-  - Tránsito = confirmed purchase.order.line with FUTURE date_planned, GLOBAL
-    per product (the workbook's Tránsito sheet is not bodega-split; all three
-    engine sheets VLOOKUP the same total). Draft-PO ("cotización") counting for
-    import suppliers is implemented but OFF until David confirms mechanics
-    (INCLUDE_DRAFT_TRANSIT).
+  - Tránsito = confirmed purchase.order.line with pending qty and STRICTLY
+    FUTURE date_planned — RULE CONFIRMED BY WILMER 2026-07-30: "Tránsito no
+    cuenta fechas pasadas" (he updates delivery dates when suppliers
+    reschedule, so late-but-expected becomes future; un-updated past = dead).
+    Past-dated pending (never-cancelled pile) excluded + reported. GLOBAL per
+    product (the workbook's Tránsito sheet is not bodega-split). Draft-PO
+    ("cotización") counting for import suppliers is implemented but OFF until
+    David confirms mechanics (INCLUDE_DRAFT_TRANSIT).
   - Velocity p3/p6 = monthly average of ORDERED qty (sale.order.line
     product_uom_qty, states 'sale'/'done') over the last 3/6 COMPLETE calendar
     months. State set is a flagged assumption (OQ-D minor open).
@@ -488,37 +491,54 @@ def sync_seasonal(execute, sku_to_opid, issues):
 
 
 def sync_transit(execute, issues):
-    """Global per-product transit: confirmed PO lines with FUTURE date_planned,
-    pending = product_qty - qty_received. Counts future drafts (cotización)
-    for visibility; includes them only if INCLUDE_DRAFT_TRANSIT."""
+    """Global per-product transit: confirmed PO lines with pending qty
+    (product_qty - qty_received > 0) and STRICTLY FUTURE date_planned.
+
+    RULE CONFIRMED BY WILMER 2026-07-30 (OQ-F): "Tránsito no cuenta fechas
+    pasadas." His discipline: when a supplier reschedules, he UPDATES the
+    delivery date on the PO — so a late-but-still-expected delivery becomes
+    future-dated and counts; an un-updated past date is dead. All past-dated
+    pending (the never-cancelled pile, back to 2024-10) is excluded and
+    reported. Transit near 0 is therefore CORRECT under this rule whenever no
+    future-dated confirmed lines exist (locals deliver same-week; the Carvajal
+    monthly enters via cotización or the manual override)."""
     now = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
     lines = odoo_read_all(execute, 'purchase.order.line',
-                          [['state', '=', 'purchase'], ['date_planned', '>', now]],
-                          ['product_id', 'product_qty', 'qty_received'])
+                          [['state', '=', 'purchase']],
+                          ['product_id', 'product_qty', 'qty_received', 'date_planned'])
     transit = {}
+    counted = past_excluded = 0
     for ln in lines:
         if not ln.get('product_id'):
             continue
         pending = (ln.get('product_qty') or 0.0) - (ln.get('qty_received') or 0.0)
-        if pending > 0:
+        if pending <= 0:
+            continue
+        if (ln.get('date_planned') or '') > now:
             transit[ln['product_id'][0]] = transit.get(ln['product_id'][0], 0.0) + pending
+            counted += 1
+        else:
+            past_excluded += 1
+    issues.add('info', 'transit',
+               f'transit = FUTURE-dated pending only (Wilmer 2026-07-30): {counted} lines '
+               f'counted; {past_excluded} past-dated pending lines excluded '
+               f'(incl. the no-auto-cancel pile back to 2024-10 — cleanup with David)')
 
-    # Data-horizon staleness check: Wilmer curates FUTURE delivery dates on his
-    # live instance, so zero future-dated pending usually means the BUILD is a
-    # stale clone (verified 2026-07-30: a fresh dev build carried a ~Jul-14
-    # backup — 762 pending lines, all past-dated). Warn loudly; never widen the
-    # rule to past dates (that would count his stale-PO junk as transit).
-    latest = execute('purchase.order.line', 'search_read',
-                     [['state', '=', 'purchase']], fields=['date_planned'],
-                     order='date_planned desc', limit=1)
-    if latest:
-        newest = latest[0].get('date_planned') or ''
-        if not transit and newest < now:
+    # Data-horizon staleness: newest purchase order date vs now.
+    latest_po = execute('purchase.order', 'search_read', [],
+                        fields=['date_order'], order='date_order desc', limit=1)
+    if latest_po:
+        newest = latest_po[0].get('date_order') or ''
+        cutoff = (datetime.now(timezone.utc)
+                  .replace(hour=0, minute=0, second=0, microsecond=0))
+        days_old = (cutoff.date() - datetime.strptime(newest[:10], '%Y-%m-%d').date()).days \
+            if newest else 999
+        if days_old > 3:
             issues.add('warning', 'transit',
-                       f'0 future-dated pending POs and the newest expected arrival is '
-                       f'{newest} — the Odoo build appears to be a STALE CLONE; transit '
-                       f'(and Sugerido) will overstate needs until a current build is used')
+                       f'newest purchase order is {newest[:10]} ({days_old} days old) — '
+                       f'Odoo data horizon appears stale; numbers lag reality')
 
+    now = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
     draft_lines = odoo_read_all(execute, 'purchase.order.line',
                                 [['state', 'in', ['draft', 'sent']], ['date_planned', '>', now]],
                                 ['product_id', 'product_qty'])

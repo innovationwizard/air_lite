@@ -137,7 +137,15 @@ export function VivoClient() {
         if (onlyCrit && r.doh >= 3) return false;
         return true;
       })
-      .sort((a, b) => a.doh - b.doh);
+      // Active products first (any demand or stock), urgency (DOH asc) within;
+      // dead zero-velocity/zero-stock rows sink to the bottom instead of
+      // dominating the first screen.
+      .sort((a, b) => {
+        const aActive = a.p3 > 0 || a.exist > 0 || a.sug > 0 ? 1 : 0;
+        const bActive = b.p3 > 0 || b.exist > 0 || b.sug > 0 ? 1 : 0;
+        if (aActive !== bActive) return bActive - aActive;
+        return a.doh - b.doh;
+      });
   }, [payload, q, prov, onlySug, onlyCrit]);
 
   const kpis = useMemo(() => {
