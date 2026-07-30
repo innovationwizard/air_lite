@@ -347,23 +347,37 @@ def sync_catalog(execute, issues, dry_run):
     return by_odoo_id, sku_to_opid, len(odoo_products), len(new_rows)
 
 
+# Patio = 1CET/Entrada ONLY (Jorge, 2026-07-30: "Make patio display
+# 1CET/Entrada without adding anything else"). The physical yard of furgones
+# exists at Bodega Central; other */Entrada locations are receiving steps,
+# not Wilmer's patio. Shown identically on every bodega row (global, like
+# transit).
+PATIO_LOCATION = '1CET/Entrada'
+
+
 def sync_stock(execute, by_name, bodega_codes, issues):
     """Per bodega: {odoo_pid: {'exist','reserved','patio'}} from stock.quant.
-    Patio = */Entrada locations (2026-07-28). 'General' = ALL physical locations."""
+    Patio = 1CET/Entrada only, applied to all bodegas. 'General' existencias =
+    ALL physical */Existencias locations (incl. tiendas)."""
+    patio_ids = []
+    if PATIO_LOCATION in by_name:
+        patio_ids = [by_name[PATIO_LOCATION]]
+    else:
+        issues.add('warning', 'bodega_map',
+                   f'patio location "{PATIO_LOCATION}" not found — patio=0 everywhere',
+                   odoo_id=PATIO_LOCATION)
+
     result = {}
     targets = dict(bodega_codes)  # purchasing bodegas from bodega_map
     for bodega, codes in targets.items():
         exist_ids = location_ids_for(by_name, codes, ['Existencias'], issues)
-        patio_ids = location_ids_for(by_name, codes, ['Entrada'], issues)
         result[bodega] = _stock_for_locations(execute, exist_ids, patio_ids)
 
     # General display aggregate: every physical warehouse, incl. tiendas.
-    all_ids = all_physical_location_ids(by_name)
     exist_ids = [i for n, i in by_name.items() if n.endswith('/Existencias')]
-    patio_ids = [i for n, i in by_name.items() if n.endswith('/Entrada')]
     result['General'] = _stock_for_locations(execute, exist_ids, patio_ids)
-    logger.info('stock synced for bodegas: %s (+General over %d locations)',
-                list(targets), len(all_ids))
+    logger.info('stock synced for bodegas: %s (+General over %d Existencias locations; '
+                'patio=%s only)', list(targets), len(exist_ids), PATIO_LOCATION)
     return result
 
 
@@ -629,10 +643,23 @@ def main():
 
         rows = assemble_inputs(product_map, stock, velocity, transit, seasonal,
                                sync_id, issues)
+
+        # DATA HORIZON — the newest business activity in Odoo (NOT the sync
+        # time). Surfaced so the UI never claims freshness the data lacks
+        # (2026-07-30: a Jul-29 clone labeled "datos al 30/7" made a correct
+        # patio number look wrong — the descargas of the 30th weren't in it).
+        horizon = ''
+        for model, fld, dom in (('purchase.order', 'date_order', []),
+                                ('stock.picking', 'date_done', [['date_done', '!=', False]])):
+            r = execute(model, 'search_read', dom, fields=[fld],
+                        order=f'{fld} desc', limit=1)
+            if r and (r[0].get(fld) or '') > horizon:
+                horizon = r[0][fld]
         counts = {
             'odoo_products': n_odoo_products, 'products_inserted': n_inserted,
             'input_rows': len(rows), 'bodegas': sorted(stock.keys()),
             'transit_products': len(transit), 'issues': len(issues.rows),
+            'data_horizon': horizon or None,
         }
         logger.info('assembled: %s', counts)
 

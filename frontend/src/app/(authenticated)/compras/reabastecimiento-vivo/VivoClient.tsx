@@ -36,7 +36,10 @@ interface ApiRow {
 }
 interface ApiMeta {
   count: number; asOf: string | null; month: string;
-  lastSync: { id: string; status: string; started_at: string; finished_at: string | null } | null;
+  lastSync: {
+    id: string; status: string; started_at: string; finished_at: string | null;
+    counts?: { data_horizon?: string | null };
+  } | null;
 }
 interface ApiPayload {
   bodega: string; bodegas: string[]; rows: ApiRow[]; meta: ApiMeta;
@@ -216,8 +219,10 @@ export function VivoClient() {
                 : 'bg-amber-50 text-amber-700 border-amber-200'
           }`}>
             <PackageCheck size={13} />
-            Última sincronización Odoo: {sync.status}
-            {payload?.meta.asOf ? ` · datos al ${new Date(payload.meta.asOf).toLocaleString('es-GT')}` : ''}
+            {sync.counts?.data_horizon
+              ? `Datos de Odoo al ${new Date(sync.counts.data_horizon.replace(' ', 'T') + 'Z').toLocaleString('es-GT')}`
+              : `Última sincronización Odoo: ${sync.status}`}
+            {payload?.meta.asOf ? ` · sincronizado ${new Date(payload.meta.asOf).toLocaleString('es-GT')}` : ''}
           </span>
         ) : (
           <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 text-amber-700 px-2.5 py-1 border border-amber-200">
