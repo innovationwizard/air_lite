@@ -1,0 +1,671 @@
+¡Gracias!
+¡Gracias!
+¡Gracias!
+¡Gracias!
+¿Qué tal?
+¡Buenos días!
+¿Cómo están?
+Hola, ¿qué tal?
+Buenos días, Jorge.
+¿Está bien?
+Hola Wilmer, ¿cómo has estado?
+Todo súper gracias.
+¡Ah, me alegra!
+¡Jorge, no sé si nos escuchas!
+¡Gracias!
+¡Jorge!
+Dame un momento...
+¡Dame un momento bueno!
+¡Gracias!
+¡Gracias!
+¡Gracias!
+¡Gracias!
+¡Gracias!
+¡Gracias!
+¡Gracias!
+¡Gracias!
+¡Gracias!
+¡Gracias!
+¡Gracias!
+¡Gracias!
+¡Gracias!
+¡Gracias!
+¡Gracias!
+¡Gracias!
+Hola, Jorge, ¿qué tal?
+Digo, ahí me tengo, ¿qué?
+Sí, no todos los días, pero sí.
+Salida, ¿necesitas que te diga qué reportes descargo de UDU o cómo?
+Ejemplo de lo más frecuente que hago es ver los niveles de inventario a la hora que estoy viéndolo, en la mañana, en la tarde.
+Entonces, necesito, ejemplo, ver el inventario por bodega, cuántos días en piso se tiene basado en su promedio de ventas por bodega.
+Wilmer.
+Y desglosado también por proveedor, ¿sí?
+Nos puedes mostrar el Excel, ¿cómo es que tú lo estás visualizando?
+Tengo varios, tengo varios. Es que es un resumen lo que les estoy dando. O sea, es un resumen porque básicamente lo que veo es eso.
+O sea, tengo varios porque tengo el abastecimiento por CDs, lo del local, el importado, pero el resumen es que, y no son iguales porque los fuimos construyendo conforme a la necesidad,
+pero el resumen es el nivel de inventario. Entonces, descargo existencias, le resto el inventario en reserva, lo que ya está pedido por los clientes.
+Le resto también, ejemplo, hay productos que todavía no tienen reserva, pero porque no tienen inventario.
+Entonces, hay pendientes de tomar reserva. Entonces, le resto eso también, todo lo que está pendiente de tomar reserva, porque si van a entrar mil unidades y hay reservadas ochocientas,
+como no me sirve mucho lo que va a entrar, ¿verdad?
+Entonces, es el inventario y le resto lo reservado y lo pendiente de tomar reserva.
+Obviamente, eso es el reporte por bodega, digamos, y luego separado por proveedor, porque yo compro basado en proveedores.
+Entonces, quiero revisar hoy el proveedor X, entonces me pongo a revisar el proveedor X y veo sus niveles de inventario y así.
+Y también hago un resumen de, sí, básicamente es el reporte de inventarios.
+Aquí hay otro reporte que descargo como constantemente.
+Una vez al mes, las ventas, cosa que se actualiza el promedio que viene arrastrando, el promedio de ventas de lo ordenado, no lo facturado.
+Y eso creo yo que es como lo más frecuente que actualizo, el de inventarios.
+Luego las ventas, es una vez al mes.
+¿Son tres?
+Cualquiera, no sé.
+Cuando deciste inventarios, ¿te referís a cuántos Excel es manejo?
+O sea, sí son tres, el de locales, el de Carvajal, que es importado, y el de abastecimientos a bodegas regionales.
+Esos tres, y es más fácil, no sé.
+O sea, ¿son iguales?
+Solo voy pegando.
+El de locales, que es el de mi, o el de Carvajal, cualquiera.
+Pero es que es básicamente lo mismo, o sea, en uno mismo.
+Yo lo tengo separado porque lo fui construyendo así, nunca lo he unificado, pero es como solo.
+¿Qué te parece si empezamos desde lo local?
+Y como ya se va a replicar, lo podemos hacer después con Carvajal.
+¿Quién?
+Ajá, muéstrenos pantalla para poder entender bien tus Exceles.
+Y luego, en esta reunión nos puedas compartir tus Exceles por correo, y así los vamos a tener aquí, para poder entenderlos bien.
+zusammen.
+¿Quién?
+¿Quién?
+Gracias.
+Gracias.
+Gracias.
+¿Qué les explico columna por columna? Código, descripción, proveedor. Luego hay un promedio de ventas de los últimos seis y de los últimos tres meses. Bueno, aquí lo tengo.
+¿Qué les explico?
+¿Qué les explico?
+¿Qué les explico?
+Le llamo yo porque es lo que está sin ingresar al sistema, a inventario, pero está esperando la descarga. Entonces me da una nueva existencia y unos nuevos days on hand.
+Entonces descargo de UDU esto. Que UDU no me da el promedio, pero ahí se están las ventas. Y este es un reporte y este es otro reporte.
+En las existencias de bodega y lo que está en patio. Entonces si yo quiero ver, aquí no lo tengo por bodega, entonces si yo quiero ver el nivel de inventario de SACAPA o de PTEN o de San José, pego aquí la información de UDU.
+Y ya me pongo a revisar cómo están los days on hand de la bodega que quiero ver. Y solo esto lo hago a mano porque Carvajal me lo manda en el reporte y yo lo voy cuadrando con ellos de aquí para acá.
+Ah, y esto también. Lo que está comprado en julio por semana. Pero digamos que esto es una vez al mes y esto es diario. Estos dos.
+Y no hay un reporte en UDU que me diga, ejemplo, te voy a dar un ejemplo. Te voy a dar un ejemplo. Si aquí estuviera estas dos a cero.
+¿Si? Yo voy a buscar lo que está pendiente de tomar reserva. Voy a buscar el código y veo lo que está pendiente de tomar reserva. Ahorita te explico cómo es eso.
+Eso sí lo hago a mano porque no hay ningún reporte. Había uno, pero no funciona.
+Permíteme que no se ni cómo.
+Ok, entonces digamos que acá estuviera. Acá está cero, mira. Porque dice la cantidad, la cantidad de bodega y la cantidad reservada está cero.
+Entonces, yo voy a ver lo que está pendiente de tomar reserva. Entonces, voy a ver acá y puedo ver que hay 4.5.
+¿Si? Que están pendientes porque esto está reservado y esto está reservado.
+Pero hay 4.5 pendiente de tomar reserva.
+Entonces, ahí es donde yo me voy a ver como código por código de los que están a cero.
+De esos, porque eso no me lo da ningún reporte.
+Como puedes ver en lo que te mostraba, cuando descargo el inventario, acá dice cantidad y cantidad reservada.
+Entonces, aquí me lo resta.
+Aquí me lo resta.
+Y ya tengo mi inventario real sin la reserva, la verdad.
+Pero, porque hay productos que me dan cero esa relación, tengo que ir a ver si no hay algo pendiente de tomar reserva para considerarlo.
+Eso sí lo hago a mano.
+Entonces, descargo este reporte.
+Descargo este reporte.
+Y si algo me da cero acá, lo voy a buscar a ver cuánto hay pendiente de tomar reserva.
+Eventual.
+No, pero sí, tal vez unas dos veces a la semana, tres veces.
+Entonces, voy a ver si depende de tomar reserva.
+Sí.
+Bueno, no, sí, es constante.
+Sí, es diario.
+Porque con locales se me pasa con un proveedor que se llama Envayca.
+Entonces, yo tengo que, es similar.
+O sea, yo hago esto con lo local, solo que lo local no debo de considerar esta parte.
+Porque no tenemos nada en patio local, solo importado.
+Entonces, solo los locales de acá para acá.
+Y entonces, si me da cero, yo siempre quiero ver el nivel de inventario de algo.
+Básicamente, el de locales tiene solo esto.
+El lección de locales.
+Entonces, yo quiero ir a ver el proveedor, lo de loso, y me da cero.
+Entonces, yo necesito ver cuánto está pendiente de tomar reserva.
+Porque nuestra venta no es tan, no tiene una, probablemente la IA lo pueda detectar.
+Si hay días específico que sale algún producto, todos los martes, todos los miércoles, todos los jueves.
+Tengo identificado como el top clientes cuando hacen sus órdenes de compra.
+Entonces, yo hace más o menos esos días, pero el resto no.
+Entonces, yo necesito estar viendo todos los días el nivel de inventario.
+Y me pasa constantemente de ceros con un proveedor que se llama Envica.
+Entonces, con ese proveedor, si tengo que estar, cuando me da ceros, tengo que ir a buscar lo que está pendiente de tomar reserva.
+Para, para, como ajustar la orden de la semana.
+Porque es un proveedor que nos ayuda entregándonos diariamente.
+Y hoy antes de las 10 le puedo decir, ajustame algo, conseguime esto.
+Conseguime aquello, le puedo levantar la mano a tiempo.
+O si yo veo que hay un inventario, unos days on fan muy altos, le puedo decir, mirá, no me despaches esto mañana o pasado.
+Entonces, con ello se me pasa constantemente.
+Pero porque ahorita me pueden aparecer en 5 días de inventario.
+Y reviso en la tarde.
+Y ya tengo 0.
+Y todavía ya debo 1.000 fardos.
+Pero porque con mayoreo no se tiene una, como con otros clientes más formales.
+Eso de generar una orden y una periodicidad.
+Entonces, mayoreo, podemos estar ahorita con 5 días de inventario.
+Y mayoreo de la nada.
+Todos empiezan a meter pedidos y ya reservaron todo.
+Entonces, yo tengo que reponer ese inventario.
+Por eso es de que en general con locales si voy viendo diariamente.
+Y esto de los ceros que te explicaba me pasa solo con un proveedor.
+Pues sí, diariamente, te puedo decir.
+¿Perdoname?
+No, no, no.
+Sí, sí, sí.
+Pues lo tengo.
+En general, yo reviso como un día sí, un día no, niveles de inventario.
+Los lunas es mi punto inicial, ¿verdad?
+Reviso niveles de inventario.
+Luego voy como que revisando un miércoles, un viernes.
+Los viernes es donde más hago ajustes de las órdenes locales que hice para la otra semana.
+Entonces, yo digo, si tengo mucho inventario o poco, voy a hacer ajustes.
+Así es porque no es de que me avisen.
+Son como, creo que en total son 14 vendedores o 16, no sé.
+Entonces, no es como que me van a levantar la mano.
+Los que más hacen esos pedidos como grandes, sí les he pedido favor, pero tampoco es como que me digan.
+Entonces, el más sensible es este proveedor que te digo que es local, pero tiene volúmenes de compra altos y ocupa mucho espacio.
+Entonces, con este proveedor, cinco días de inventario de un código, o sea, me ocupa, ¿qué?
+Dos furgones, por ejemplo.
+Tres furgones.
+Tres furgones.
+Y, pero él está cerca y todo.
+Entonces, con él sí lo reviso una vez al día con este proveedor.
+Pero no, nadie me avisa.
+No sé cómo un dashboard de niveles de inventario para ver por proveedor cuáles son mis top afectaciones.
+No, no, no, no lo tengo, sino que es, lo está haciendo este, esta descarga que está aquí.
+Esto.
+Entonces lo pego, lo actualizo, y ya voy viendo.
+Con locales es igual, igual y bueno, bueno.
+Con el abastecimiento a ZKPPT, eso también, eso lo veo una vez a la semana.
+Bueno, el abastecimiento a ZKPPT, y ahí es por proveedor.
+Estamos, pues la idea es de que la mayor parte de proveedores nos empiecen a entregar por Bodea,
+ya no enviar aquí desde San José.
+Entonces ahí es como que voy agregando cada vez como la visual de proveedores.
+Pero es, es como te decía, en resumen es descargar estos promedios una vez al mes,
+y las existencias cuando voy a ver el reporte.
+Entonces el de locales es todos los días.
+El de Carvajal, este lo actualizo, esta parte de la existencia la actualizo unas dos veces a la semana.
+Sí, dos veces la semana, y ya, eso es como un resumen.
+Ok, ok.
+Y mira, fíjate que te quería hacer como una consulta, porque, por ejemplo, pues esta parte como de la visual,
+yo entiendo que esto podría ser algo visual, pero también consultarte si puede ser dinámico.
+¿A qué me refiero?
+Pues ya te expliqué acá el tema de hasta acá.
+Pero, te voy a explicar este, digamos.
+Esta columna que dice pendiente Carvajal, yo debo de cuadrar con ellos,
+qué es lo que tienen pendientes para echarme de esta semana.
+Con ellos hago compras semanales.
+Les doy una instrucción semanal.
+Hay una orden mensual, pero yo le doy la instrucción semanal.
+¿Por qué?
+Porque antes despachaban lo que querían.
+O sea, tenías tu orden del mes, y ellos lo que tenían, y probablemente me despachaban,
+te voy a decir, este, que tiene 35 días de enmendar, o este, que tiene, o sea,
+y los que tenían poquito, no lo despachaban.
+Entonces, yo les, como que les voy cerrando ese chorro.
+Entonces, vamos como semanal.
+Entonces, yo necesito saber con ellos cuadrar qué es lo que me tienen pendientes para echar esta semana.
+Entonces, tengo que ver si lo están cargando hoy, si están a promoción para cargarlo algún día de estos,
+o si ya viene en tránsito y el furgón está en la aduana, o donde esté.
+Entonces, yo hago mi reporte.
+Este me sirve, y luego voy viendo como lo pendiente de ellos, y voy buscando dónde está.
+Y si yo ya detecté en mi reporte que hago, que aquí me deben 100,
+entonces yo hago mi VLOCOP del reporte y pongo 100 acá, ¿verdad?
+100.
+Entonces, ya me cambió los de IZON HAND.
+Entonces, aparte de la visual, me gustaría que fuera dinámico,
+porque que yo pueda poner ese resultado de mi reporte que hago,
+que no es como tan automático, ¿verdad?
+Voy viendo similar a esto.
+Yo creo que aquí lo tengo.
+Permítame.
+Entonces, yo digo, esta es mi, la semana 1, pedido y recibido.
+Entonces, yo voy viendo como lo que está debajo de 100, digamos, a hoy.
+Y yo digo, esto es lo que me deben.
+¿Sí?
+Porque ya sumé el inventario en stock y lo que estaba en patio.
+Entonces, yo digo, esto es lo que me deben.
+Pero lo que me deben, tengo que ir a ver ya a manita.
+Si está programado para que lo carguen hoy.
+O si ya salió de Carvajal y no ha venido acá, ver el furgón dónde está.
+Entonces, ahí como que me voy a manita, ya modifico, digamos, esto.
+El furgón está en aduana.
+Este lo cargan mañana.
+Y esto es lo único que me deben de la semana.
+Entonces, estos numeritos los pongo acá.
+Entonces, yo digo, ah, me deben 100.
+Entonces, lo voy a considerar como mi inventario,
+porque va a venir esta semana todavía.
+Entonces, porque yo me di a entender como en esta parte de acá para acá,
+me di a entender como que fuera un dashboard visual de existencia,
+Jason Hamm por proveedor, por bodega.
+Creo que esa parte está lo de la visual que te comentaba.
+Pero yo también quisiera que fuera dinámico,
+que yo pudiera agregar un dato y que se modificara los Jason Hamm.
+Porque, como te digo, tengo que buscar, en este caso,
+el proveedor que es importado a Carvajal,
+si me deben algo de la semana y considerarlo como que si ya ingresó
+para poder calcular mi pedido de la otra semana.
+Por ejemplo.
+O me dicen que nos van a hacer un descuento si pedimos algo
+o hay muchos furgones disponibles y hay que aprovechar
+porque los transportistas van a caer cortos la otra semana.
+Entonces, actualizo esto y necesito sacar,
+ejemplo, decirle, mire, díame cinco furgones.
+Entonces, necesito ver qué productos necesito para no pedirle cualquiera.
+Entonces, como puedes ver, descargar estos reportes son fáciles.
+Pero a veces lo complicado que me lleva tiempo es sacar este datito.
+Que ya digo yo, me deben cien.
+Los cien, señores Carvajal, lo van a cargar hoy,
+lo van a cargar, no, ya lo despachamos.
+Bueno, entonces, ¿dónde está el furgón?
+Entonces, ya busco dónde está el furgón.
+Y ya agrego aquí el dato.
+Cien.
+O miren, esta semana no se va a poder cumplir con ese.
+Porque salió mal.
+La máquina está mal.
+Entonces, cero.
+Y ya me quedo yo como.
+Entonces, como que sí se da una visual,
+pero que también me permita modificar para que me mueva el dato
+de los de Jason Han, que es el que me dice
+si necesitaba este 0.1 cierta bodega.
+Si, si, si. Gracias.
+Gracias.
+Gracias.
+Excelente. Gracias, Jorge.
+Solo un tema.
+Wilmer, si en dado caso, ahorita que nos mandan información por correo,
+¿hay algo que tú quisieras agregar, algún punto que no platicamos?
+Y si te ocurra después de esta reunión,
+mandándola por correo.
+Estamos totalmente abiertos a cualquier punto de vista que tengas
+para mejorar este proceso.
+Ah, de acuerdo, de acuerdo.
+Muchos de la clase.
+Perfecto.
+Y entonces solo queda al pendiente de eso.
+De ahí te voy a estar molestando en esta semana,
+o llamando, mejor dicho,
+para coordinar la siguiente reunión,
+para ya mostrarte qué es lo que logramos avanzar.
+Ah, ok.
+Solo, ah, cierto.
+Es que eso les quería decir.
+Sí, porque con los demás proveedores el tránsito está fácil,
+porque ya hay órdenes puestas mensuales o algo así.
+Entonces considerar un tránsito está fácil descargarlo de UDU.
+Pero con este proveedor Carvajal,
+mi pedido yo lo envío por PDF o Excel al mes,
+y luego lo separo por semana en una orden de compra ya en el sistema,
+que la genero una semana antes.
+Pero yo tengo ya pedido algo para,
+por ejemplo,
+para las,
+si estamos hoy,
+esta semana,
+yo necesito mandar a confirmarlo de la semana 3.
+Pero yo ya tengo algo pendiente que me entreguen para la semana 3 y 4.
+Entonces como no se me ocurre una forma para verlo,
+para que el sistema de IA lo pueda sacar de UDU,
+porque no está en UDU.
+Entonces,
+por ahí,
+eso lo estoy implementando,
+o sea,
+no es de que así se haya manejado siempre,
+siempre se manejaba una orden de compra mensual,
+y ya,
+y ahí ya podíamos ver que era lo que estaba pendiente,
+pero no podíamos medir al proveedor,
+no sé si vieron ahí el que decía Field Rate,
+como mensual,
+perdón,
+semanal,
+porque este proveedor nos despachaba,
+nos acumulaba semana 3 y 4 casi todo,
+entonces era un caos logístico,
+y con ventas también,
+y entonces,
+como la forma de apretar la tuerca es,
+yo voy a medir semanal,
+el Field Rate,
+pero en UDU no hay una forma,
+o sea,
+haces una orden de compra,
+y no puedes ver que entro cada semana,
+y cuánto le pedí yo a ellos,
+en mi Excel,
+el que yo,
+el que mi análisis,
+yo les dije,
+miren,
+esto quiero esta semana,
+no hay una forma como de medirlo,
+más que hicimos una orden semanal mejor,
+y ya veo yo que me entregaron,
+de lo que yo les dije,
+entonces por el momento no sé,
+no sé si a David se le ocurre algo como para eso,
+pero sí fue como una instrucción,
+que los midiéramos semanal,
+de Luis Roberto,
+entonces la única forma que a mí se me ocurrió,
+fue hacer una orden ya no mensual,
+sino que semanal,
+y yo tengo mi reporte de Firve,
+ah ya dejé de compartir,
+de Firve,
+ahorita les muestro rápido,
+ya los dejo.
+Entonces,
+entonces yo tengo este,
+mi query,
+donde yo descargo,
+el historial de compras,
+el historial de compras,
+es un reporte de compras,
+yo lo descargo,
+entonces yo ya puedo ver que por bodega,
+cantidad ordenada,
+recibida,
+en mi filre,
+y ya puedo,
+pues,
+de una forma más fácil,
+hacer mi gestión con proveedores.
+Entonces,
+como te decía,
+el Luis Roberto pidió que se midiera semanal a Carvajal,
+entonces,
+tuve que hacer lo mejor así,
+para que yo solo filtrara la orden de la semana,
+ejemplo,
+entonces ya puedo ver yo cuánto me entregaron,
+de lo que yo les pedí,
+pero ahorita no,
+la única forma que se me ocurrió,
+verdad,
+pero si yo quiero ver,
+quiero ver cuánto le tengo que comprar a Carvajal para el otro mes,
+que eso lo tengo que enviar ya mañana,
+ejemplo,
+yo tengo que hacer,
+en Excel,
+o sea,
+tengo que ver,
+qué es lo que me deben de este mes,
+y agregarlo,
+y así,
+porque no,
+no me lo va a dar,
+porque no hice una orden mensual,
+digamos,
+Alex,
+es que era el que miraba a Carvajal antes,
+y él hacía mensual,
+entonces,
+fácil,
+porque mirabas que era lo que estaba en tránsito,
+porque mirabas aquí lo pendiente de recibir,
+verdad,
+aquí,
+entonces decía,
+esto me deben del mes,
+cuadrabas con ellos,
+y ya lo habían sacado esta semana,
+hoy,
+digamos,
+ya lo estaban cargando,
+y ya,
+pero,
+porque no,
+porque me lo pidieron,
+me dieron semanal,
+entonces,
+hago una orden semanal,
+pero yo no puedo ver,
+cuánto me deben total mes,
+entonces eso lo tengo que hacer a mano,
+pero si se les ocurre una forma de,
+a David,
+de que yo pueda,
+hacerlo en Odoo,
+para que la aplicación de IA,
+si,
+si tenga la información real,
+de lo pendiente,
+de despachar de ellos,
+el tránsito,
+entonces,
+nos ayudaría,
+porque si no,
+me va a dar un dato incorrecto a la IA siempre,
+porque yo no metí la información en Odoo,
+entonces,
+como decía aquel día,
+Jorge,
+lo que le meta a uno en la aplicación,
+es lo que le va a dar el resultado,
+la verdad,
+entonces,
+si no tiene la aplicación,
+la información,
+no me va a dar,
+un sugerido,
+que me vaya a ayudar,
+porque voy a tener que hacerlo a mano,
+de todos modos,
+semanal,
+o sea,
+la mensual no,
+la mensual no,
+entonces,
+yo les,
+si,
+les mandé un correo con el PDF,
+y les dije,
+esta es la confirmación,
+y luego,
+yo ejemplo hoy,
+eso lo hago los miércoles,
+jueves,
+pero hoy les digo,
+para la otra semana,
+hago esto de los niveles de inventario y todo,
+para la otra semana,
+necesito,
+este listado,
+con estas cantidades,
+para estas bodegas,
+y ya genero una orden de compra,
+por cada bodega,
+para esta semana,
+pero me siguen debiendo,
+para el resto de semanas,
+entonces,
+mañana yo debo de confirmarle a ellos,
+el pedido de julio,
+yo debo de confirmarle,
+pero ahí,
+Oduno tiene la información,
+de lo,
+en tránsito,
+del tránsito real,
+y cuando la aplicación,
+haga esa información,
+me va a sugerir,
+un montón,
+porque no tienen en mente,
+que este mes,
+cuando,
+cuando quiera analizar la aplicación,
+el inventario teórico,
+inicial de julio,
+no va a considerar,
+el tránsito,
+de junio,
+no,
+perdón,
+cuando quiera sugerir agosto,
+perdón,
+cuando quiera sugerir agosto,
+no va a tomar en cuenta,
+el inventario,
+en tránsito de julio,
+porque yo no lo metí,
+pero porque yo lo estoy haciendo,
+semanal,
+como para ir,
+y porque no puedo hacer,
+modificar orden de compra,
+no puedo,
+no puedo,
+si no yo haría una orden semanal,
+y las voy modificando,
+pero dicen que no puedo modificar,
+las órdenes ya hechas,
+entonces es como,
+por supuesto,
+entonces solo,
+solo hay que arreglar,
+a este tema,
+sí,
+sí,
+porque no,
+o sea,
+si el Odu,
+tiene una forma,
+como,
+para hacer lo que me pidió,
+el Odu,
+Roberto,
+más fácil,
+buenísimo,
+porque la aplicación,
+va a jalar la información,
+real,
+pues,
+pero si no,
+la información no va a ser real,
+y nos va a dar otra información,
+claro,
+por mi lado,
+estamos bien,
+solo quedo pendiente,
+el correo con la información,
+de los exceles,
+y cualquier cosita,
+mandamelo por correo,
+Wilmer,
+o me lo puedes mandar en WhatsApp,
+por si se te ocurre algo más,
+algo que no platicamos,
+¿no?
+Solo permíteme,
+que es un tema,
+de seguridad del proveedor,
+para mí,
+Jorge,
+solo te puedes quedar,
+un par de minutos,
+ahorita que terminemos esta reunión,
+gracias,
+gracias,
+gracias,
+listo,
+perdón,
+perdón,
+entonces,
+estamos solo en el momento del Excel,
+muchísimas gracias,
+feliz día,
+cuídense a Dios,
+Ok,
+Jorge,
+creo que ya se fue,
+Wilmer,
+y prácticamente,
+este es el inicio,
+¿cómo te pareció la información,
+que te dio Wilmer?
+No me refiero a todo,
+sino que como,
+el punto de vista principal,
+en el decir,
+si está convencido,
+si consideras,
+que nos va a dar,
+toda la información,
+o algún punto,
+que tú me quisieras brindar,
+¿por qué te lo estoy pidiendo ahorita,
+ahorita como tal?
+Porque como estás totalmente,
+fuera de la operación,
+fuera de cualquier comentario,
+fuera de todo,
+si pudiera.
+Exactamente,
+no,
+cabal,
+entonces,
+sí,
+sí,
+sí,
+estaba en el mismo punto,
+ok,
+ahora lo que va a seguir,
+es de que me van a dar los exceles,
+yo te los voy a compartir a ti,
+y prácticamente,
+yo quedaría al pendiente,
+de los avances,
+para coordinar la siguiente reunión,
+¿cuánto tiempo consideras,
+para poder,
+hacer marcha,
+o sea,
+dejar ese espacio,
+y decir,
+hoy me lo entregan,
+ahí por el jueves,
+me escribís,
+entonces,
+reunión el viernes,
+¿cuánto tiempo consideras,
+que te podrías tardar?
+Ok.
+Ok.
+Ah,
+perfecto,
+entonces,
+quedaría al pendiente,
+solo me llegue el correo de Wilmer,
+y yo te lo voy a reenviar inmediatamente,
+te voy a escribir por WhatsApp,
+mira,
+ya lo tenés,
+voy a buscar la forma que sea hoy,
+así,
+puedes trabajar,
+libremente,
+no puedo estar contigo,
+todo el tiempo,
+pero,
+la mayor parte,
+voy a estar ahí,
+apoyándote,
+y cualquier cosa que necesites,
+para que podamos cumplir con todo,
+me avisas,
+bueno,
+dale Jorge,
+gracias,
+feliz día,
+y,
+aquí,
+las,
+350,
+todas,
+todas,
+no,
+todas,

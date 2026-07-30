@@ -268,7 +268,7 @@ Usage beyond the cap or premium SLA = paid upgrade. Define these numbers after 2
 | 1 | Sign baseline measurement document | Both parties | This week |
 | 2 | Draft software escrow clause | Jorge (legal) | Before balance hits zero |
 | 3 | Define post-balance usage cap | Jorge | After 2-3 months of usage data |
-| 4 | Odoo API credentials — verify sync capability | Jorge | Phase 1 |
+| ~~4~~ | ~~Odoo API credentials — verify sync capability~~ — ✅ **DONE 2026-07-13**: verified live (Odoo 17.0+e, uid 198, 1,597 products). Host `…34516586.dev.odoo.com`; DB must match host subdomain; API keys are per-database. **Unblocks D3.** | Jorge | ~~Phase 1~~ closed |
 | 5 | AWS account setup for ML plane | Jorge | Phase 1 |
 | 6 | Client AWS billing arrangement (invoice format) | Jorge | Phase 1 |
 | 7 | Formal contract addendum: IP ownership in correct legal form (existing agreement is CEO high-level terms only) including weight ownership clause | Jorge (legal) | Before weight persistence goes live |

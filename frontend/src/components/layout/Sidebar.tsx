@@ -109,6 +109,12 @@ const allNavGroups: NavGroup[] = [
         subtitle: 'Sugerido por bodega y proveedor',
       },
       {
+        name: 'Reabastecimiento en Vivo',
+        href: '/compras/reabastecimiento-vivo',
+        icon: Activity,
+        subtitle: 'Datos Odoo en vivo + captura en línea',
+      },
+      {
         name: 'Forecast de Compras',
         href: '/compras/forecast',
         icon: BarChart3,

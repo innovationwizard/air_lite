@@ -80,6 +80,7 @@ export const PAGE_PERMISSIONS: Record<string, Role[]> = {
   '/oa': CAN_VIEW_OA,
   '/compras': CAN_VIEW_COMPRAS,
   '/compras/reabastecimiento': CAN_VIEW_COMPRAS,
+  '/compras/reabastecimiento-vivo': CAN_VIEW_COMPRAS,
   '/operaciones': CAN_VIEW_OPERACIONES,
   '/gerencia': CAN_VIEW_GERENCIA,
   '/superuser': CAN_VIEW_SYSTEM,

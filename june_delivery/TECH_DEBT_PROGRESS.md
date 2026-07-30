@@ -5,7 +5,8 @@
 >
 > Legend: `[ ]` not started · `[~]` in progress · `[x]` done & verified · `[!]` blocked/needs Jorge
 
-**Last updated:** 2026-07-01 — Phase 2 underway. **M0 decisions all locked** (D-ACCESS / D-AUTHZ / D-CUTOVER) + **H1 (test coverage) COMPLETE & committed** — the first Phase-2 batch shipped. Recent commits: `cb77590` (gitignore/.env* security) · `721de37` (H1 tests + CI floors) · `0334845` (Phase 2 plan reconcile + M0 decisions). Remaining M0 = external prereqs only (2 AWS accts + cross-acct role, WorkOS, Odoo creds §6.4).
+**Last updated:** 2026-07-13 — **Odoo credentials VERIFIED** (uid 198, 1,597 products) → **D3 unblocked** and dropped from M0 prereqs. Also shipped since: ML API auth-bypass fix (`b295bd7`) and the Supabase publishable/secret key migration (`b05e972`, legacy keys disabled). Remaining M0 = external prereqs only (**2 AWS accts + cross-acct role, WorkOS**). Open items consolidated in [OPEN_ITEMS.md](../OPEN_ITEMS.md).
+_Prior (2026-07-01):_ Phase 2 underway. **M0 decisions all locked** (D-ACCESS / D-AUTHZ / D-CUTOVER) + **H1 (test coverage) COMPLETE & committed** — the first Phase-2 batch shipped. Commits: `cb77590` (gitignore/.env* security) · `721de37` (H1 tests + CI floors) · `0334845` (Phase 2 plan reconcile + M0 decisions).
 **Phase 1 (tech debt) — ✅ ALL 6 BATCHES COMPLETE & COMMITTED:** `6d1566d` (Node 22) · `54cb226` (ESLint 9 + docs) · `fb76f2e` (Jest 30) · `fac698d` (recharts + Python caps) · `1d3aac4` (ML env: python 3.12 + numpy 2.x + prophet pin). Forecasts proven bit-identical.
 **Git note:** Claude does not commit. Each `[x]` batch is handed to Jorge to commit. "Committed?" column tracks that.
 
@@ -180,7 +181,7 @@ _**RECONCILED 2026-07-01 (rev. 2)** to `Full-AWS-architecture-for-Air-3_0.md` (+
 
 | Batch | Title | Track | Risk | State | Blocked by |
 |---|---|---|---|---|---|
-| M0 | Prereqs (decisions ALL locked) | Migrate | — | `[!]` | external only: 2 AWS accts + cross-acct role, WorkOS acct, Odoo creds §6.4 |
+| M0 | Prereqs (decisions ALL locked) | Migrate | — | `[!]` | external only: 2 AWS accts + cross-acct role, WorkOS acct (~~Odoo creds §6.4~~ ✅ verified 2026-07-13) |
 | M1 | AWS foundation (both accts + cross-acct trust) | [J]+[C]+[X] | none | `[ ]` | M0 |
 | M2 | Aurora Serverless v2 + schema (38 tbl / 57 fn) | [C] | data | `[ ]` | M1 |
 | M3 | Data migration (row-count + checksum parity) | [C] | data | `[ ]` | M2 |
@@ -195,17 +196,17 @@ _**RECONCILED 2026-07-01 (rev. 2)** to `Full-AWS-architecture-for-Air-3_0.md` (+
 | M12 | Cutover + decommission Railway/Vercel/Supabase | [X] | ⚠️ live client | `[ ]` | M2–M11 |
 | D1 | Derived-ratio verify/finish (**mostly built**) + Tier-3 | Deliver | ⚠️ forecast (harness) | `[ ]` | — (can start now) |
 | D2 | Weight persistence serving | Deliver | ⚠️ forecast | `[ ]` | M7, M9 |
-| D3 | Odoo sync Feb–Jun | Deliver | data | `[ ]` | Odoo creds §6.4 |
+| D3 | Odoo sync Feb–Jun | Deliver | data | `[ ]` | — **unblocked 2026-07-13** (creds verified) |
 | D4 | Acid Test 2 + sign baseline | Deliver | none | `[ ]` | D1–D3 + actuals |
 | H1 | Test coverage (gate) | Harden | none | `[x]` done & verified | ☑ committed `721de37` |
 | H2 | Pandas 3.0 (golden-backtest gated) | Harden | ⚠️ medium (CoW) | `[ ]` | H1 |
 | H3 | Frontend major pass (React19/Next16/TW4…) | Harden | none | `[ ]` | H1 |
 
-**Sequence:** M1 → (M2‖H1) → M3 → M4 → M5 → M6 → M7/M8 → M9 → M10/M11 → M12. D1 startable now; D2 after M7/M9; H1 before M6; H2/H3 after cutover. Deliver-first still holds (D-track + Acid Test 2 provable during migration).
+**Sequence:** M1 → (M2‖H1) → M3 → M4 → M5 → M6 → M7/M8 → M9 → M10/M11 → M12. **D1 + D3 startable now**; D2 after M7/M9; H1 before M6; H2/H3 after cutover. Deliver-first still holds (D-track + Acid Test 2 provable during migration).
 
 ## Track M — Migration to the two-account split-plane
 _[J] Jorge's acct (ML plane) · [C] client `plasticentro` acct (data plane) · [X] cross-account_
-- [~] M0 — Decisions **ALL LOCKED**: D-ACCESS ✅ (b) direct-DAL · D-AUTHZ ✅ defense-in-depth DB-enforced · D-CUTOVER ✅ blue-green short-freeze. **Remaining = external prereqs only:** 2 AWS accts + client-granted cross-acct deploy role, WorkOS acct, Odoo creds §6.4
+- [~] M0 — Decisions **ALL LOCKED**: D-ACCESS ✅ (b) direct-DAL · D-AUTHZ ✅ defense-in-depth DB-enforced · D-CUTOVER ✅ blue-green short-freeze. **Remaining = external prereqs only:** 2 AWS accts + client-granted cross-acct deploy role, WorkOS acct. (~~Odoo creds §6.4~~ ✅ **verified 2026-07-13** — uid 198, 1,597 products.)
 - [ ] M1 — [J]+[C]+[X] Foundation: Jorge acct (IAM+OIDC, ECR fe+ml, CloudWatch, SES, budget) + client acct bootstrap + cross-acct deploy role (least-priv) → CI assumes role + pushes ECR
 - [ ] M2 — [C] Aurora Serverless v2 (client acct): provision + port 38 tables + 57 functions + migration flow → schema diff 0
 - [ ] M3 — [C] Data migration: Supabase → Aurora; row-count + checksum parity per table
@@ -222,14 +223,14 @@ _[J] Jorge's acct (ML plane) · [C] client `plasticentro` acct (data plane) · [
 ## Track D — Forecasting delivery
 - [ ] D1 — Derived-ratio: **verify** existing `forecast_purchases_derived.py` + `/forecast/purchases-derived` + `route.ts` orchestration against harness; add Tier-3 fallback (CARVAJAL/REYMA) for 6 SKUs → +1,069%→±15%
 - [ ] D2 — Weight persistence serving: load from S3 (cached) → ms; matches fresh train (depends M7/M9)
-- [ ] D3 — Odoo sync Feb–Jun 2026 (post-sale; blind-test cutoff discipline; respect `_qci/` gates)
+- [ ] D3 — Odoo sync Feb–Jun 2026 (post-sale; blind-test cutoff discipline; respect `_qci/` gates). **Unblocked 2026-07-13** — creds verified live; working endpoint is `https://suplicentro-03062026-34516586.dev.odoo.com` (DB name **must match** the host subdomain; API keys are per-database).
 - [ ] D4 — Acid Test 2: Feb/Mar actuals → predicted-vs-actual report → gain-sharing backtest → present → sign baseline (§6.1)
 
 ## Track H — Hardening
 - [x] H1 — Test coverage **COMPLETE & verified & committed `721de37`** (all 5 sub-batches)
   - [x] H1.1 — Coverage audit: targets = census_filter (moat), derived-ratio Tukey, get_prophet_config, roles.ts matrix. Baseline was 10 FE + 1 ML smoke.
   - [x] H1.2 — ML tests: `test_census_filter.py` (10), `test_derived_ratio.py` (5), `test_forecast_config.py` (3). census_filter **100% cov**. Bare imports via new `ml/conftest.py` (matches api.py). Verified: ruff clean, 19 pytest pass.
-  - [x] H1.3 — Data-sync tests (mocked Odoo mapping): extracted 2 pure helpers from `odoo_sync_oa_v2.py` (`index_odoo_products_by_sku`, `compute_product_patch` — behavior-preserving) + `test_odoo_sync.py` (16 tests). Fixtures model real Odoo quirks (empty=`False`, absent `x_studio_*`, PostgREST string-numeric). Live-capture attempted but the Odoo dev instance was hibernated (404); tests grounded in the code's defensive handling instead. **Finding:** the Odoo dev instance also has an SSL cert hostname mismatch (`*.odoo.com` vs 3-label dev host) — verify cert handling before D3.
+  - [x] H1.3 — Data-sync tests (mocked Odoo mapping): extracted 2 pure helpers from `odoo_sync_oa_v2.py` (`index_odoo_products_by_sku`, `compute_product_patch` — behavior-preserving) + `test_odoo_sync.py` (16 tests). Fixtures model real Odoo quirks (empty=`False`, absent `x_studio_*`, PostgREST string-numeric). Live-capture attempted but the Odoo dev instance was hibernated (404); tests grounded in the code's defensive handling instead. **Finding:** the Odoo dev instance also has an SSL cert hostname mismatch (`*.odoo.com` vs 3-label dev host) — verify cert handling before D3. → **RESOLVED 2026-07-13:** the mismatch was an artefact of a stale/torn-down host; the correct instance (`…34516586.dev.odoo.com`) presents a valid cert and XML-RPC connects with no special cert handling.
   - [x] H1.4 — Frontend auth tests: `src/lib/auth/__tests__/roles.test.ts` (12) — role matrix invariants + cross-privilege negative tests + getDefaultPage. **Security net for D-AUTHZ.** Verified: lint clean, 22 jest pass.
   - [x] H1.5 — CI floors: dropped `--passWithNoTests`; FE `npm run test:coverage` enforces `roles.ts` threshold (75/90/90/90); ML `pytest --cov=census_filter --cov-fail-under=95` (at 100%); added `pytest-cov`. Ratchet outward as coverage grows.
 
@@ -258,3 +259,7 @@ _[J] Jorge's acct (ML plane) · [C] client `plasticentro` acct (data plane) · [
 - **2026-07-01** — **D-AUTHZ LOCKED = defense-in-depth, DB-enforced tenant+role isolation** (Jorge's criteria: client-data + moat security first, then enterprise best practice; effort irrelevant). Corrects an earlier least-change rec. Enforce at every layer: WorkOS server-verified → single DAL matrix gate → real Aurora RLS w/ per-request session context + tenant isolation → least-privilege connection (no BYPASSRLS in serving) → Secrets Manager → scoped/rotatable ML API cred + audit. **Fixes an active _THE_RULES violation** (74× RLS-bypassing service-role usage + deprecated `SUPABASE_SERVICE_ROLE_KEY`; local `.env` holds service keys). M5 grows deliberately; baked into plan M4/M5/M6.
 - **2026-07-01** — **D-ACCESS LOCKED = (b) Direct-Postgres DAL rewrite.** Grounding scan: data access is ~97% server-side (79 server vs 2 browser clients) in ~40 route handlers; authz already app-layer (74 service-role/RLS-bypassing usages, coarse RLS). So (b) is cheaper than "133 calls" and the only path to managed Aurora+WorkOS. Baked reasoning into plan M0 + M6. D-AUTHZ leaning app-layer-primary (pending lock-in); D-CUTOVER open.
 - **2026-07-01 (rev. 2)** — Jorge updated `Full-AWS-*` with an **addendum: literal two-account split-plane** (client account = frontend App Runner + Aurora + Secrets, their card/no invoicing; Jorge account = ML App Runner + S3 + training + ECR/CloudWatch/SES; cross-account deploy IAM role). Re-tagged all Track-M batches by account **[J]/[C]/[X]**, added cross-account foundation to M1, ML API key to M7. This **resolves** the escrow/IP tension (client account holds zero moats) and **changes AIR3 §5 billing** (direct-to-client-card, not invoiced $500 budget). Still awaiting M0.
+- **2026-07-13** — **Odoo credentials VERIFIED → D3 UNBLOCKED.** Working combination established: `ODOO_URL=https://suplicentro-03062026-34516586.dev.odoo.com`, DB `suplicentro-03062026-34516586`, user `integracion@piensom.com`. Live check: Odoo 17.0+e, `authenticate()` → uid 198, `product.product` count 1,597. **Two gotchas recorded:** the DB name must match the host subdomain (an earlier `…33061051` DB/URL mismatch failed), and Odoo API keys are **per-database** (a key minted on another instance is rejected). Also closes the H1.3 SSL-cert-mismatch concern — that was a stale/torn-down host, not a cert-handling problem. Odoo creds removed from M0 prereqs and AIR3 §6 item #4.
+- **2026-07-13** — **ML API auth-bypass FIXED** (`b295bd7`). `verify_api_key()` had been hard-coded `return True` since a 2026-04-24 demo ("RESTORE after demo" — never actioned), leaving every backtest/forecast endpoint publicly callable. Restored a constant-time `X-API-Key` comparison via `hmac.compare_digest`, fail-closed when `ML_SERVICE_API_KEY` is unset, `/health` still exempt. Live-verified on Railway: 401 without key, 401 with wrong key, passes with correct key.
+- **2026-07-13** — **Supabase publishable/secret key migration COMPLETE** (`0955c96`, `b05e972`). Retired deprecated `anon`/`service_role` env-var naming repo-wide (46 files) → `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` + `SUPABASE_SECRET_KEY`; key values were already `sb_publishable_`/`sb_secret_` so no rotation. Railway + Vercel + local `.env` updated; **legacy JWT keys disabled** in the Supabase dashboard; `_THE_RULES.MD` flag rewritten. Resolves the deprecated-`SUPABASE_SERVICE_ROLE_KEY` half of the _THE_RULES violation noted in the D-AUTHZ entry above (the 74× RLS-bypassing service-role *usage* remains open → M5). Tracker: [SUPABASE_KEY_MIGRATION.md](../SUPABASE_KEY_MIGRATION.md).
+- **2026-07-13** — **Go-live readiness audit** surfaced 7 previously-untracked findings (localhost fallback in ML proxy routes, ML coverage gate scoped to a single 17-line module, thin FE test breadth, deploy docs contradicting the actual Vercel path, stale top-level docs, stray `frontend/temp_fix.txt`, silent `run_id: null`). Recorded as **Track F** in the new consolidated [OPEN_ITEMS.md](../OPEN_ITEMS.md).
