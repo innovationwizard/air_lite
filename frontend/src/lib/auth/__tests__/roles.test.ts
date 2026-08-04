@@ -58,6 +58,15 @@ describe('role-matrix invariants (guard against accidental privilege widening)',
 });
 
 describe('cross-privilege negative tests (least privilege)', () => {
+  it('inventario reaches its silo but not compras/gerencia/admin', () => {
+    expect(isAuthorized('inventario', PAGE_PERMISSIONS['/inventarios/reyma'])).toBe(true);
+    expect(isAuthorized('inventario', PAGE_PERMISSIONS['/compras'])).toBe(false);
+    expect(isAuthorized('inventario', PAGE_PERMISSIONS['/gerencia'])).toBe(false);
+    expect(isAuthorized('inventario', PAGE_PERMISSIONS['/admin'])).toBe(false);
+    expect(isAuthorized('ventas', PAGE_PERMISSIONS['/inventarios/reyma'])).toBe(false);
+    expect(isAuthorized('compras', PAGE_PERMISSIONS['/inventarios/reyma'])).toBe(false);
+  });
+
   it('compras cannot reach gerencia, admin, or superuser pages', () => {
     expect(isAuthorized('compras', PAGE_PERMISSIONS['/gerencia'])).toBe(false);
     expect(isAuthorized('compras', PAGE_PERMISSIONS['/admin'])).toBe(false);
@@ -84,6 +93,7 @@ describe('getDefaultPage', () => {
     expect(getDefaultPage('compras')).toBe('/compras');
     expect(getDefaultPage('operaciones')).toBe('/operaciones');
     expect(getDefaultPage('gerencia')).toBe('/gerencia/forecast');
+    expect(getDefaultPage('inventario')).toBe('/inventarios/reyma');
     expect(getDefaultPage('admin')).toBe('/backtest');
   });
 

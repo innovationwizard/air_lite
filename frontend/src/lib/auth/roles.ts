@@ -53,6 +53,11 @@ export const CAN_VIEW_COMPRAS: Role[] = [
   'superuser', 'admin', 'gerencia', 'compras',
 ];
 
+/** Roles that can access the Inventarios silo (Alexis' tool) */
+export const CAN_VIEW_INVENTARIOS: Role[] = [
+  'superuser', 'admin', 'gerencia', 'inventario',
+];
+
 /** Roles that can access the Gerencia silo (Luis-facing validation) */
 export const CAN_VIEW_GERENCIA: Role[] = [
   'superuser', 'admin', 'gerencia',
@@ -81,6 +86,7 @@ export const PAGE_PERMISSIONS: Record<string, Role[]> = {
   '/compras': CAN_VIEW_COMPRAS,
   '/compras/reabastecimiento': CAN_VIEW_COMPRAS,
   '/compras/reabastecimiento-vivo': CAN_VIEW_COMPRAS,
+  '/inventarios/reyma': CAN_VIEW_INVENTARIOS,
   '/operaciones': CAN_VIEW_OPERACIONES,
   '/gerencia': CAN_VIEW_GERENCIA,
   '/superuser': CAN_VIEW_SYSTEM,
@@ -99,6 +105,8 @@ export function getDefaultPage(role: Role | string): string {
       return '/compras';
     case ROLES.OPERACIONES:
       return '/operaciones';
+    case ROLES.INVENTARIO:
+      return '/inventarios/reyma';
     case ROLES.GERENCIA:
       return '/gerencia/forecast';
     case ROLES.ADMIN:

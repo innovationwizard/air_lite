@@ -119,6 +119,9 @@ docs/reconciliation/backup_*.json
 # Documentation / working notes — kept local, not version-controlled
 docs/
 
+# Client-provided working drop 2026-08-04 (Alexis xlsx + meeting notes) — local only
+20260804/
+
 # Tech-debt golden-backtest harness + client-derived forecast baselines — local only
 ml/_baselines/
 

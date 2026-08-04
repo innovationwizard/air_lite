@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation';
 import {
   BarChart3,
   AlertTriangle,
+  Boxes,
   Warehouse,
   Snowflake,
   ShoppingCart,
@@ -30,6 +31,7 @@ import {
   CAN_VIEW_SYSTEM,
   // CAN_VIEW_OA,    // unused while Órdenes Abiertas section is hidden (2026-05-27)
   CAN_VIEW_COMPRAS,
+  CAN_VIEW_INVENTARIOS,
   CAN_VIEW_OPERACIONES,
   CAN_VIEW_GERENCIA,
   ROLE_LABELS,
@@ -126,6 +128,18 @@ const allNavGroups: NavGroup[] = [
         icon: Truck,
         subtitle: 'Carvajal y Reyma',
         disabled: true,
+      },
+    ],
+  },
+  {
+    section: 'Inventarios',
+    requiredRoles: CAN_VIEW_INVENTARIOS,
+    items: [
+      {
+        name: 'Modelo Reyma',
+        href: '/inventarios/reyma',
+        icon: Boxes,
+        subtitle: 'Réplica del libro — Julio 2026',
       },
     ],
   },
