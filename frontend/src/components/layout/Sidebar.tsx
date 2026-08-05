@@ -141,6 +141,12 @@ const allNavGroups: NavGroup[] = [
         icon: Boxes,
         subtitle: 'Réplica del libro — Julio 2026',
       },
+      {
+        name: 'Modelo Reyma en Vivo',
+        href: '/inventarios/reyma-vivo',
+        icon: Activity,
+        subtitle: 'Datos Odoo en vivo + proyección editable',
+      },
     ],
   },
   {

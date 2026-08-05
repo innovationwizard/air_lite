@@ -87,6 +87,7 @@ export const PAGE_PERMISSIONS: Record<string, Role[]> = {
   '/compras/reabastecimiento': CAN_VIEW_COMPRAS,
   '/compras/reabastecimiento-vivo': CAN_VIEW_COMPRAS,
   '/inventarios/reyma': CAN_VIEW_INVENTARIOS,
+  '/inventarios/reyma-vivo': CAN_VIEW_INVENTARIOS,
   '/operaciones': CAN_VIEW_OPERACIONES,
   '/gerencia': CAN_VIEW_GERENCIA,
   '/superuser': CAN_VIEW_SYSTEM,
