@@ -68,7 +68,7 @@ import urllib.parse
 import urllib.request
 import xmlrpc.client
 from collections import defaultdict
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
@@ -85,6 +85,7 @@ REYMA_PARTNER_ID = 23188          # PLASTICOS ADHERIBLES DEL BAJIO, S.A. DE C.V.
 EXCLUDED_CODES = {'77201028'}     # tenedor real en Odoo, no alias de Mariel (RESPUESTAS rule 7)
 ORDERED_STATES = ['sale', 'done']  # same flagged assumption as the Wilmer sync
 SALE_ORDER_FROM = '2024-10-01'    # probe: sale.order.line has no data before 2024-10
+FACTURAS_DESDE = '2026-06-01'     # NC window: current + prior month cierre (rule 8 cutoff)
 
 # bodega <- location complete_name (content-bound; probe-verified 2026-08-05)
 LOCATION_TO_BODEGA = {
@@ -218,9 +219,13 @@ def load_or_seed_products(issues, dry_run):
 
 
 def sync_products(execute, scope, issues, dry_run, sync_id):
+    """Categoría de negocio = x_studio_material de product.template (decisión
+    2026-08-05: "use x_studio_material instead" — reemplaza categ_id y la
+    categoría del xlsx). Valor presente -> categoria fuente 'odoo'; vacío ->
+    se conserva el fallback xlsx y se reporta."""
     prods = odoo_read_all(execute, 'product.product',
                           [['default_code', 'in', list(scope)]],
-                          ['default_code', 'name', 'categ_id', 'uom_id', 'volume', 'active'])
+                          ['default_code', 'name', 'x_studio_material', 'uom_id', 'volume', 'active'])
     by_code = {p['default_code']: p for p in prods}
     updates = []
     for cod, srow in scope.items():
@@ -239,7 +244,8 @@ def sync_products(execute, scope, issues, dry_run, sync_id):
         elif seed_cub and abs(vol - seed_cub) > 1e-6:
             issues.add('info', 'product',
                        f'{cod} cubicaje difiere: Odoo {vol} vs xlsx {seed_cub} — se usa Odoo', p['id'])
-        updates.append({
+        material = (p.get('x_studio_material') or '').strip()
+        u = {
             'codigo': cod,
             'odoo_product_id': p['id'],
             'nombre_odoo': p['name'],
@@ -248,7 +254,15 @@ def sync_products(execute, scope, issues, dry_run, sync_id):
             'activo': bool(p['active']),
             'source_sync_id': sync_id,
             'updated_at': datetime.now(timezone.utc).isoformat(),
-        })
+        }
+        if material:
+            u['categoria'] = material
+            u['categoria_fuente'] = 'odoo'
+        else:
+            issues.add('info', 'product',
+                       f'{cod} sin x_studio_material en Odoo — se mantiene la categoría del xlsx '
+                       f'({srow.get("categoria")!r}) hasta que se asigne', p['id'])
+        updates.append(u)
     if not dry_run:
         # PATCH per row: partial update must not clobber seeded xlsx fields
         for u in updates:
@@ -302,7 +316,6 @@ def sync_pendientes(execute, code_to_opid, issues, dry_run, sync_id):
     """Pendiente = SO line qty ordered − delivered (stock.move unreadable for
     this user; SO-line definition matches Alexis' words — see module docstring)."""
     opid_to_code = {v: k for k, v in code_to_opid.items()}
-    from datetime import timedelta
     desde = (datetime.now(timezone.utc) - timedelta(days=60)).strftime('%Y-%m-%d')
     lines = odoo_read_all(
         execute, 'sale.order.line',
@@ -349,10 +362,12 @@ def sync_pendientes(execute, code_to_opid, issues, dry_run, sync_id):
 
 def sync_transito(execute, code_to_opid, issues, dry_run, sync_id):
     opid_to_code = {v: k for k, v in code_to_opid.items()}
+    # states purchase+done: measured 2026-08-06 (Wilmer case) — orders with
+    # receipts still pending can sit LOCKED in state 'done'; 'purchase' alone misses them
     lines = odoo_read_all(
         execute, 'purchase.order.line',
         [['order_id.partner_id', '=', REYMA_PARTNER_ID],
-         ['order_id.state', '=', 'purchase'],
+         ['order_id.state', 'in', ['purchase', 'done']],
          ['product_id', 'in', list(opid_to_code)]],
         ['order_id', 'product_id', 'product_qty', 'qty_received', 'qty_invoiced', 'date_planned'])
     order_ids = sorted({l['order_id'][0] for l in lines})
@@ -399,7 +414,7 @@ def sync_transito(execute, code_to_opid, issues, dry_run, sync_id):
     # products the supplier ships that are NOT in scope — visibility, not silence
     all_lines = execute('purchase.order.line', 'search_count',
                         [['order_id.partner_id', '=', REYMA_PARTNER_ID],
-                         ['order_id.state', '=', 'purchase'],
+                         ['order_id.state', 'in', ['purchase', 'done']],
                          ['product_id', 'not in', list(opid_to_code)]])
     if all_lines:
         issues.add('info', 'transit',
@@ -478,6 +493,64 @@ def sync_ventas(execute, code_to_opid, issues, dry_run, sync_id):
     return len(so_rows) + len(sh_rows)
 
 
+def sync_facturas(execute, scope, code_to_opid, issues, dry_run, sync_id):
+    """Vendor bills (posted) of the Reyma partner — the NC + price-check source
+    (L3; probe-verified readable 2026-08-05). NC semantics per RESPUESTAS rule 8:
+    'cada caja que yo compro' = cajas FACTURADAS de la categoría duroport.
+    Price alerts: factura vs reyma_products.precio_factura (the xlsx BASE DATOS
+    price, which already includes the +0.41 duroport differential)."""
+    opid_to_code = {v: k for k, v in code_to_opid.items()}
+    moves = odoo_read_all(
+        execute, 'account.move',
+        [['partner_id', '=', REYMA_PARTNER_ID],
+         ['move_type', 'in', ['in_invoice', 'in_refund']],
+         ['state', '=', 'posted'],
+         ['invoice_date', '>=', FACTURAS_DESDE]],
+        ['name', 'invoice_date', 'ref', 'move_type'])
+    rows = []
+    desviaciones = {}  # (factura, codigo) -> (precio, base, rel)
+    for mv in moves:
+        lines = odoo_read_all(
+            execute, 'account.move.line',
+            [['move_id', '=', mv['id']], ['product_id', '!=', False],
+             ['product_id', 'in', list(opid_to_code)]],
+            ['product_id', 'quantity', 'price_unit'])
+        for l in lines:
+            cod = opid_to_code[l['product_id'][0]]
+            precio = float(l['price_unit'] or 0)
+            rows.append({
+                'sync_id': sync_id,
+                'factura': mv['name'],
+                'fecha': mv['invoice_date'] or None,
+                'referencia': (mv['ref'] or '')[:120] or None,
+                'tipo': 'factura' if mv['move_type'] == 'in_invoice' else 'nota_credito',
+                'codigo': cod,
+                'cantidad': float(l['quantity'] or 0),
+                'precio_unit': precio,
+            })
+            base = scope.get(cod, {}).get('precio_factura')
+            if base and mv['move_type'] == 'in_invoice':
+                rel = abs(precio - float(base)) / float(base)
+                if rel > 0.01:  # >1% relativo; el diferencial +0.41 ya vive en el precio base
+                    desviaciones[(mv['name'], cod)] = (precio, float(base), rel)
+    # alert design: top-5 nombradas + resumen (311 alertas individuales = fatiga, no señal)
+    top = sorted(desviaciones.items(), key=lambda kv: -kv[1][2])[:5]
+    for (fac, cod), (precio, base, rel) in top:
+        issues.add('warning', 'facturas',
+                   f'{fac}: {cod} facturado a {precio:.4f} vs precio vigente {base:.2f} ({rel:+.1%}) — '
+                   '"si no hay nada anunciado, eso no se paga" (Alexis)')
+    if len(desviaciones) > len(top):
+        issues.add('info', 'facturas',
+                   f'{len(desviaciones)} líneas factura-código con precio desviado >1% del vigente '
+                   '(detalle completo en reyma_facturas — revisar en la pestaña NC/precios; '
+                   'algunas facturas traen precios prorrateados/convertidos)')
+    logger.info('facturas: %d líneas de %d facturas desde %s (%d desviaciones de precio >1%%)',
+                len(rows), len(moves), FACTURAS_DESDE, len(desviaciones))
+    if not dry_run:
+        sb_insert_batched('reyma_facturas', rows)
+    return len(rows)
+
+
 # ─── Main ────────────────────────────────────────────────────────────────────
 
 def main():
@@ -494,6 +567,17 @@ def main():
 
     sync_id = None
     if not dry:
+        # anti-solape (C4, cron horario): si hay una corrida 'running' reciente,
+        # esta invocación se salta limpia en vez de duplicar trabajo contra Odoo.
+        cutoff = urllib.parse.quote(
+            (datetime.now(timezone.utc) - timedelta(minutes=45)).strftime('%Y-%m-%dT%H:%M:%SZ'))
+        running = sb_request(
+            'GET',
+            f'sync_runs?kind=eq.reyma&status=eq.running&started_at=gte.{cutoff}&select=id,started_at&limit=1')
+        if running:
+            logger.info('SKIP: corrida %s sigue running desde %s — no se solapa',
+                        running[0]['id'], running[0]['started_at'])
+            return
         run = sb_request('POST', 'sync_runs',
                          {'kind': 'reyma', 'status': 'running'}, prefer='return=representation')
         sync_id = run[0]['id']
@@ -508,6 +592,7 @@ def main():
         counts['pendientes'] = sync_pendientes(execute, code_to_opid, issues, dry, sync_id)
         counts['transito'] = sync_transito(execute, code_to_opid, issues, dry, sync_id)
         counts['ventas'] = sync_ventas(execute, code_to_opid, issues, dry, sync_id)
+        counts['facturas'] = sync_facturas(execute, scope, code_to_opid, issues, dry, sync_id)
         status = 'partial' if issues.has_errors() else 'success'
     except Exception:
         logger.exception('sync failed')

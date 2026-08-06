@@ -4,6 +4,10 @@ import { CAN_VIEW_INVENTARIOS } from '@/lib/auth/roles';
 import { createServiceRoleClient } from '@/lib/supabase/server';
 import type { ModeloRow, VentasRow } from '@/app/(authenticated)/inventarios/reyma/engine';
 import type {
+  FacturaLinea,
+  NcConfig,
+  PedidoGuardado,
+  PlanGuardado,
   ReymaVivoPayload,
   SyncIssue,
   TransitoDetalle,
@@ -39,6 +43,12 @@ const MESES_PROMEDIO_MOVIL = 2;
 const MAX_EDAD_PENDIENTES_DIAS = 8;
 const CAPACIDAD_M3 = 100;
 const COD_FURGON_COMPLETO = '77201046';
+// NC Duroport: lista medida (hoja NC del libro, 8 claves VT; Alexis 2026-08-04).
+// La categoría ya no sirve de filtro: desde 2026-08-05 es x_studio_material.
+const NC_CODIGOS = [
+  '77201000', '77201035', '77201036', '77201039',
+  '77201041', '77201046', '77201047', '77201064',
+];
 const SALE_ORDER_DESDE = { anio: 2024, mes: 10 }; // probe: sale.order.line starts 2024-10
 
 interface ProductRowDb {
@@ -60,6 +70,18 @@ interface TransRowDb {
   es_entrega_directa: boolean; es_fecha_pasada: boolean;
 }
 interface VentaRowDb { codigo: string; anio: number; mes: number; cajas: number; fuente: string }
+interface OverrideRowDb { codigo: string; cajas: number | null; autor: string; created_at: string }
+interface NcConfigRowDb {
+  tarifa_usd: number; vigente_hasta: string | null; nota: string | null;
+  autor: string; created_at: string;
+}
+interface NotaRowDb { po_name: string; eta: string | null; nota: string | null; autor: string; created_at: string }
+interface FacturaRowDb {
+  factura: string; fecha: string | null; referencia: string | null;
+  tipo: 'factura' | 'nota_credito'; codigo: string; cantidad: number; precio_unit: number;
+}
+interface PlanRowDb { semana: string; payload: unknown; autor: string; created_at: string }
+interface PedidoRowDb { mes: string; payload: unknown; autor: string; created_at: string }
 
 async function fetchAll<T>(
   query: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>,
@@ -117,6 +139,51 @@ export async function GET() {
         service.from('sync_issues').select('severity, entity, message, sync_id')
           .eq('sync_id', run.id).range(a, b)),
     ]);
+
+    // ── L3 write-path state (append-only history; latest row wins)
+    const [overridesRaw, ncRaw, notasRaw, facturasRaw, planesRaw, pedidosRaw] = await Promise.all([
+      fetchAll<OverrideRowDb>((a, b) =>
+        service.from('reyma_proyeccion_overrides')
+          .select('codigo, cajas, autor, created_at')
+          .order('created_at', { ascending: false }).range(a, b)),
+      service.from('reyma_nc_config')
+        .select('tarifa_usd, vigente_hasta, nota, autor, created_at')
+        .order('created_at', { ascending: false }).limit(1)
+        .then(({ data, error }) => {
+          if (error) throw new Error(error.message);
+          return (data ?? []) as NcConfigRowDb[];
+        }),
+      fetchAll<NotaRowDb>((a, b) =>
+        service.from('reyma_furgon_notas')
+          .select('po_name, eta, nota, autor, created_at')
+          .order('created_at', { ascending: false }).range(a, b)),
+      fetchAll<FacturaRowDb>((a, b) =>
+        service.from('reyma_facturas')
+          .select('factura, fecha, referencia, tipo, codigo, cantidad, precio_unit')
+          .eq('sync_id', run.id).range(a, b)),
+      service.from('reyma_plan_despacho')
+        .select('semana, payload, autor, created_at')
+        .order('created_at', { ascending: false }).limit(1)
+        .then(({ data, error }) => {
+          if (error) throw new Error(error.message);
+          return (data ?? []) as PlanRowDb[];
+        }),
+      service.from('reyma_pedido_mensual')
+        .select('mes, payload, autor, created_at')
+        .order('created_at', { ascending: false }).limit(1)
+        .then(({ data, error }) => {
+          if (error) throw new Error(error.message);
+          return (data ?? []) as PedidoRowDb[];
+        }),
+    ]);
+    const overrideByCod = new Map<string, OverrideRowDb>();
+    for (const o of overridesRaw) {
+      if (!overrideByCod.has(o.codigo)) overrideByCod.set(o.codigo, o); // first = latest
+    }
+    const notaByPo = new Map<string, NotaRowDb>();
+    for (const n of notasRaw) {
+      if (!notaByPo.has(n.po_name)) notaByPo.set(n.po_name, n);
+    }
 
     // ── ventas: stitch sources (sale_order wins from 2024-10; sales_history before)
     const soIdx = new Map<string, number>();
@@ -181,6 +248,8 @@ export async function GET() {
 
     const rows: VivoRow[] = products.map((p) => {
       const st = stockIdx.get(p.codigo) ?? {};
+      const ov = overrideByCod.get(p.codigo);
+      const tieneOverride = ov !== undefined && ov.cajas !== null;
       const base: ModeloRow = {
         cod: p.codigo,
         clave: p.clave ?? '',
@@ -196,8 +265,8 @@ export async function GET() {
         pat: st['PAT'] ?? 0,
         psx: psxContada.get(p.codigo) ?? 0,
         transito: transitoNormal.get(p.codigo) ?? 0,
-        proyeccion: proyeccionDefault(p.codigo),
-        proyOverride: false,
+        proyeccion: tieneOverride ? (ov.cajas as number) : proyeccionDefault(p.codigo),
+        proyOverride: tieneOverride,
         ventaPend: 0,
         descAniv: null,
       };
@@ -206,18 +275,55 @@ export async function GET() {
         entregaDirecta: transitoDirecta.get(p.codigo) ?? 0,
         psxTotal: psxTotal.get(p.codigo) ?? 0,
         categoriaEsFallback: p.categoria_fuente === 'xlsx',
+        proyeccionInfo: tieneOverride ? { autor: ov.autor, fecha: ov.created_at } : null,
       };
     });
 
-    const transitoDetalle: TransitoDetalle[] = transito.map((t) => ({
-      codigo: t.codigo,
-      poName: t.po_name,
-      fechaPlaneada: t.fecha_planeada,
-      cantidad: t.cantidad_pendiente,
-      destino: t.destino,
-      esEntregaDirecta: t.es_entrega_directa,
-      esFechaPasada: t.es_fecha_pasada,
+    const transitoDetalle: TransitoDetalle[] = transito.map((t) => {
+      const nota = notaByPo.get(t.po_name);
+      return {
+        codigo: t.codigo,
+        poName: t.po_name,
+        fechaPlaneada: t.fecha_planeada,
+        cantidad: t.cantidad_pendiente,
+        destino: t.destino,
+        esEntregaDirecta: t.es_entrega_directa,
+        esFechaPasada: t.es_fecha_pasada,
+        eta: nota?.eta ?? null,
+        nota: nota?.nota ?? null,
+        notaAutor: nota?.autor ?? null,
+      };
+    });
+
+    const ncRow = ncRaw[0];
+    const ncConfig: NcConfig = ncRow
+      ? {
+          tarifaUsd: ncRow.tarifa_usd,
+          vigenteHasta: ncRow.vigente_hasta,
+          nota: ncRow.nota,
+          autor: ncRow.autor,
+          fecha: ncRow.created_at,
+        }
+      : { tarifaUsd: 0.41, vigenteHasta: null, nota: null, autor: 'default', fecha: '' };
+
+    const facturasOut: FacturaLinea[] = facturasRaw.map((f) => ({
+      factura: f.factura,
+      fecha: f.fecha,
+      referencia: f.referencia,
+      tipo: f.tipo,
+      codigo: f.codigo,
+      cantidad: f.cantidad,
+      precioUnit: f.precio_unit,
     }));
+
+    const planRow = planesRaw[0];
+    const ultimoPlan: PlanGuardado | null = planRow
+      ? { semana: planRow.semana, autor: planRow.autor, fecha: planRow.created_at, payload: planRow.payload }
+      : null;
+    const pedidoRow = pedidosRaw[0];
+    const ultimoPedido: PedidoGuardado | null = pedidoRow
+      ? { mes: pedidoRow.mes, autor: pedidoRow.autor, fecha: pedidoRow.created_at, payload: pedidoRow.payload }
+      : null;
 
     const payload: ReymaVivoPayload = {
       sync: {
@@ -231,11 +337,16 @@ export async function GET() {
         codFurgonCompleto: COD_FURGON_COMPLETO,
         mesesPromedioMovil: MESES_PROMEDIO_MOVIL,
         maxEdadPendientesDias: MAX_EDAD_PENDIENTES_DIAS,
+        ncCodigos: NC_CODIGOS,
       },
       rows,
       ventas: ventasRows,
       transitoDetalle,
       issues: issuesRaw.map(({ severity, entity, message }) => ({ severity, entity, message })),
+      facturas: facturasOut,
+      ncConfig,
+      ultimoPlan,
+      ultimoPedido,
     };
     return NextResponse.json(payload);
   } catch (e) {

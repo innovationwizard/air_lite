@@ -218,10 +218,15 @@ def sync_catalog(execute, issues, dry_run):
         ['id', 'default_code', 'name', 'standard_price', 'list_price', 'uom_id', 'categ_id'])
     logger.info('Odoo products: %d', len(odoo_products))
 
-    # Match by SKU (content) FIRST, odoo_id second. Odoo database ids CHANGE on
-    # every dev-build clone (verified 2026-07-30: only ~400/1597 matched by id
-    # against the March snapshot; blind id-matching would have inserted ~1,199
-    # near-duplicates). SKU is the stable business key.
+    # Match by SKU (content) ONLY. Odoo database ids CHANGE on every build
+    # (measured 2026-08-06 against PRODUCTION: 1,666/1,685 stored odoo_ids are
+    # stale — most point at nothing, some at UNRELATED products; the old
+    # odoo_id fallback silently credited e.g. a sticker's 14,658 units to a
+    # bolsa row — caught by Wilmer's Q3 answer: codes are NEVER reused, they
+    # carry the same identity since SAE). SKU is the only stable business key.
+    # When a SKU matches, the stored odoo_id is REPAIRED to the current build's
+    # id (deliberate exception to "never mutate existing rows": odoo_id is an
+    # integration key, not business data, and stale values are proven poison).
     existing = sb_get_all('products?select=id,odoo_id,sku')
     by_sku, dup_skus = {}, 0
     for p in existing:
@@ -230,24 +235,23 @@ def sync_catalog(execute, issues, dry_run):
                 dup_skus += 1
             else:
                 by_sku[p['sku']] = p['id']
-    by_odoo_id_existing = {p['odoo_id']: p['id'] for p in existing}
+    stored_oid_by_row = {p['id']: p['odoo_id'] for p in existing}
     if dup_skus:
         issues.add('warning', 'product',
                    f'{dup_skus} duplicate SKUs already present in Supabase products '
                    f'(first row wins for matching) — review separately')
 
     by_odoo_id = {}   # str(new-build odoo id) -> supabase product id
-    id_drift = 0
+    oid_repairs = []  # (supabase row id, current odoo id) — stale integration keys to heal
     new_rows = []
     for p in odoo_products:
         oid = str(p['id'])
         sku = p.get('default_code') or None
         if sku and sku in by_sku:
-            by_odoo_id[oid] = by_sku[sku]
-            if oid not in by_odoo_id_existing:
-                id_drift += 1
-        elif oid in by_odoo_id_existing:
-            by_odoo_id[oid] = by_odoo_id_existing[oid]
+            row_id = by_sku[sku]
+            by_odoo_id[oid] = row_id
+            if stored_oid_by_row.get(row_id) != oid:
+                oid_repairs.append((row_id, oid))
         else:
             new_rows.append({
                 'odoo_id': oid,
@@ -258,10 +262,26 @@ def sync_catalog(execute, issues, dry_run):
                 'list_price': p.get('list_price') or None,
                 'stock_uom': (p['uom_id'][1][:50] if p.get('uom_id') else None),
             })
-    if id_drift:
+    if oid_repairs:
         issues.add('info', 'product',
-                   f'{id_drift} products bridged by SKU (odoo_id drift across builds '
-                   f'— existing rows reused, never mutated)')
+                   f'{len(oid_repairs)} stored odoo_ids stale vs this build — repaired to the '
+                   f'current id (SKU-matched; sku-only matching since 2026-08-06)')
+        if not dry_run:
+            # odoo_id is UNIQUE and NOT NULL: rotating ids collides with stale
+            # holders (409) and cannot pass through null (23502). Phase 1 —
+            # park every row that is about to move (repaired rows + any other
+            # row still holding a target value) on a per-row sentinel
+            # 'stale:<row_id>' (honest marker: integration key invalid for this
+            # build). Phase 2 — write the current-build ids. Rows without a
+            # prod SKU match keep the sentinel, which is the truth.
+            targets = {oid for _rid, oid in oid_repairs} | {r['odoo_id'] for r in new_rows}
+            repair_rows = {rid for rid, _oid in oid_repairs}
+            holders = [p['id'] for p in existing
+                       if p['odoo_id'] in targets or p['id'] in repair_rows]
+            for row_id in holders:
+                sb_request('PATCH', f'products?id=eq.{row_id}', {'odoo_id': f'stale:{row_id}'})
+            for row_id, oid in oid_repairs:
+                sb_request('PATCH', f'products?id=eq.{row_id}', {'odoo_id': oid})
     if new_rows:
         issues.add('info', 'product',
                    f'{len(new_rows)} genuinely new products (no SKU/odoo_id match) — inserted')
@@ -274,6 +294,8 @@ def sync_catalog(execute, issues, dry_run):
                 oid = str(p['id'])
                 if oid not in by_odoo_id:
                     sku = p.get('default_code') or None
+                    # sku-only for pre-existing rows; freshly-inserted rows carry
+                    # this build's odoo_id, so re_by_oid is safe for them alone
                     mapped = (re_by_sku.get(sku) if sku else None) or re_by_oid.get(oid)
                     if mapped:
                         by_odoo_id[oid] = mapped
@@ -506,36 +528,49 @@ def sync_seasonal(execute, sku_to_opid, issues):
 
 def sync_transit(execute, issues):
     """Global per-product transit: confirmed PO lines with pending qty
-    (product_qty - qty_received > 0) and STRICTLY FUTURE date_planned.
+    (product_qty - qty_received > 0) on orders expected TODAY OR LATER.
 
     RULE CONFIRMED BY WILMER 2026-07-30 (OQ-F): "Tránsito no cuenta fechas
     pasadas." His discipline: when a supplier reschedules, he UPDATES the
-    delivery date on the PO — so a late-but-still-expected delivery becomes
-    future-dated and counts; an un-updated past date is dead. All past-dated
-    pending (the never-cancelled pile, back to 2024-10) is excluded and
-    reported. Transit near 0 is therefore CORRECT under this rule whenever no
-    future-dated confirmed lines exist (locals deliver same-week; the Carvajal
-    monthly enters via cotización or the manual override)."""
-    now = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
+    delivery date — MEASURED 2026-08-06: that update lives on the PO HEADER
+    date_planned (the "Fecha Esperada" of the rampa schedule, e.g.
+    x_studio_horario_rampa_inicio), NOT on the lines (line dates stay stale:
+    PO-P-2960 lines said 08-01 while the header said 08-06 with rampa booked).
+    Also measured: orders arriving today sit in state='done' (locked) with
+    receipts still pending — so state must include 'done', and "today" counts
+    as transit until received (falsified live by Wilmer 2026-08-06: transit=0
+    while 4 trucks arrived that day). Past-dated headers remain excluded
+    (the never-cancelled pile) and are reported."""
+    today0 = datetime.now(timezone.utc).strftime('%Y-%m-%d 00:00:00')
+    orders = odoo_read_all(execute, 'purchase.order',
+                           [['state', 'in', ['purchase', 'done']]],
+                           ['name', 'date_planned'])
+    future_ids = [o['id'] for o in orders if (o.get('date_planned') or '') >= today0]
+    past_ids = [o['id'] for o in orders if (o.get('date_planned') or '') < today0]
     lines = odoo_read_all(execute, 'purchase.order.line',
-                          [['state', '=', 'purchase']],
-                          ['product_id', 'product_qty', 'qty_received', 'date_planned'])
+                          [['order_id', 'in', future_ids]],
+                          ['product_id', 'product_qty', 'qty_received', 'date_planned']) \
+        if future_ids else []
+    past_lines = odoo_read_all(execute, 'purchase.order.line',
+                               [['order_id', 'in', past_ids]],
+                               ['product_id', 'product_qty', 'qty_received']) if past_ids else []
     transit = {}
-    counted = past_excluded = 0
+    counted = 0
+    past_excluded = sum(
+        1 for ln in past_lines
+        if ln.get('product_id') and ((ln.get('product_qty') or 0.0) - (ln.get('qty_received') or 0.0)) > 0)
     for ln in lines:
         if not ln.get('product_id'):
             continue
         pending = (ln.get('product_qty') or 0.0) - (ln.get('qty_received') or 0.0)
         if pending <= 0:
             continue
-        if (ln.get('date_planned') or '') > now:
-            transit[ln['product_id'][0]] = transit.get(ln['product_id'][0], 0.0) + pending
-            counted += 1
-        else:
-            past_excluded += 1
+        transit[ln['product_id'][0]] = transit.get(ln['product_id'][0], 0.0) + pending
+        counted += 1
     issues.add('info', 'transit',
-               f'transit = FUTURE-dated pending only (Wilmer 2026-07-30): {counted} lines '
-               f'counted; {past_excluded} past-dated pending lines excluded '
+               f'transit = pending on orders expected today-or-later, header date, '
+               f'states purchase+done (rule fixed 2026-08-06 after Wilmer falsified transit=0): '
+               f'{counted} lines counted; {past_excluded} pending lines on past-dated orders excluded '
                f'(incl. the no-auto-cancel pile back to 2024-10 — cleanup with David)')
 
     # Data-horizon staleness: newest purchase order date vs now.
@@ -670,6 +705,20 @@ def main():
 
         sb_insert_batched('reabastecimiento_inputs', rows,
                           on_conflict='product_id,bodega')
+        # Purge rows this run did NOT touch: products that vanished from Odoo
+        # (or lost all data) would otherwise serve a stale snapshot forever —
+        # measured 2026-08-06: the mis-matched bolsa 11011048 kept showing the
+        # sticker's 14,658 after the identity fix because upsert never removes.
+        run_start = min(r['as_of'] for r in rows) if rows else None
+        if run_start:
+            stale = sb_request(
+                'DELETE',
+                f'reabastecimiento_inputs?as_of=lt.{urllib.parse.quote(run_start)}',
+                prefer='return=representation') or []
+            if stale:
+                issues.add('info', 'stock',
+                           f'{len(stale)} filas de inputs purgadas (productos sin datos en esta '
+                           f'corrida — instantáneas viejas no deben sobrevivir)')
         for issue in issues.rows:
             issue['sync_id'] = sync_id
         sb_insert_batched('sync_issues', issues.rows)

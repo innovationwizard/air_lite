@@ -14,6 +14,8 @@ export interface VivoRow extends ModeloRow {
   psxTotal: number;
   /** Categoría aún desde el xlsx (P7 pendiente) — false cuando Odoo ya la tenga. */
   categoriaEsFallback: boolean;
+  /** Override persistido de proyección (L3) — cuando existe, proyeccion ya lo trae aplicado. */
+  proyeccionInfo: { autor: string; fecha: string } | null;
 }
 
 export interface TransitoDetalle {
@@ -24,6 +26,42 @@ export interface TransitoDetalle {
   destino: string | null;
   esEntregaDirecta: boolean;
   esFechaPasada: boolean;
+  /** Anotación manual (L3): ETA real conocida por factura/correo + nota. */
+  eta: string | null;
+  nota: string | null;
+  notaAutor: string | null;
+}
+
+export interface FacturaLinea {
+  factura: string;
+  fecha: string | null;
+  referencia: string | null;
+  tipo: 'factura' | 'nota_credito';
+  codigo: string;
+  cantidad: number;
+  precioUnit: number;
+}
+
+export interface NcConfig {
+  tarifaUsd: number;
+  vigenteHasta: string | null;
+  nota: string | null;
+  autor: string;
+  fecha: string;
+}
+
+export interface PlanGuardado {
+  semana: string;
+  autor: string;
+  fecha: string;
+  payload: unknown;
+}
+
+export interface PedidoGuardado {
+  mes: string; // YYYY-MM-01
+  autor: string;
+  fecha: string;
+  payload: unknown;
 }
 
 export interface SyncIssue {
@@ -47,9 +85,21 @@ export interface ReymaVivoPayload {
     mesesPromedioMovil: number;
     /** Regla de edad de pendientes por surtir (RESPUESTAS regla 3). */
     maxEdadPendientesDias: number;
+    /**
+     * Productos que acumulan NC Duroport — lista medida de la hoja NC del
+     * libro (8 claves VT), confirmada por Alexis 2026-08-04. Ya no puede
+     * derivarse de la categoría: desde 2026-08-05 la categoría es
+     * x_studio_material y "Duroport" también cubre bandejas/biodegradables.
+     */
+    ncCodigos: string[];
   };
   rows: VivoRow[];
   ventas: VentasRow[];
   transitoDetalle: TransitoDetalle[];
   issues: SyncIssue[];
+  /** L3: facturas del proveedor (NC + verificación de precios). */
+  facturas: FacturaLinea[];
+  ncConfig: NcConfig;
+  ultimoPlan: PlanGuardado | null;
+  ultimoPedido: PedidoGuardado | null;
 }
