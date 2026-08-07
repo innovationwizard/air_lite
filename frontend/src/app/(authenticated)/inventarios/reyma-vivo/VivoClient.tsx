@@ -12,7 +12,13 @@ import {
   type ReymaData,
   type VentasRow,
 } from '../reyma/engine';
-import { generarPlan, DIAS_DEFAULT, type PlanFurgon } from './planificacion';
+import {
+  generarPlan,
+  mrpRegional,
+  DIAS_DEFAULT,
+  OBJETIVO_SEMANAS_REGIONAL_DEFAULT,
+  type PlanFurgon,
+} from './planificacion';
 import type { ReymaVivoPayload, VivoRow } from './types';
 
 function esc(s: string): string {
@@ -83,6 +89,7 @@ const TABS = [
   { id: 'pedido', label: 'Pedido mensual' },
   { id: 'mrp', label: 'MRP + Plan de despacho' },
   { id: 'nc', label: 'NC Duroport y precios' },
+  { id: 'cumplimiento', label: 'Cumplimiento' },
   { id: 'ventas', label: 'Ventas' },
   { id: 'datos', label: 'Datos y sincronización' },
 ] as const;
@@ -280,6 +287,7 @@ export function VivoClient() {
         <TabMrp payload={payload} mrpSorted={computed.mrpSorted} flash={flash} onSaved={load} />
       )}
       {tab === 'nc' && <TabNc payload={payload} flash={flash} onSaved={load} />}
+      {tab === 'cumplimiento' && <TabCumplimiento payload={payload} />}
       {tab === 'ventas' && <TabVentas payload={payload} computed={computed} />}
       {tab === 'datos' && <TabDatos payload={payload} flash={flash} onSaved={load} />}
     </div>
@@ -529,8 +537,108 @@ function TabMrp({
   flash: (m: string) => void;
   onSaved: () => void;
 }) {
+  const [bodega, setBodega] = useState<'SJ' | 'ZAC' | 'PET' | 'Z11'>('SJ');
+  const [objetivo, setObjetivo] = useState(OBJETIVO_SEMANAS_REGIONAL_DEFAULT);
+  const regional = useMemo(
+    () =>
+      bodega === 'SJ'
+        ? null
+        : mrpRegional(payload.rows, bodega, objetivo, payload.config.capacidadM3),
+    [payload, bodega, objetivo],
+  );
+
   return (
     <>
+      <div className="mb-4 flex flex-wrap items-center gap-2 text-xs">
+        <span className="font-semibold text-slate-700">Bodega:</span>
+        {(['SJ', 'ZAC', 'PET', 'Z11'] as const).map((b) => (
+          <button
+            key={b}
+            onClick={() => setBodega(b)}
+            className={`rounded px-2.5 py-1 font-medium border ${
+              bodega === b
+                ? 'border-emerald-600 bg-emerald-600 text-white'
+                : 'border-slate-300 bg-white text-slate-600 hover:bg-slate-50'
+            }`}
+          >
+            {{ SJ: 'San José (semanal)', ZAC: 'Zacapa', PET: 'Petén', Z11: 'Zona 11' }[b]}
+          </button>
+        ))}
+        {bodega !== 'SJ' && (
+          <>
+            <span className="text-slate-600 ml-2">Nivelar a</span>
+            <input
+              type="number"
+              min={1}
+              max={8}
+              value={objetivo}
+              onChange={(e) => setObjetivo(Math.max(1, Math.min(8, Number(e.target.value) || 3)))}
+              className="w-14 rounded border border-slate-300 px-1 py-0.5 text-right"
+              title='"tratemos de que el inventario máximo de todos queden en tres semanas" (Alexis)'
+            />
+            <span className="text-slate-600">semanas</span>
+          </>
+        )}
+      </div>
+      {regional && (
+        <div className="bg-white rounded-lg border border-slate-200 p-4">
+          <div className="mb-2 flex flex-wrap gap-2 text-[11px]">
+            <span className="rounded bg-slate-100 px-2 py-1">{fmt(regional.totalCajas)} cajas a pedir</span>
+            <span className="rounded bg-slate-100 px-2 py-1">
+              {m3(regional.totalM3)} m³ ≈ {fmt(regional.furgonesEstimados)} furgones
+            </span>
+            <span className="rounded bg-amber-50 px-2 py-1 text-amber-800">
+              Demanda = ventas de {{ SJ: 'San José', ZAC: 'Zacapa', PET: 'Petén', Z11: 'Zona 11' }[bodega]} (promedio móvil por
+              bodega — nunca la global). Nivelación: «el que está de una semana sube a {objetivo} y el que está de dos
+              sube a {objetivo}».
+            </span>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="text-xs border-collapse min-w-full">
+              <thead className="bg-slate-50">
+                <tr>
+                  <th className={TH}>Código</th>
+                  <th className={TH}>Clave</th>
+                  <th className={TH}>Descripción</th>
+                  <th className={THR}>Inv. bodega</th>
+                  <th className={THR}>PxS (≤8d)</th>
+                  <th className={THR}>Tránsito</th>
+                  <th className={THR}>Neto</th>
+                  <th className={THR}>Prom. mensual</th>
+                  <th className={THR}>Venta sem.</th>
+                  <th className={THR}>Pedido</th>
+                  <th className={THR}>Nivel (sem)</th>
+                  <th className={THR}>m³</th>
+                </tr>
+              </thead>
+              <tbody>
+                {regional.rows.map((r) => (
+                  <tr key={r.cod} className={`border-t border-slate-100 ${r.nivel < 2 ? 'bg-red-50' : 'hover:bg-slate-50'}`}>
+                    <td className={`${TD} font-mono`}>{r.cod}</td>
+                    <td className={TD}>{r.clave}</td>
+                    <td className={`${TD} max-w-[240px] truncate`} title={r.desc}>{r.desc}</td>
+                    <td className={TDR}>{qty(r.inv)}</td>
+                    <td className={TDR}>{qty(r.psx)}</td>
+                    <td className={TDR}>{qty(r.transito)}</td>
+                    <td className={`${TDR} font-medium ${r.neto < 0 ? 'text-red-600' : ''}`}>{qty(r.neto)}</td>
+                    <td className={TDR}>{qty(r.proyMensual)}</td>
+                    <td className={TDR}>{qty(r.ventaSem)}</td>
+                    <td className={`${TDR} font-semibold ${r.pedido > 0 ? 'text-emerald-700' : 'text-slate-400'}`}>
+                      {qty(r.pedido)}
+                    </td>
+                    <td className={TDR}>
+                      {r.nivel === 999 ? '—' : r.nivel.toLocaleString('es-GT', { maximumFractionDigits: 2 })}
+                    </td>
+                    <td className={TDR}>{m3(r.m3)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+      {bodega === 'SJ' && (
+      <>
       <PlanPanel payload={payload} mrpSorted={mrpSorted} flash={flash} onSaved={onSaved} />
       <div className="bg-white rounded-lg border border-slate-200 p-4">
       <div className="mb-2 text-[11px] text-slate-500">
@@ -585,7 +693,151 @@ function TabMrp({
         </table>
       </div>
       </div>
+      </>
+      )}
     </>
+  );
+}
+
+// ---------------------------------------------------------------- cumplimiento (C7)
+
+function TabCumplimiento({ payload }: { payload: ReymaVivoPayload }) {
+  const pedido = payload.ultimoPedido;
+  const rowsByCod = useMemo(() => new Map(payload.rows.map((r) => [r.cod, r])), [payload.rows]);
+  const datos = useMemo(() => {
+    if (!pedido) return null;
+    const lineas = (pedido.payload as { lineas?: Array<{ codigo: string; cajas: number }> })?.lineas ?? [];
+    if (!lineas.length) return null;
+    const mes = pedido.mes.slice(0, 7);
+    const facturado = new Map<string, number>();
+    for (const f of payload.facturas) {
+      if (!f.fecha || !f.fecha.startsWith(mes)) continue;
+      const sign = f.tipo === 'nota_credito' ? -1 : 1;
+      facturado.set(f.codigo, (facturado.get(f.codigo) ?? 0) + sign * f.cantidad);
+    }
+    const porProducto = lineas.map((l) => {
+      const fac = facturado.get(l.codigo) ?? 0;
+      return {
+        codigo: l.codigo,
+        desc: rowsByCod.get(l.codigo)?.desc || rowsByCod.get(l.codigo)?.prodReyma || '',
+        cat: rowsByCod.get(l.codigo)?.cat ?? '—',
+        pedido: l.cajas,
+        facturado: fac,
+        saldo: l.cajas - fac,
+        fill: l.cajas > 0 ? fac / l.cajas : 0,
+      };
+    });
+    const fueraDePedido = [...facturado.entries()]
+      .filter(([cod]) => !lineas.some((l) => l.codigo === cod))
+      .map(([cod, fac]) => ({ cod, fac }))
+      .filter((x) => x.fac > 0);
+    const cats = [...new Set(porProducto.map((p) => p.cat))].sort();
+    const porCategoria = cats.map((cat) => {
+      const ps = porProducto.filter((p) => p.cat === cat);
+      const ped = ps.reduce((a, p) => a + p.pedido, 0);
+      const fac = ps.reduce((a, p) => a + p.facturado, 0);
+      return { cat, pedido: ped, facturado: fac, fill: ped > 0 ? fac / ped : 0 };
+    });
+    const totPed = porProducto.reduce((a, p) => a + p.pedido, 0);
+    const totFac = porProducto.reduce((a, p) => a + p.facturado, 0);
+    return { mes, porProducto, porCategoria, fueraDePedido, totPed, totFac, fill: totPed > 0 ? totFac / totPed : 0 };
+  }, [pedido, payload.facturas, rowsByCod]);
+
+  if (!pedido || !datos) {
+    return (
+      <div className="bg-white rounded-lg border border-slate-200 p-4 text-sm text-slate-600">
+        Sin pedido mensual guardado todavía — genera y guarda el pedido en la pestaña «Pedido mensual» y aquí verás
+        el fill rate del proveedor (facturado vs pedido) en vivo, sin el defecto del dashboard del libro (H3: aquí
+        entran TODOS los productos del pedido).
+      </div>
+    );
+  }
+  const barra = (fill: number) => (
+    <div className="flex items-center gap-2">
+      <div className="h-2 w-24 overflow-hidden rounded bg-slate-200">
+        <div
+          className={`h-full ${fill >= 1 ? 'bg-emerald-500' : fill >= 0.8 ? 'bg-blue-500' : 'bg-amber-500'}`}
+          style={{ width: `${Math.min(100, fill * 100)}%` }}
+        />
+      </div>
+      <span className="tabular-nums">{(fill * 100).toLocaleString('es-GT', { maximumFractionDigits: 1 })}%</span>
+    </div>
+  );
+  return (
+    <div className="bg-white rounded-lg border border-slate-200 p-4">
+      <h3 className="text-sm font-semibold text-slate-700 mb-1">
+        Fill rate del proveedor — pedido de {datos.mes} (guardado por {pedido.autor})
+      </h3>
+      <div className="mb-3 text-[11px] text-slate-500">
+        Facturado (facturas del mes, notas de crédito restan) vs pedido mensual guardado. «El porcentaje de
+        cumplimiento del fill rate que el proveedor tenga… en vivo» (Alexis).
+      </div>
+      <div className="mb-4 grid grid-cols-3 gap-3 max-w-lg">
+        {[
+          { l: 'Pedido (cajas)', v: fmt(datos.totPed) },
+          { l: 'Facturado (cajas)', v: fmt(datos.totFac) },
+          { l: 'Fill rate global', v: `${(datos.fill * 100).toLocaleString('es-GT', { maximumFractionDigits: 1 })}%` },
+        ].map((k) => (
+          <div key={k.l} className="rounded-lg border border-slate-200 px-3 py-2">
+            <div className="text-[11px] text-slate-500">{k.l}</div>
+            <div className="text-lg font-bold text-slate-800 tabular-nums">{k.v}</div>
+          </div>
+        ))}
+      </div>
+      <table className="text-xs border-collapse min-w-[480px] mb-4">
+        <thead className="bg-slate-50">
+          <tr>
+            <th className={TH}>Categoría</th>
+            <th className={THR}>Pedido</th>
+            <th className={THR}>Facturado</th>
+            <th className={TH}>Fill</th>
+          </tr>
+        </thead>
+        <tbody>
+          {datos.porCategoria.map((c) => (
+            <tr key={c.cat} className="border-t border-slate-100">
+              <td className={TD}>{c.cat}</td>
+              <td className={TDR}>{qty(c.pedido)}</td>
+              <td className={TDR}>{qty(c.facturado)}</td>
+              <td className={TD}>{barra(c.fill)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <div className="overflow-x-auto">
+        <table className="text-xs border-collapse min-w-full">
+          <thead className="bg-slate-50">
+            <tr>
+              <th className={TH}>Código</th>
+              <th className={TH}>Descripción</th>
+              <th className={THR}>Pedido</th>
+              <th className={THR}>Facturado</th>
+              <th className={THR}>Saldo</th>
+              <th className={TH}>Fill</th>
+            </tr>
+          </thead>
+          <tbody>
+            {[...datos.porProducto].sort((a, b) => a.fill - b.fill).map((p) => (
+              <tr key={p.codigo} className="border-t border-slate-100 hover:bg-slate-50">
+                <td className={`${TD} font-mono`}>{p.codigo}</td>
+                <td className={`${TD} max-w-[280px] truncate`} title={p.desc}>{p.desc}</td>
+                <td className={TDR}>{qty(p.pedido)}</td>
+                <td className={TDR}>{qty(p.facturado)}</td>
+                <td className={`${TDR} ${p.saldo < 0 ? 'text-red-600' : ''}`}>{qty(p.saldo)}</td>
+                <td className={TD}>{barra(p.fill)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {datos.fueraDePedido.length > 0 && (
+        <div className="mt-3 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-800">
+          Facturado FUERA del pedido guardado ({datos.fueraDePedido.length} productos):{' '}
+          {datos.fueraDePedido.map((x) => `${x.cod} (${fmt(x.fac)})`).join(' · ')} — los excedentes del MRP semanal
+          que el pedido original no traía (el caso H4 que Alexis ajusta en Odoo).
+        </div>
+      )}
+    </div>
   );
 }
 

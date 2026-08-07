@@ -63,13 +63,13 @@ interface ProductRowDb {
   activo: boolean;
 }
 interface StockRowDb { codigo: string; bodega: string; cantidad: number }
-interface PendRowDb { codigo: string; cantidad: number; edad_dias: number | null }
+interface PendRowDb { codigo: string; cantidad: number; edad_dias: number | null; bodega_origen: string | null }
 interface TransRowDb {
   codigo: string; po_name: string; fecha_planeada: string | null;
   cantidad_pendiente: number; destino: string | null;
   es_entrega_directa: boolean; es_fecha_pasada: boolean;
 }
-interface VentaRowDb { codigo: string; anio: number; mes: number; cajas: number; fuente: string }
+interface VentaRowDb { codigo: string; anio: number; mes: number; cajas: number; fuente: string; bodega: string }
 interface OverrideRowDb { codigo: string; cajas: number | null; autor: string; created_at: string }
 interface NcConfigRowDb {
   tarifa_usd: number; vigente_hasta: string | null; nota: string | null;
@@ -127,14 +127,14 @@ export async function GET() {
         service.from('reyma_stock').select('codigo, bodega, cantidad')
           .eq('sync_id', run.id).range(a, b)),
       fetchAll<PendRowDb>((a, b) =>
-        service.from('reyma_pendientes').select('codigo, cantidad, edad_dias')
+        service.from('reyma_pendientes').select('codigo, cantidad, edad_dias, bodega_origen')
           .eq('sync_id', run.id).range(a, b)),
       fetchAll<TransRowDb>((a, b) =>
         service.from('reyma_transito')
           .select('codigo, po_name, fecha_planeada, cantidad_pendiente, destino, es_entrega_directa, es_fecha_pasada')
           .eq('sync_id', run.id).range(a, b)),
       fetchAll<VentaRowDb>((a, b) =>
-        service.from('reyma_ventas_mensuales').select('codigo, anio, mes, cajas, fuente').range(a, b)),
+        service.from('reyma_ventas_mensuales').select('codigo, anio, mes, cajas, fuente, bodega').range(a, b)),
       fetchAll<SyncIssue & { sync_id: string }>((a, b) =>
         service.from('sync_issues').select('severity, entity, message, sync_id')
           .eq('sync_id', run.id).range(a, b)),
@@ -188,7 +188,12 @@ export async function GET() {
     // ── ventas: stitch sources (sale_order wins from 2024-10; sales_history before)
     const soIdx = new Map<string, number>();
     const shIdx = new Map<string, number>();
+    const soBodIdx = new Map<string, number>(); // `${codigo}|${anio}|${mes}|${bodega}` (L3.5)
     for (const v of ventas) {
+      if (v.bodega && v.bodega !== 'GLOBAL') {
+        if (v.fuente === 'sale_order') soBodIdx.set(`${v.codigo}|${v.anio}|${v.mes}|${v.bodega}`, v.cajas);
+        continue;
+      }
       const k = `${v.codigo}|${v.anio}|${v.mes}`;
       if (v.fuente === 'sale_order') soIdx.set(k, v.cajas);
       else shIdx.set(k, v.cajas);
@@ -223,6 +228,15 @@ export async function GET() {
       const vals = mesesCompletos.map(([a, m]) => mesVenta(codigo, a, m));
       return Math.round(vals.reduce((x, y) => x + y, 0) / vals.length);
     };
+    const BODEGAS_REGIONALES = ['SJ', 'Z11', 'PET', 'ZAC'];
+    const proyeccionPorBodega = (codigo: string): Record<string, number> => {
+      const out: Record<string, number> = {};
+      for (const b of BODEGAS_REGIONALES) {
+        const vals = mesesCompletos.map(([a, m]) => soBodIdx.get(`${codigo}|${a}|${m}|${b}`) ?? 0);
+        out[b] = Math.round(vals.reduce((x, y) => x + y, 0) / vals.length);
+      }
+      return out;
+    };
 
     // ── stock / pendientes / tránsito aggregation per código
     const stockIdx = new Map<string, Record<string, number>>();
@@ -233,17 +247,30 @@ export async function GET() {
     }
     const psxContada = new Map<string, number>();
     const psxTotal = new Map<string, number>();
+    const psxBod = new Map<string, Record<string, number>>();
     for (const p of pendientes) {
       psxTotal.set(p.codigo, (psxTotal.get(p.codigo) ?? 0) + p.cantidad);
       if (p.edad_dias !== null && p.edad_dias <= MAX_EDAD_PENDIENTES_DIAS) {
         psxContada.set(p.codigo, (psxContada.get(p.codigo) ?? 0) + p.cantidad);
+        const bod = p.bodega_origen;
+        if (bod) {
+          const cur = psxBod.get(p.codigo) ?? {};
+          cur[bod] = (cur[bod] ?? 0) + p.cantidad;
+          psxBod.set(p.codigo, cur);
+        }
       }
     }
     const transitoNormal = new Map<string, number>();
     const transitoDirecta = new Map<string, number>();
+    const transitoBod = new Map<string, Record<string, number>>();
     for (const t of transito) {
       const target = t.es_entrega_directa ? transitoDirecta : transitoNormal;
       target.set(t.codigo, (target.get(t.codigo) ?? 0) + t.cantidad_pendiente);
+      if (!t.es_entrega_directa && t.destino) {
+        const cur = transitoBod.get(t.codigo) ?? {};
+        cur[t.destino] = (cur[t.destino] ?? 0) + t.cantidad_pendiente;
+        transitoBod.set(t.codigo, cur);
+      }
     }
 
     const rows: VivoRow[] = products.map((p) => {
@@ -276,6 +303,9 @@ export async function GET() {
         psxTotal: psxTotal.get(p.codigo) ?? 0,
         categoriaEsFallback: p.categoria_fuente === 'xlsx',
         proyeccionInfo: tieneOverride ? { autor: ov.autor, fecha: ov.created_at } : null,
+        psxPorBodega: psxBod.get(p.codigo) ?? {},
+        transitoPorDestino: transitoBod.get(p.codigo) ?? {},
+        proyeccionPorBodega: proyeccionPorBodega(p.codigo),
       };
     });
 

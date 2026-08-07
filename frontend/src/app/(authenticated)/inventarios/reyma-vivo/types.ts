@@ -16,6 +16,13 @@ export interface VivoRow extends ModeloRow {
   categoriaEsFallback: boolean;
   /** Override persistido de proyección (L3) — cuando existe, proyeccion ya lo trae aplicado. */
   proyeccionInfo: { autor: string; fecha: string } | null;
+  /** L3.5 MRP regional — desagregados por bodega (SJ/Z11/PET/ZAC): */
+  /** Pendientes por surtir ≤8 días por bodega de origen. */
+  psxPorBodega: Record<string, number>;
+  /** Tránsito facturado-no-recibido por destino (sin entregas directas). */
+  transitoPorDestino: Record<string, number>;
+  /** Proyección regional: promedio móvil (mismos meses que la global) de las ventas de esa bodega. */
+  proyeccionPorBodega: Record<string, number>;
 }
 
 export interface TransitoDetalle {

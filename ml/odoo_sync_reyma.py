@@ -440,15 +440,35 @@ def sync_ventas(execute, code_to_opid, issues, dry_run, sync_id):
         [['product_id', 'in', list(opid_to_code)],
          ['state', 'in', ORDERED_STATES],
          ['create_date', '>=', SALE_ORDER_FROM]],
-        ['product_id', 'qty_delivered', 'create_date'])
+        ['product_id', 'qty_delivered', 'create_date', 'order_id'])
+    # bodega del pedido (L3.5, MRP regional): warehouse del sale.order. Tiendas y
+    # no-mapeadas NO generan fila por bodega (Alexis las excluye) pero SÍ suman
+    # al GLOBAL — nada se pierde, solo no se regionaliza.
+    order_ids = sorted({l['order_id'][0] for l in lines if l.get('order_id')})
+    wh_by_order = {}
+    for i in range(0, len(order_ids), 5000):
+        for o in odoo_read_all(execute, 'sale.order',
+                               [['id', 'in', order_ids[i:i + 5000]]], ['warehouse_id']):
+            wh = o['warehouse_id'][1] if o.get('warehouse_id') else ''
+            wh_by_order[o['id']] = PICKING_WH_TO_DESTINO.get(wh.strip()[:1])
     so_agg = defaultdict(float)
+    so_agg_bod = defaultdict(float)
     for l in lines:
         cod = opid_to_code[l['product_id'][0]]
         d = l['create_date'][:7]  # YYYY-MM
-        so_agg[(cod, int(d[:4]), int(d[5:7]))] += float(l['qty_delivered'] or 0)
+        qty = float(l['qty_delivered'] or 0)
+        key = (cod, int(d[:4]), int(d[5:7]))
+        so_agg[key] += qty
+        bod = wh_by_order.get(l['order_id'][0]) if l.get('order_id') else None
+        if bod:
+            so_agg_bod[key + (bod,)] += qty
+    now_iso = datetime.now(timezone.utc).isoformat()
     so_rows = [{'codigo': c, 'anio': a, 'mes': m, 'cajas': round(v, 4), 'fuente': 'sale_order',
-                'source_sync_id': sync_id, 'updated_at': datetime.now(timezone.utc).isoformat()}
+                'bodega': 'GLOBAL', 'source_sync_id': sync_id, 'updated_at': now_iso}
                for (c, a, m), v in so_agg.items()]
+    so_rows += [{'codigo': c, 'anio': a, 'mes': m, 'cajas': round(v, 4), 'fuente': 'sale_order',
+                 'bodega': b, 'source_sync_id': sync_id, 'updated_at': now_iso}
+                for (c, a, m, b), v in so_agg_bod.items()]
 
     # fuente 2: sales.history (SAE; per code x month(name) x canal, quantity_24/25)
     sh_rows = []
@@ -469,7 +489,8 @@ def sync_ventas(execute, code_to_opid, issues, dry_run, sync_id):
         if bad_months:
             issues.add('warning', 'sales', f'sales.history con meses no interpretables: {sorted(bad_months)[:5]}')
         sh_rows = [{'codigo': c, 'anio': a, 'mes': m, 'cajas': round(v, 4), 'fuente': 'sales_history',
-                    'source_sync_id': sync_id, 'updated_at': datetime.now(timezone.utc).isoformat()}
+                    'bodega': 'GLOBAL', 'source_sync_id': sync_id,
+                    'updated_at': datetime.now(timezone.utc).isoformat()}
                    for (c, a, m), v in sh_agg.items()]
     except Exception as e:  # model unavailable -> flagged, sale_order still lands
         issues.add('warning', 'sales', f'sales.history no disponible ({type(e).__name__}) — solo fuente sale_order')
@@ -487,8 +508,9 @@ def sync_ventas(execute, code_to_opid, issues, dry_run, sync_id):
                        f'meses-código con datos en ambas fuentes: desviación media '
                        f'{sum(diffs) / len(diffs):.1f} cajas')
     if not dry_run:
-        sb_insert_batched('reyma_ventas_mensuales', so_rows + sh_rows, on_conflict='codigo,anio,mes,fuente')
-    logger.info('ventas: %d meses-código sale_order + %d sales_history (de %d líneas SO)',
+        sb_insert_batched('reyma_ventas_mensuales', so_rows + sh_rows,
+                          on_conflict='codigo,anio,mes,fuente,bodega')
+    logger.info('ventas: %d meses-código sale_order (global+bodega) + %d sales_history (de %d líneas SO)',
                 len(so_rows), len(sh_rows), len(lines))
     return len(so_rows) + len(sh_rows)
 

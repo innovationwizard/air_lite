@@ -2,8 +2,9 @@
  * Bin-packing rules (L3): capacity, dedicated full-furgón code, splitting,
  * day assignment with shared-capacity awareness. Pure module, no IO.
  */
-import { generarPlan, DIAS_DEFAULT, type PlanOpts } from '../planificacion';
+import { generarPlan, mrpRegional, DIAS_DEFAULT, type PlanOpts } from '../planificacion';
 import type { MrpDerived } from '../../reyma/engine';
+import type { VivoRow } from '../types';
 
 const OPTS: PlanOpts = {
   capacidadM3: 100,
@@ -84,6 +85,41 @@ describe('generarPlan — bin-packing del despacho semanal', () => {
     expect(furgones[12].dia).toBeNull();
     expect(avisos.some((a) => a.includes('exceden el cupo'))).toBe(true);
     expect(avisos.some((a) => a.includes('Wilmer'))).toBe(true); // capacidad compartida visible
+  });
+
+  it('mrpRegional levels every product to the target weeks using BODEGA data only', () => {
+    const vrow = (partial: Partial<VivoRow> & { cod: string }): VivoRow =>
+      ({
+        clave: partial.cod, prodReyma: '', desc: `prod ${partial.cod}`, cat: '', cub: 0.1,
+        precio: 0, sj: 0, z11: 0, pet: 0, zac: 0, pat: 0, psx: 0, transito: 0,
+        proyeccion: 0, proyOverride: false, ventaPend: 0, descAniv: null,
+        entregaDirecta: 0, psxTotal: 0, categoriaEsFallback: false, proyeccionInfo: null,
+        psxPorBodega: {}, transitoPorDestino: {}, proyeccionPorBodega: {},
+        ...partial,
+      }) as VivoRow;
+    const rows = [
+      // ZAC vende 429/mes → ventaSem 100; neto = 120 − 20 + 50 = 150 → pedido = 3×100 − 150 = 150
+      vrow({ cod: 'A', zac: 120, psxPorBodega: { ZAC: 20 }, transitoPorDestino: { ZAC: 50 },
+             proyeccionPorBodega: { ZAC: 429, SJ: 99999 } }), // la demanda GLOBAL/SJ jamás se usa
+      // sin datos en ZAC → excluido
+      vrow({ cod: 'B', sj: 500, proyeccionPorBodega: { SJ: 1000 } }),
+      // con stock pero sin demanda regional → nivel 999, pedido 0, visible
+      vrow({ cod: 'C', zac: 30 }),
+    ];
+    const r = mrpRegional(rows, 'ZAC', 3, 100);
+    const a = r.rows.find((x) => x.cod === 'A');
+    expect(a).toBeDefined();
+    expect(a?.ventaSem).toBe(100);
+    expect(a?.neto).toBe(150);
+    expect(a?.pedido).toBe(150);
+    expect(a?.nivel).toBe(1.5);
+    expect(r.rows.find((x) => x.cod === 'B')).toBeUndefined(); // solo datos de la bodega
+    const c = r.rows.find((x) => x.cod === 'C');
+    expect(c?.pedido).toBe(0);
+    expect(c?.nivel).toBe(999);
+    expect(r.rows[0].cod).toBe('A'); // menor nivel primero
+    expect(r.totalCajas).toBe(150);
+    expect(r.furgonesEstimados).toBe(1); // 15 m³ → 1 furgón
   });
 
   it('excludes rows without pedido (w=0) and is deterministic', () => {

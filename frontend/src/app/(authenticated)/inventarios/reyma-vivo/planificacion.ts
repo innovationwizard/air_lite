@@ -15,7 +15,8 @@
  *
  * Módulo puro (sin IO) — testeado en __tests__/planificacion.test.ts.
  */
-import type { MrpDerived } from '../reyma/engine';
+import { xround, WORKBOOK_CONSTANTS, type MrpDerived } from '../reyma/engine';
+import type { VivoRow } from './types';
 
 export interface PlanLinea {
   cod: string;
@@ -50,6 +51,81 @@ export interface PlanResult {
 }
 
 export const DIAS_DEFAULT = ['Lunes', 'Martes', 'Miércoles', 'Viernes'];
+
+// ─── L3.5: MRP regional (Zacapa / Petén / Zona 11) ──────────────────────────
+//
+// RESPUESTAS regla 4 (Alexis, 2026-08-04): "para sacar un pedido para Petén y
+// Zacapa tengo que poner el inventario de Zacapa… el mismo modelo del MRP",
+// nivelando TODOS los productos a un mismo objetivo (~3 semanas): "el que está
+// de una semana sube a tres y el que está de dos sube a tres… que no sobre,
+// pero que tampoco falte". Demanda = ventas de ESA bodega (promedio móvil del
+// sync por warehouse — nunca la demanda global, que sobre-pediría).
+
+export const OBJETIVO_SEMANAS_REGIONAL_DEFAULT = 3;
+
+export interface MrpRegionalRow {
+  cod: string;
+  clave: string;
+  desc: string;
+  inv: number;       // existencias en la bodega
+  psx: number;       // pendientes por surtir (≤8 días) originados en la bodega
+  transito: number;  // facturado-no-recibido con destino a la bodega
+  neto: number;      // inv − psx + transito
+  proyMensual: number; // promedio móvil de ventas de la bodega
+  ventaSem: number;
+  pedido: number;    // max(0, round(objetivo×ventaSem − neto))
+  nivel: number;     // neto / ventaSem (999 sin demanda)
+  m3: number;        // pedido × cubicaje
+}
+
+export interface MrpRegionalResult {
+  rows: MrpRegionalRow[];
+  totalCajas: number;
+  totalM3: number;
+  furgonesEstimados: number;
+}
+
+const INV_POR_BODEGA: Record<string, (r: VivoRow) => number> = {
+  SJ: (r) => r.sj + r.pat, // San José incluye patios (regla confirmada)
+  Z11: (r) => r.z11,
+  PET: (r) => r.pet,
+  ZAC: (r) => r.zac,
+};
+
+export function mrpRegional(
+  rows: VivoRow[],
+  bodega: 'ZAC' | 'PET' | 'Z11',
+  objetivoSemanas: number,
+  capacidadM3: number,
+): MrpRegionalResult {
+  const { weeksPerMonth, coverageSentinel } = WORKBOOK_CONSTANTS;
+  const getInv = INV_POR_BODEGA[bodega];
+  const out: MrpRegionalRow[] = [];
+  for (const r of rows) {
+    const inv = getInv(r);
+    const psx = r.psxPorBodega[bodega] ?? 0;
+    const transito = r.transitoPorDestino[bodega] ?? 0;
+    const neto = inv - psx + transito;
+    const proy = r.proyeccionPorBodega[bodega] ?? 0;
+    const ventaSem = xround(proy / weeksPerMonth);
+    const pedido = Math.max(0, xround(objetivoSemanas * ventaSem - neto));
+    if (pedido <= 0 && neto === 0 && proy === 0) continue; // sin datos en la bodega
+    const nivel = ventaSem === 0 ? coverageSentinel : xround(neto / ventaSem, 2);
+    out.push({
+      cod: r.cod,
+      clave: r.clave,
+      desc: r.desc || r.prodReyma,
+      inv, psx, transito, neto,
+      proyMensual: proy,
+      ventaSem, pedido, nivel,
+      m3: pedido * r.cub,
+    });
+  }
+  out.sort((a, b) => a.nivel - b.nivel);
+  const totalCajas = out.reduce((a, x) => a + x.pedido, 0);
+  const totalM3 = out.reduce((a, x) => a + x.m3, 0);
+  return { rows: out, totalCajas, totalM3, furgonesEstimados: Math.ceil(totalM3 / capacidadM3) };
+}
 
 interface Candidato {
   cod: string;
