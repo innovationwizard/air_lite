@@ -4,6 +4,7 @@ import { ReactNode } from 'react';
 import { Sidebar } from './Sidebar';
 import { UserMenu } from './UserMenu';
 import OAAlertBanner from './OAAlertBanner';
+import { BugReportWidget } from '@/components/feedback/BugReportWidget';
 
 interface AppShellProps {
   children: ReactNode;
@@ -23,6 +24,7 @@ export function AppShell({ children }: AppShellProps) {
           {children}
         </main>
       </div>
+      <BugReportWidget />
     </div>
   );
 }
