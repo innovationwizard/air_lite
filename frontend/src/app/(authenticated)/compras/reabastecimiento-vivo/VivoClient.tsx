@@ -24,6 +24,49 @@ const SEV_PILL: Record<Sev, string> = {
   exc: 'bg-blue-100 text-blue-700',
 };
 
+/**
+ * Tooltips state what each title INCLUDES and EXCLUDES, verbatim from the
+ * synced composition — so any disagreement with Wilmer's mental model surfaces
+ * as a bug report instead of a silent mismatch (Jorge, 2026-08-11).
+ */
+const BODEGA_TIP: Record<string, string> = {
+  General:
+    'Existencias de TODAS las bodegas físicas (incluye tiendas y Zona 11), MENOS 5DEP (reempaque). '
+    + 'NO incluye Entrada/patio ni tránsito (regla Wilmer 2026-08-06).',
+  'San Jose VN':
+    'Existencias de 1CET/Existencias (Bodega Central) únicamente. '
+    + 'No incluye tiendas, Zona 11, ni Entrada/patio (el patio se muestra aparte).',
+  'Zacapa-Petén':
+    'Existencias de 4ZAC/Existencias (Zacapa) + 3PET/Existencias (Petén). '
+    + 'No incluye Entrada/patio.',
+};
+
+const COL_TIP = {
+  cod: 'Código del producto (SKU) — identidad estable desde SAE, igual que en Odoo.',
+  desc: 'Descripción y proveedor del catálogo de Odoo.',
+  exist:
+    'Existencias − reservado − pendiente de tomar reserva (captura manual). '
+    + 'NO incluye patio ni tránsito.',
+  patio:
+    'Solo 1CET/Entrada: furgones en el patio de Bodega Central. '
+    + 'Se muestra aparte y NO entra al cálculo (igual que en el Excel).',
+  doh:
+    'Días de inventario: exist. neta ÷ (promedio 3 meses ÷ 26). '
+    + 'Venta = ordenado (excluye cotización, cotización enviada y cancelado). '
+    + 'Semáforo aprobado 2026-08-06: crítico < 3 · bajo < 7 · normal 7–30 · exceso > 30.',
+  trans:
+    'Órdenes de compra confirmadas con fecha de entrega FUTURA (fechas pasadas no cuentan). '
+    + 'Editable: tu valor manual reemplaza al sincronizado (p. ej. el mensual de Carvajal).',
+  pend:
+    'Pendiente de tomar reserva — captura manual (no existe en ningún sistema). '
+    + '¿? significa sin dato, no cero. Resta de la exist. neta.',
+  adic: 'Adicional comercial del mes vigente (forecast comercial).',
+  sug:
+    'Sugerido = max(0, forecast − max(0, exist. neta + tránsito − proyección)) + adicional. '
+    + 'Forecast: promedio(6m, 3m, estacional) × 1.1 en General; promedio(6m, 3m) por bodega. '
+    + 'Proyección: (promedio 3m ÷ 20) × ventana (10 General / 5 por bodega).',
+} as const;
+
 interface ApiRow {
   productId: number;
   cod: string; desc: string; prov: string;
@@ -192,6 +235,7 @@ export function VivoClient() {
             <button
               key={b}
               onClick={() => setBodega(b)}
+              title={BODEGA_TIP[b]}
               className={`px-3 py-1.5 text-sm rounded-md transition ${
                 bodega === b ? 'bg-teal-700 text-white font-semibold' : 'text-gray-600 hover:text-gray-900'
               }`}
@@ -242,10 +286,14 @@ export function VivoClient() {
 
       {/* KPIs */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
-        <Kpi label="Productos" value={fmt(kpis.total)} sub={`bodega ${bodega}`} icon={<Boxes size={16} />} />
-        <Kpi label="Requieren compra" value={fmt(kpis.need)} sub="sugerido > 0" accent />
-        <Kpi label="Unidades sugeridas" value={fmt(kpis.totSug)} sub="total a comprar" accent />
-        <Kpi label="Quiebre inminente" value={fmt(kpis.crit)} sub="DOH < 3 días" danger />
+        <Kpi label="Productos" value={fmt(kpis.total)} sub={`bodega ${bodega}`} icon={<Boxes size={16} />}
+             tip={`Productos visibles con los filtros actuales. ${BODEGA_TIP[bodega] ?? ''}`} />
+        <Kpi label="Requieren compra" value={fmt(kpis.need)} sub="sugerido > 0" accent
+             tip="Productos con Sugerido > 0 (tras filtros)." />
+        <Kpi label="Unidades sugeridas" value={fmt(kpis.totSug)} sub="total a comprar" accent
+             tip="Suma del Sugerido de los productos que requieren compra (tras filtros)." />
+        <Kpi label="Quiebre inminente" value={fmt(kpis.crit)} sub="DOH < 3 días" danger
+             tip="Productos con DOH < 3 días (banda crítica del semáforo, tras filtros)." />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_290px] gap-4 items-start">
@@ -288,15 +336,15 @@ export function VivoClient() {
               <table className="w-full text-[13px]">
                 <thead className="sticky top-0 bg-white z-10">
                   <tr className="text-[11px] uppercase tracking-wide text-gray-500">
-                    <Th left>Código</Th>
-                    <Th left>Descripción / Proveedor</Th>
-                    <Th>Exist. neta</Th>
-                    <Th>Patio</Th>
-                    <Th>DOH</Th>
-                    <Th><span className="inline-flex items-center gap-1">Tránsito <Pencil size={11} /></span></Th>
-                    <Th><span className="inline-flex items-center gap-1">Pend. reserva <Pencil size={11} /></span></Th>
-                    <Th>Adic.</Th>
-                    <Th>Sugerido</Th>
+                    <Th left tip={COL_TIP.cod}>Código</Th>
+                    <Th left tip={COL_TIP.desc}>Descripción / Proveedor</Th>
+                    <Th tip={COL_TIP.exist}>Exist. neta</Th>
+                    <Th tip={COL_TIP.patio}>Patio</Th>
+                    <Th tip={COL_TIP.doh}>DOH</Th>
+                    <Th tip={COL_TIP.trans}><span className="inline-flex items-center gap-1">Tránsito <Pencil size={11} /></span></Th>
+                    <Th tip={COL_TIP.pend}><span className="inline-flex items-center gap-1">Pend. reserva <Pencil size={11} /></span></Th>
+                    <Th tip={COL_TIP.adic}>Adic.</Th>
+                    <Th tip={COL_TIP.sug}>Sugerido</Th>
                   </tr>
                 </thead>
                 <tbody className="tabular-nums">
@@ -357,7 +405,10 @@ export function VivoClient() {
 
         <div className="space-y-4">
           <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
-            <h2 className="text-xs uppercase tracking-wide text-gray-500 font-semibold px-4 py-3 border-b border-gray-100">
+            <h2
+              title="Suma de unidades sugeridas por proveedor (top 8, sin filtros). Barra roja = el proveedor tiene productos en quiebre (DOH < 3) que requieren compra."
+              className="text-xs uppercase tracking-wide text-gray-500 font-semibold px-4 py-3 border-b border-gray-100 cursor-help"
+            >
               Top afectaciones por proveedor
             </h2>
             <ul>
@@ -400,9 +451,12 @@ export function VivoClient() {
   );
 }
 
-function Th({ children, left }: { children: React.ReactNode; left?: boolean }) {
+function Th({ children, left, tip }: { children: React.ReactNode; left?: boolean; tip?: string }) {
   return (
-    <th className={`${left ? 'text-left' : 'text-right'} font-semibold px-3 py-2.5 border-b border-gray-200 whitespace-nowrap`}>
+    <th
+      title={tip}
+      className={`${left ? 'text-left' : 'text-right'} font-semibold px-3 py-2.5 border-b border-gray-200 whitespace-nowrap ${tip ? 'cursor-help' : ''}`}
+    >
       {children}
     </th>
   );
@@ -442,12 +496,12 @@ function QtyInput({ value, edited, unknown, label, onCommit }: {
   );
 }
 
-function Kpi({ label, value, sub, icon, accent, danger }: {
+function Kpi({ label, value, sub, icon, accent, danger, tip }: {
   label: string; value: string; sub: string;
-  icon?: React.ReactNode; accent?: boolean; danger?: boolean;
+  icon?: React.ReactNode; accent?: boolean; danger?: boolean; tip?: string;
 }) {
   return (
-    <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
+    <div title={tip} className={`bg-white border border-gray-200 rounded-xl p-4 shadow-sm ${tip ? 'cursor-help' : ''}`}>
       <div className="text-[11px] uppercase tracking-wide text-gray-500 font-semibold flex items-center gap-1">
         {icon} {label}
       </div>

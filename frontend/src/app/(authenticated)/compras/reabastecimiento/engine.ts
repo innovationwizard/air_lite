@@ -4,7 +4,8 @@
  *
  * Parity: reproduces the workbook's `Sugerido` for 1,325/1,327 products (99.85%)
  * on the General sheet. Constants (26 / window 10·5 / ×1.1) are the workbook's own,
- * pending Wilmer's confirmation (open question Q3). This module is the single
+ * confirmed deliberate by Wilmer 2026-07-23 (26 = 30d − Sundays; ×1.1 = growth
+ * cushion; fixed window instead of LT is intentional). This module is the single
  * source of truth for the calculation so the UI and any future server job agree.
  */
 
@@ -50,7 +51,8 @@ export function doh(r: ProductRow, existOverride?: number): number {
   return r.p3 ? e / (r.p3 / 26) : 0;
 }
 
-/** DOH severity band — thresholds are ILLUSTRATIVE, pending Wilmer's confirmation. */
+/** DOH severity band — thresholds APPROVED verbatim by Wilmer 2026-08-06
+ * (crítico < 3 · bajo < 7 · normal 7–30 · exceso > 30). */
 export type Sev = 'crit' | 'low' | 'ok' | 'exc';
 export function sev(d: number): Sev {
   if (d < 3) return 'crit';

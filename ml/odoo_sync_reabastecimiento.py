@@ -7,8 +7,13 @@ engine inputs measured from MAYO2026.xlsx (docs/compras/MAYO2026_XLSX_MANIFEST.m
 Design decisions (docs/compras/REABASTECIMIENTO_LIVE_PROGRESS.md B2):
   - Bodegas come from the `bodega_map` table (confirmed 2026-07-28: purchasing
     scope = 1CET 'San Jose VN' + 4ZAC/3PET 'Zacapa-Petén'). 'General' is a
-    computed DISPLAY aggregate across ALL physical warehouses (+ patio), per
-    Wilmer: "todo el inventario de todas las bodegas físicas... también patio".
+    computed DISPLAY aggregate: every */Existencias location EXCEPT 5DEP
+    (reempaque — no sales, occasional stock); Entrada stays OUT of the
+    aggregate (patio shown separately). Rule: Wilmer 2026-08-06 ("todas las
+    que sean de existencias… menos 5DEP… Entrada queda fuera"), superseding
+    the 07-28 "también patio, todo" answer (Jorge 2026-08-11: latest
+    transcript wins — I6). The page tooltips state this composition so any
+    disagreement surfaces as a bug report, not a silent mismatch.
   - Patio = the `<WH>/Entrada` locations (confirmed 2026-07-28).
   - Tránsito = confirmed purchase.order.line with pending qty and STRICTLY
     FUTURE date_planned — RULE CONFIRMED BY WILMER 2026-07-30: "Tránsito no
@@ -203,10 +208,18 @@ def location_ids_for(by_name, wh_codes, kinds, issues):
     return ids
 
 
-def all_physical_location_ids(by_name):
-    """For the 'General' display aggregate: every */Existencias and */Entrada."""
+# Warehouses excluded from the 'General' aggregate (Wilmer 2026-08-06:
+# "Todas, menos 5DEP" — 5DEP is reempaque: no sales, occasional stock).
+GENERAL_EXCLUDED_WH = ('5DEP',)
+
+
+def general_exist_location_ids(by_name):
+    """The 'General' display aggregate: every */Existencias location except
+    GENERAL_EXCLUDED_WH. Entrada deliberately NOT summed (Wilmer 2026-08-06,
+    supersedes 07-28 "también patio" — I6, latest transcript wins)."""
+    excluded = tuple(f'{wh}/' for wh in GENERAL_EXCLUDED_WH)
     return [i for n, i in by_name.items()
-            if n.endswith('/Existencias') or n.endswith('/Entrada')]
+            if n.endswith('/Existencias') and not n.startswith(excluded)]
 
 
 def sync_catalog(execute, issues, dry_run):
@@ -395,11 +408,13 @@ def sync_stock(execute, by_name, bodega_codes, issues):
         exist_ids = location_ids_for(by_name, codes, ['Existencias'], issues)
         result[bodega] = _stock_for_locations(execute, exist_ids, patio_ids)
 
-    # General display aggregate: every physical warehouse, incl. tiendas.
-    exist_ids = [i for n, i in by_name.items() if n.endswith('/Existencias')]
+    # General display aggregate: every */Existencias incl. tiendas, minus
+    # GENERAL_EXCLUDED_WH; Entrada out (Wilmer 2026-08-06 — see module doc).
+    exist_ids = general_exist_location_ids(by_name)
     result['General'] = _stock_for_locations(execute, exist_ids, patio_ids)
-    logger.info('stock synced for bodegas: %s (+General over %d Existencias locations; '
-                'patio=%s only)', list(targets), len(exist_ids), PATIO_LOCATION)
+    logger.info('stock synced for bodegas: %s (+General over %d Existencias locations, '
+                'excl. %s; patio=%s only)', list(targets), len(exist_ids),
+                GENERAL_EXCLUDED_WH, PATIO_LOCATION)
     return result
 
 
