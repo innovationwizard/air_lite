@@ -90,11 +90,15 @@ describe('cross-privilege negative tests (least privilege)', () => {
 describe('getDefaultPage', () => {
   it('routes known roles to their landing pages', () => {
     expect(getDefaultPage('superuser')).toBe('/superuser');
-    expect(getDefaultPage('compras')).toBe('/compras');
     expect(getDefaultPage('operaciones')).toBe('/operaciones');
     expect(getDefaultPage('gerencia')).toBe('/gerencia/forecast');
-    expect(getDefaultPage('inventario')).toBe('/inventarios/reyma');
     expect(getDefaultPage('admin')).toBe('/backtest');
+  });
+
+  it('rollout focus (TEMPORARY, 2026-08-11): compras/inventario land on their live page', () => {
+    // When ROLLOUT_FOCUS is emptied, these revert to /compras and /inventarios/reyma.
+    expect(getDefaultPage('compras')).toBe('/compras/reabastecimiento-vivo');
+    expect(getDefaultPage('inventario')).toBe('/inventarios/reyma-vivo');
   });
 
   it('falls back to /backtest for roles without a specific landing page', () => {

@@ -35,6 +35,7 @@ import {
   CAN_VIEW_OPERACIONES,
   CAN_VIEW_GERENCIA,
   ROLE_LABELS,
+  ROLLOUT_FOCUS,
   Role,
 } from '@/lib/auth/roles';
 
@@ -348,11 +349,19 @@ export function Sidebar() {
   const userRole = profile?.role;
   const isGerenciaDemo = userRole === 'gerencia';
 
-  const visibleGroups = allNavGroups.filter((group) => {
-    if (group.requiredRoles && !isAuthorized(userRole, group.requiredRoles)) return false;
-    if (isGerenciaDemo && !GERENCIA_DEMO_SECTIONS.has(group.section)) return false;
-    return true;
-  });
+  // Delivery-phase focus: roles in ROLLOUT_FOCUS see only their live page.
+  const focusHref = userRole ? ROLLOUT_FOCUS[userRole as Role] : undefined;
+
+  const visibleGroups = allNavGroups
+    .filter((group) => {
+      if (group.requiredRoles && !isAuthorized(userRole, group.requiredRoles)) return false;
+      if (isGerenciaDemo && !GERENCIA_DEMO_SECTIONS.has(group.section)) return false;
+      return true;
+    })
+    .map((group) => (focusHref
+      ? { ...group, items: group.items.filter((item) => item.href === focusHref) }
+      : group))
+    .filter((group) => group.items.length > 0);
 
   return (
     <aside className="flex flex-col w-72 bg-white border-r border-gray-200">

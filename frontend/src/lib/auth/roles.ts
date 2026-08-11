@@ -66,6 +66,18 @@ export const CAN_VIEW_GERENCIA: Role[] = [
 export const CAN_VIEW_POC_ONLY: Role[] = ['testuser'];
 
 /**
+ * TEMPORARY delivery-phase focus (Jorge, 2026-08-11): while Wilmer (compras)
+ * and Alexis (inventario) onboard, their navigation shows ONLY their live
+ * Odoo page and they land there on login, so nothing distracts from
+ * validation. Navigation-only: PAGE_PERMISSIONS / route access are unchanged
+ * (direct URLs still work). Delete entries here to restore full navigation.
+ */
+export const ROLLOUT_FOCUS: Partial<Record<Role, string>> = {
+  compras: '/compras/reabastecimiento-vivo',
+  inventario: '/inventarios/reyma-vivo',
+};
+
+/**
  * Check if a role is authorized for an action.
  * Superuser always returns true.
  */
@@ -99,6 +111,8 @@ export const PAGE_PERMISSIONS: Record<string, Role[]> = {
  * Get the default landing page for a role.
  */
 export function getDefaultPage(role: Role | string): string {
+  const focus = ROLLOUT_FOCUS[role as Role];
+  if (focus) return focus;
   switch (role) {
     case ROLES.SUPERUSER:
       return '/superuser';
