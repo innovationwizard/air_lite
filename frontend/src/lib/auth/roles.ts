@@ -67,10 +67,11 @@ export const CAN_VIEW_POC_ONLY: Role[] = ['testuser'];
 
 /**
  * TEMPORARY delivery-phase focus (Jorge, 2026-08-11): while Wilmer (compras)
- * and Alexis (inventario) onboard, their navigation shows ONLY their live
- * Odoo page and they land there on login, so nothing distracts from
- * validation. Navigation-only: PAGE_PERMISSIONS / route access are unchanged
- * (direct URLs still work). Delete entries here to restore full navigation.
+ * and Alexis (inventario) onboard, they are CONFINED to their live Odoo page —
+ * the sidebar shows only that item, login lands there, and the middleware
+ * redirects every other page (except /update-password) back to it, so nothing
+ * distracts from validation. API routes / PAGE_PERMISSIONS are unchanged.
+ * Delete entries here to lift the confinement everywhere at once.
  */
 export const ROLLOUT_FOCUS: Partial<Record<Role, string>> = {
   compras: '/compras/reabastecimiento-vivo',

@@ -1,5 +1,6 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
+import { ROLLOUT_FOCUS, getDefaultPage, type Role } from '@/lib/auth/roles';
 
 // Page routes reachable without a valid auth session. Everything else
 // requires an authenticated Supabase user cookie; callers without one get
@@ -78,9 +79,31 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL('/login', request.url));
   }
 
-  // Redirect authenticated users away from login
-  if (user && pathname === '/login') {
-    return NextResponse.redirect(new URL('/backtest', request.url));
+  // Page routes: resolve the role once (own-row read, allowed by RLS) for the
+  // login bounce and the rollout-focus confinement below.
+  if (!pathname.startsWith('/api/')) {
+    const { data: profile } = await supabase
+      .from('user_profiles')
+      .select('role')
+      .eq('id', user.id)
+      .single();
+    const role = (profile?.role ?? null) as Role | null;
+
+    // Redirect authenticated users away from login to their landing page
+    if (pathname === '/login') {
+      return NextResponse.redirect(new URL(role ? getDefaultPage(role) : '/backtest', request.url));
+    }
+
+    // TEMPORARY rollout focus (Jorge, 2026-08-11): focused roles are CONFINED
+    // to their live page — any other page (incl. '/', '/backtest', silo
+    // landings) redirects there, so nothing distracts from validation.
+    // /update-password stays reachable (temp-password change). API routes are
+    // untouched (the live page needs them). Delete the ROLLOUT_FOCUS entries
+    // in roles.ts to lift the confinement.
+    const focus = role ? ROLLOUT_FOCUS[role] : undefined;
+    if (focus && !pathname.startsWith(focus) && !pathname.startsWith('/update-password')) {
+      return NextResponse.redirect(new URL(focus, request.url));
+    }
   }
 
   // Per-route permission check for /api/* via the route_permissions matrix.
