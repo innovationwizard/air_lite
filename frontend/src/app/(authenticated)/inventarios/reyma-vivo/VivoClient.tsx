@@ -180,7 +180,6 @@ export function VivoClient() {
     ? new Date(payload.sync.finishedAt).toLocaleString('es-GT')
     : '—';
   const nEdits = Object.keys(proyEdits).length;
-  const catFallback = payload.rows.filter((r) => r.categoriaEsFallback).length;
 
   return (
     <div className="p-6 max-w-[1400px] mx-auto">
@@ -223,14 +222,7 @@ export function VivoClient() {
           (paridad 2,752/2,752 con el libro de Alexis). Proyección por defecto = promedio móvil de{' '}
           {payload.config.mesesPromedioMovil} meses completos, editable; pendientes por surtir cuentan solo con edad ≤{' '}
           {payload.config.maxEdadPendientesDias} días; tránsito = facturado no recibido (entregas directas aparte).
-          Las ediciones son locales — la persistencia llega en L3.
-          {catFallback > 0 && (
-            <>
-              {' '}
-              <span className="font-semibold">{catFallback} categorías aún vienen del Excel</span> (carga en Odoo
-              pendiente — David).
-            </>
-          )}
+          Las ediciones se guardan con autor e historial (proyección, precios, NC, ETA, plan).
         </div>
       </div>
 
