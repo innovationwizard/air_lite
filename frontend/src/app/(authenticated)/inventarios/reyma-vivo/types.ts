@@ -77,6 +77,41 @@ export interface SyncIssue {
   message: string;
 }
 
+/** C7: línea de la PO global del mes, sincronizada de Odoo (baseline de saldos/fill rate). */
+export interface PoLinea {
+  codigo: string;
+  cajas: number;
+  recibidas: number;
+  precioUnit: number | null;
+}
+
+/** C7: la orden global configurada (dato, no código — Alexis la registra cada mes). */
+export interface OrdenGlobal {
+  mes: string; // YYYY-MM-01
+  poName: string; // e.g. 'PO-P-3003'
+  autor: string;
+  fecha: string;
+  lineas: PoLinea[];
+}
+
+/**
+ * C7/L4: línea de factura capturada del PDF del proveedor (llega por correo
+ * días antes de que contabilidad la registre en Odoo — manifest R2). Cuando la
+ * misma factura aparece en Odoo (reyma_facturas), la versión Odoo gana y la
+ * PDF se marca como duplicada (dedupe por número de factura).
+ */
+export interface FacturaPdfLinea {
+  folioFiscal: string;
+  factura: string; // 'F171849'
+  guia: string | null; // 'G-216-2026'
+  destino: string | null;
+  fecha: string;
+  codigo: string;
+  clave: string;
+  cantidad: number;
+  precioUnit: number;
+}
+
 export interface ReymaVivoPayload {
   sync: {
     id: string;
@@ -109,4 +144,8 @@ export interface ReymaVivoPayload {
   ncConfig: NcConfig;
   ultimoPlan: PlanGuardado | null;
   ultimoPedido: PedidoGuardado | null;
+  /** C7: PO global del mes + líneas sincronizadas (null si no hay configurada). */
+  ordenGlobal: OrdenGlobal | null;
+  /** C7/L4: facturas capturadas de los PDFs del proveedor (fuente adelantada). */
+  facturasPdf: FacturaPdfLinea[];
 }

@@ -5,7 +5,9 @@ import { createServiceRoleClient } from '@/lib/supabase/server';
 import type { ModeloRow, VentasRow } from '@/app/(authenticated)/inventarios/reyma/engine';
 import type {
   FacturaLinea,
+  FacturaPdfLinea,
   NcConfig,
+  OrdenGlobal,
   PedidoGuardado,
   PlanGuardado,
   ReymaVivoPayload,
@@ -82,6 +84,14 @@ interface FacturaRowDb {
 }
 interface PlanRowDb { semana: string; payload: unknown; autor: string; created_at: string }
 interface PedidoRowDb { mes: string; payload: unknown; autor: string; created_at: string }
+interface OrdenGlobalRowDb { mes: string; po_name: string; autor: string; created_at: string }
+interface PoLineaRowDb {
+  po_name: string; codigo: string; cajas: number; recibidas: number; precio_unit: number | null;
+}
+interface FacturaPdfRowDb {
+  folio_fiscal: string; factura: string; guia: string | null; destino: string | null;
+  fecha: string; codigo: string; clave: string; cantidad: number; precio_unit: number;
+}
 
 async function fetchAll<T>(
   query: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>,
@@ -141,7 +151,7 @@ export async function GET() {
     ]);
 
     // ── L3 write-path state (append-only history; latest row wins)
-    const [overridesRaw, ncRaw, notasRaw, facturasRaw, planesRaw, pedidosRaw] = await Promise.all([
+    const [overridesRaw, ncRaw, notasRaw, facturasRaw, planesRaw, pedidosRaw, ordenGlobalRaw, poLineasRaw, facturasPdfRaw] = await Promise.all([
       fetchAll<OverrideRowDb>((a, b) =>
         service.from('reyma_proyeccion_overrides')
           .select('codigo, cajas, autor, created_at')
@@ -175,6 +185,21 @@ export async function GET() {
           if (error) throw new Error(error.message);
           return (data ?? []) as PedidoRowDb[];
         }),
+      service.from('reyma_orden_global')
+        .select('mes, po_name, autor, created_at')
+        .order('mes', { ascending: false }).order('created_at', { ascending: false }).limit(1)
+        .then(({ data, error }) => {
+          if (error) throw new Error(error.message);
+          return (data ?? []) as OrdenGlobalRowDb[];
+        }),
+      fetchAll<PoLineaRowDb>((a, b) =>
+        service.from('reyma_po_lineas')
+          .select('po_name, codigo, cajas, recibidas, precio_unit')
+          .eq('sync_id', run.id).range(a, b)),
+      fetchAll<FacturaPdfRowDb>((a, b) =>
+        service.from('reyma_facturas_pdf')
+          .select('folio_fiscal, factura, guia, destino, fecha, codigo, clave, cantidad, precio_unit')
+          .range(a, b)),
     ]);
     const overrideByCod = new Map<string, OverrideRowDb>();
     for (const o of overridesRaw) {
@@ -355,6 +380,26 @@ export async function GET() {
       ? { mes: pedidoRow.mes, autor: pedidoRow.autor, fecha: pedidoRow.created_at, payload: pedidoRow.payload }
       : null;
 
+    // C7 baseline: the configured monthly global PO + its synced lines.
+    const ogRow = ordenGlobalRaw[0];
+    const ordenGlobal: OrdenGlobal | null = ogRow
+      ? {
+          mes: ogRow.mes,
+          poName: ogRow.po_name,
+          autor: ogRow.autor,
+          fecha: ogRow.created_at,
+          lineas: poLineasRaw
+            .filter((l) => l.po_name === ogRow.po_name)
+            .map((l) => ({
+              codigo: l.codigo, cajas: l.cajas, recibidas: l.recibidas, precioUnit: l.precio_unit,
+            })),
+        }
+      : null;
+    const facturasPdf: FacturaPdfLinea[] = facturasPdfRaw.map((f) => ({
+      folioFiscal: f.folio_fiscal, factura: f.factura, guia: f.guia, destino: f.destino,
+      fecha: f.fecha, codigo: f.codigo, clave: f.clave, cantidad: f.cantidad, precioUnit: f.precio_unit,
+    }));
+
     const payload: ReymaVivoPayload = {
       sync: {
         id: run.id,
@@ -377,6 +422,8 @@ export async function GET() {
       ncConfig,
       ultimoPlan,
       ultimoPedido,
+      ordenGlobal,
+      facturasPdf,
     };
     return NextResponse.json(payload);
   } catch (e) {

@@ -573,6 +573,61 @@ def sync_facturas(execute, scope, code_to_opid, issues, dry_run, sync_id):
     return len(rows)
 
 
+def sync_orden_global(execute, code_to_opid, issues, dry_run, sync_id):
+    """Lines of the configured monthly global PO — the C7 fill-rate/saldos
+    baseline. Which PO is 'la orden global' is DATA, not code: Alexis registers
+    it per month in reyma_orden_global (Aug 2026: PO-P-3003, per his 2026-08-12
+    message, seeded by migration 20260812000001). Latest row per mes wins; the
+    two most recent months are synced (current + closing previous)."""
+    config = sb_request(
+        'GET', 'reyma_orden_global?select=mes,po_name,created_at&order=mes.desc,created_at.desc')
+    if not config:
+        issues.add('info', 'orden_global',
+                   'sin PO global configurada — saldos/fill rate quedan sin baseline')
+        return 0
+    by_mes = {}
+    for r in config:  # already newest-first per mes
+        by_mes.setdefault(r['mes'], r['po_name'])
+    targets = sorted(by_mes.items(), reverse=True)[:2]
+    opid_to_code = {v: k for k, v in code_to_opid.items()}
+    rows = []
+    for mes, po_name in targets:
+        pos = odoo_read_all(execute, 'purchase.order',
+                            [['name', '=', po_name]], ['id', 'name', 'state'])
+        if not pos:
+            issues.add('warning', 'orden_global',
+                       f'PO global {po_name} (mes {mes}) no existe en Odoo — sin baseline ese mes')
+            continue
+        lines = odoo_read_all(execute, 'purchase.order.line',
+                              [['order_id', '=', pos[0]['id']]],
+                              ['product_id', 'product_qty', 'qty_received', 'price_unit'])
+        unmapped = []
+        for l in lines:
+            pid = l['product_id'][0] if l['product_id'] else None
+            cod = opid_to_code.get(pid)
+            if cod is None:
+                # never drop: keep the line under a sentinel código + flag it
+                cod = f'odoo:{pid}'[:20]
+                unmapped.append(l['product_id'][1] if l['product_id'] else str(pid))
+            rows.append({
+                'sync_id': sync_id,
+                'po_name': po_name,
+                'codigo': cod,
+                'cajas': float(l['product_qty'] or 0),
+                'recibidas': float(l['qty_received'] or 0),
+                'precio_unit': float(l['price_unit'] or 0) or None,
+            })
+        if unmapped:
+            issues.add('warning', 'orden_global',
+                       f'{po_name}: {len(unmapped)} líneas con producto fuera del alcance Reyma '
+                       f'(capturadas con código centinela): {unmapped[:5]}')
+        logger.info('orden_global %s (%s): %d líneas, %d fuera de alcance',
+                    po_name, mes, len(lines), len(unmapped))
+    if not dry_run and rows:
+        sb_insert_batched('reyma_po_lineas', rows)
+    return len(rows)
+
+
 # ─── Main ────────────────────────────────────────────────────────────────────
 
 def main():
@@ -615,6 +670,7 @@ def main():
         counts['transito'] = sync_transito(execute, code_to_opid, issues, dry, sync_id)
         counts['ventas'] = sync_ventas(execute, code_to_opid, issues, dry, sync_id)
         counts['facturas'] = sync_facturas(execute, scope, code_to_opid, issues, dry, sync_id)
+        counts['orden_global'] = sync_orden_global(execute, code_to_opid, issues, dry, sync_id)
         status = 'partial' if issues.has_errors() else 'success'
     except Exception:
         logger.exception('sync failed')

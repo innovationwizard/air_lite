@@ -20,6 +20,7 @@ import {
   type PlanFurgon,
 } from './planificacion';
 import type { ReymaVivoPayload, VivoRow } from './types';
+import { computeSaldos } from './saldos';
 
 function esc(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -702,10 +703,37 @@ function TabMrp({
 // ---------------------------------------------------------------- cumplimiento (C7)
 
 function TabCumplimiento({ payload }: { payload: ReymaVivoPayload }) {
+  const og = payload.ordenGlobal;
   const pedido = payload.ultimoPedido;
   const rowsByCod = useMemo(() => new Map(payload.rows.map((r) => [r.cod, r])), [payload.rows]);
+
+  // Preferred baseline: the real Odoo PO (C7, unblocked 2026-08-12 by PO-P-3003).
+  const saldos = useMemo(
+    () => (og && og.lineas.length ? computeSaldos(og, payload.facturas, payload.facturasPdf) : null),
+    [og, payload.facturas, payload.facturasPdf],
+  );
   const datos = useMemo(() => {
-    if (!pedido) return null;
+    if (!saldos || !og) return null;
+    const porProducto = saldos.rows.map((r) => ({
+      ...r,
+      desc: rowsByCod.get(r.codigo)?.desc || rowsByCod.get(r.codigo)?.prodReyma
+        || (r.codigo.startsWith('odoo:') ? '(producto fuera del alcance Reyma)' : ''),
+      cat: rowsByCod.get(r.codigo)?.cat ?? '—',
+    }));
+    const cats = [...new Set(porProducto.map((p) => p.cat))].sort();
+    const porCategoria = cats.map((cat) => {
+      const ps = porProducto.filter((p) => p.cat === cat);
+      const ped = ps.reduce((a, p) => a + p.pedido, 0);
+      const fac = ps.reduce((a, p) => a + p.facturado, 0);
+      return { cat, pedido: ped, facturado: fac, fill: ped > 0 ? fac / ped : 0 };
+    });
+    const pdfTotal = porProducto.reduce((a, p) => a + p.fuentePdf, 0);
+    return { mes: og.mes.slice(0, 7), porProducto, porCategoria, pdfTotal };
+  }, [saldos, og, rowsByCod]);
+
+  // Fallback (legacy, pre-orden-global): app-saved pedido mensual vs Odoo bills.
+  const datosPedidoApp = useMemo(() => {
+    if (og?.lineas.length || !pedido) return null;
     const lineas = (pedido.payload as { lineas?: Array<{ codigo: string; cajas: number }> })?.lineas ?? [];
     if (!lineas.length) return null;
     const mes = pedido.mes.slice(0, 7);
@@ -715,40 +743,17 @@ function TabCumplimiento({ payload }: { payload: ReymaVivoPayload }) {
       const sign = f.tipo === 'nota_credito' ? -1 : 1;
       facturado.set(f.codigo, (facturado.get(f.codigo) ?? 0) + sign * f.cantidad);
     }
-    const porProducto = lineas.map((l) => {
-      const fac = facturado.get(l.codigo) ?? 0;
-      return {
-        codigo: l.codigo,
-        desc: rowsByCod.get(l.codigo)?.desc || rowsByCod.get(l.codigo)?.prodReyma || '',
-        cat: rowsByCod.get(l.codigo)?.cat ?? '—',
-        pedido: l.cajas,
-        facturado: fac,
-        saldo: l.cajas - fac,
-        fill: l.cajas > 0 ? fac / l.cajas : 0,
-      };
-    });
-    const fueraDePedido = [...facturado.entries()]
-      .filter(([cod]) => !lineas.some((l) => l.codigo === cod))
-      .map(([cod, fac]) => ({ cod, fac }))
-      .filter((x) => x.fac > 0);
-    const cats = [...new Set(porProducto.map((p) => p.cat))].sort();
-    const porCategoria = cats.map((cat) => {
-      const ps = porProducto.filter((p) => p.cat === cat);
-      const ped = ps.reduce((a, p) => a + p.pedido, 0);
-      const fac = ps.reduce((a, p) => a + p.facturado, 0);
-      return { cat, pedido: ped, facturado: fac, fill: ped > 0 ? fac / ped : 0 };
-    });
-    const totPed = porProducto.reduce((a, p) => a + p.pedido, 0);
-    const totFac = porProducto.reduce((a, p) => a + p.facturado, 0);
-    return { mes, porProducto, porCategoria, fueraDePedido, totPed, totFac, fill: totPed > 0 ? totFac / totPed : 0 };
-  }, [pedido, payload.facturas, rowsByCod]);
+    return { mes, lineas, facturado };
+  }, [og, pedido, payload.facturas]);
 
-  if (!pedido || !datos) {
+  if (!datos || !saldos || !og) {
     return (
       <div className="bg-white rounded-lg border border-slate-200 p-4 text-sm text-slate-600">
-        Sin pedido mensual guardado todavía — genera y guarda el pedido en la pestaña «Pedido mensual» y aquí verás
-        el fill rate del proveedor (facturado vs pedido) en vivo, sin el defecto del dashboard del libro (H3: aquí
-        entran TODOS los productos del pedido).
+        {datosPedidoApp
+          ? 'Hay un pedido mensual guardado en la app pero ninguna PO global registrada — registra la PO del mes '
+            + '(POST orden-global o pedirle a Jorge) para ver saldos y fill rate contra la orden real de Odoo.'
+          : 'Sin PO global registrada para el mes — cuando Alexis registre "la orden de agosto es PO-…", la '
+            + 'siguiente sincronización trae sus líneas y aquí aparecen los saldos y el fill rate en vivo.'}
       </div>
     );
   }
@@ -766,17 +771,36 @@ function TabCumplimiento({ payload }: { payload: ReymaVivoPayload }) {
   return (
     <div className="bg-white rounded-lg border border-slate-200 p-4">
       <h3 className="text-sm font-semibold text-slate-700 mb-1">
-        Fill rate del proveedor — pedido de {datos.mes} (guardado por {pedido.autor})
+        Saldos y fill rate — orden global {og.poName} ({datos.mes}) · registrada por {og.autor}
       </h3>
       <div className="mb-3 text-[11px] text-slate-500">
-        Facturado (facturas del mes, notas de crédito restan) vs pedido mensual guardado. «El porcentaje de
-        cumplimiento del fill rate que el proveedor tenga… en vivo» (Alexis).
+        Pedido = líneas de {og.poName} en Odoo (sincronizadas). Facturado = facturas de proveedor en Odoo{' '}
+        <b>+ facturas PDF del correo</b> (fuente adelantada — contabilidad tarda días en registrarlas;
+        cuando la misma factura aparece en Odoo, la versión Odoo gana). Notas de crédito restan.
+        «El porcentaje de cumplimiento del fill rate que el proveedor tenga… en vivo» (Alexis).
       </div>
-      <div className="mb-4 grid grid-cols-3 gap-3 max-w-lg">
+      {datos.pdfTotal > 0 && (
+        <div className="mb-3 rounded border border-blue-200 bg-blue-50 px-3 py-2 text-[11px] text-blue-800">
+          {fmt(datos.pdfTotal)} cajas del facturado provienen SOLO de facturas PDF aún no registradas en Odoo
+          (marcadas <span className="rounded bg-blue-100 px-1 font-semibold">PDF</span> por producto).
+          {saldos.supersededPdf.length > 0
+            && ` · ${saldos.supersededPdf.length} facturas PDF ya registradas en Odoo (deduplicadas): ${saldos.supersededPdf.join(', ')}.`}
+        </div>
+      )}
+      {saldos.directasExcluidas.cajas > 0 && (
+        <div className="mb-3 rounded border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] text-slate-600">
+          Entregas directas del mes ({saldos.directasExcluidas.facturas.join(', ')}:{' '}
+          {fmt(saldos.directasExcluidas.cajas)} cajas) NO descuentan la orden global — pertenecen a sus
+          órdenes hijas PO-PZ11 (mecánica Z11 de Alexis) y se excluyen de este conteo.
+        </div>
+      )}
+      <div className="mb-4 grid grid-cols-2 md:grid-cols-5 gap-3">
         {[
-          { l: 'Pedido (cajas)', v: fmt(datos.totPed) },
-          { l: 'Facturado (cajas)', v: fmt(datos.totFac) },
-          { l: 'Fill rate global', v: `${(datos.fill * 100).toLocaleString('es-GT', { maximumFractionDigits: 1 })}%` },
+          { l: 'Pedido (cajas)', v: fmt(saldos.totales.pedido) },
+          { l: 'Facturado (cajas)', v: fmt(saldos.totales.facturado) },
+          { l: 'Recibidas (cajas)', v: fmt(saldos.totales.recibidas) },
+          { l: 'Saldo (cajas)', v: fmt(saldos.totales.pedido - saldos.totales.facturado) },
+          { l: 'Fill rate global', v: `${(saldos.totales.fill * 100).toLocaleString('es-GT', { maximumFractionDigits: 1 })}%` },
         ].map((k) => (
           <div key={k.l} className="rounded-lg border border-slate-200 px-3 py-2">
             <div className="text-[11px] text-slate-500">{k.l}</div>
@@ -812,6 +836,7 @@ function TabCumplimiento({ payload }: { payload: ReymaVivoPayload }) {
               <th className={TH}>Descripción</th>
               <th className={THR}>Pedido</th>
               <th className={THR}>Facturado</th>
+              <th className={THR}>Recibidas</th>
               <th className={THR}>Saldo</th>
               <th className={TH}>Fill</th>
             </tr>
@@ -822,7 +847,18 @@ function TabCumplimiento({ payload }: { payload: ReymaVivoPayload }) {
                 <td className={`${TD} font-mono`}>{p.codigo}</td>
                 <td className={`${TD} max-w-[280px] truncate`} title={p.desc}>{p.desc}</td>
                 <td className={TDR}>{qty(p.pedido)}</td>
-                <td className={TDR}>{qty(p.facturado)}</td>
+                <td className={TDR}>
+                  {qty(p.facturado)}
+                  {p.fuentePdf > 0 && (
+                    <span
+                      className="ml-1 rounded bg-blue-100 px-1 text-[10px] font-semibold text-blue-700"
+                      title={`${fmt(p.fuentePdf)} cajas de facturas PDF aún no registradas en Odoo`}
+                    >
+                      PDF
+                    </span>
+                  )}
+                </td>
+                <td className={TDR}>{qty(p.recibidas)}</td>
                 <td className={`${TDR} ${p.saldo < 0 ? 'text-red-600' : ''}`}>{qty(p.saldo)}</td>
                 <td className={TD}>{barra(p.fill)}</td>
               </tr>
@@ -830,11 +866,11 @@ function TabCumplimiento({ payload }: { payload: ReymaVivoPayload }) {
           </tbody>
         </table>
       </div>
-      {datos.fueraDePedido.length > 0 && (
+      {saldos.fueraDePedido.length > 0 && (
         <div className="mt-3 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-800">
-          Facturado FUERA del pedido guardado ({datos.fueraDePedido.length} productos):{' '}
-          {datos.fueraDePedido.map((x) => `${x.cod} (${fmt(x.fac)})`).join(' · ')} — los excedentes del MRP semanal
-          que el pedido original no traía (el caso H4 que Alexis ajusta en Odoo).
+          Facturado FUERA de {og.poName} ({saldos.fueraDePedido.length} productos):{' '}
+          {saldos.fueraDePedido.map((x) => `${x.codigo} (${fmt(x.total)})`).join(' · ')} — p. ej. los excedentes
+          del MRP semanal que la orden global no traía (el caso que Alexis ajusta en Odoo), o facturas de otra OC.
         </div>
       )}
     </div>
