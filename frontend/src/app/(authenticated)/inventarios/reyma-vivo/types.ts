@@ -106,6 +106,8 @@ export interface FacturaPdfLinea {
   guia: string | null; // 'G-216-2026'
   destino: string | null;
   fecha: string;
+  /** ETA del furgón (Alexis la codifica en la carpeta del drop, p. ej. 'zacapa-eta-agosto-14'). */
+  eta: string | null;
   codigo: string;
   clave: string;
   cantidad: number;

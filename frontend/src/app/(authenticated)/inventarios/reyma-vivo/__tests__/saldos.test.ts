@@ -1,4 +1,4 @@
-import { computeSaldos, mergeFacturado } from '../saldos';
+import { computePdfTransito, computeSaldos, mergeFacturado } from '../saldos';
 import type { FacturaLinea, FacturaPdfLinea, OrdenGlobal } from '../types';
 
 const og: OrdenGlobal = {
@@ -15,7 +15,7 @@ const og: OrdenGlobal = {
 
 const pdf = (factura: string, codigo: string, cantidad: number, fecha = '2026-08-07'): FacturaPdfLinea => ({
   folioFiscal: `uuid-${factura}-${codigo}`, factura, guia: 'G-216-2026', destino: 'bodega-san-jose',
-  fecha, codigo, clave: 'X', cantidad, precioUnit: 22,
+  fecha, eta: null, codigo, clave: 'X', cantidad, precioUnit: 22,
 });
 
 const odoo = (factura: string, codigo: string, cantidad: number, opts: Partial<FacturaLinea> = {}): FacturaLinea => ({
@@ -80,6 +80,25 @@ describe('computeSaldos', () => {
     const vt10 = res.rows.find((r) => r.codigo === '77201046')!;
     expect(vt10.facturado).toBe(666); // the 319 directas do NOT count
     expect(res.directasExcluidas).toEqual({ facturas: ['F171905'], cajas: 319 });
+  });
+
+  it('computePdfTransito: the CS1XN case — facturado in PDF, partially received', () => {
+    // G-218 shipped 15 (received) + G-225 shipped 30 (ETA 17-ago, on the water).
+    const t = computePdfTransito('PO-P-3003', '2026-08',
+      [{ po_name: 'PO-P-3003', codigo: '77201045', recibidas: 15 }],
+      [],
+      [pdf('F171850', '77201045', 15),
+       { ...pdf('F172108', '77201045', 30, '2026-08-12'), destino: 'bodega-peten', eta: '2026-08-17' }]);
+    expect(t.get('77201045')).toEqual({ cantidad: 30, eta: '2026-08-17', destinos: ['bodega-peten', 'bodega-san-jose'] });
+  });
+
+  it('computePdfTransito: no double-count once Odoo carries the same PO tránsito; directas never count', () => {
+    const t = computePdfTransito('PO-P-3003', '2026-08',
+      [{ po_name: 'PO-P-3003', codigo: '77201046', recibidas: 817 }],
+      [{ po_name: 'PO-P-3003', codigo: '77201046', cantidad_pendiente: 1303 }], // Odoo caught up
+      [pdf('F171849', '77201046', 2120),
+       { ...pdf('F171905', '77201046', 319), destino: 'entrega-directa' }]);
+    expect(t.get('77201046')).toBeUndefined(); // 2120 − 817 − 1303 = 0 → nothing extra
   });
 
   it('Odoo bills whose referencia mentions Z11 are treated as directas', () => {

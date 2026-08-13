@@ -84,6 +84,59 @@ export function mergeFacturado(
   return { porCodigo, supersededPdf: [...superseded].sort() };
 }
 
+/**
+ * PDF-implied tránsito (2026-08-13, after the CS1XN finding): the supplier
+ * facturas arrive by mail DAYS before contabilidad posts them, so Odoo's
+ * facturado − recibido misses furgones already on the water. Alexis' rule with
+ * the merged facturado source, per código of the orden global (entregas
+ * directas excluded — rule 6):
+ *
+ *   pdfTransito = max(0, pdfFacturado − recibidasPO − transitoOdooDeLaPO)
+ *
+ * The last term prevents double-counting once contabilidad posts the bills
+ * (Odoo facturado then produces reyma_transito rows for the same PO).
+ * Returns per-código qty + earliest ETA + contributing destinos for display.
+ */
+export function computePdfTransito(
+  poName: string,
+  mes: string, // 'YYYY-MM'
+  poLineas: Array<{ po_name: string; codigo: string; recibidas: number }>,
+  odooTransito: Array<{ po_name: string; codigo: string; cantidad_pendiente: number }>,
+  pdfFacturas: FacturaPdfLinea[],
+): Map<string, { cantidad: number; eta: string | null; destinos: string[] }> {
+  const pdfFact = new Map<string, { qty: number; etas: string[]; destinos: Set<string> }>();
+  for (const f of pdfFacturas) {
+    if (f.destino === 'entrega-directa' || f.fecha.slice(0, 7) !== mes) continue;
+    const e = pdfFact.get(f.codigo) ?? { qty: 0, etas: [], destinos: new Set<string>() };
+    e.qty += f.cantidad;
+    if (f.eta) e.etas.push(f.eta);
+    if (f.destino) e.destinos.add(f.destino);
+    pdfFact.set(f.codigo, e);
+  }
+  const recibidas = new Map<string, number>();
+  for (const l of poLineas) {
+    if (l.po_name !== poName) continue;
+    recibidas.set(l.codigo, (recibidas.get(l.codigo) ?? 0) + l.recibidas);
+  }
+  const odooOg = new Map<string, number>();
+  for (const t of odooTransito) {
+    if (t.po_name !== poName) continue;
+    odooOg.set(t.codigo, (odooOg.get(t.codigo) ?? 0) + t.cantidad_pendiente);
+  }
+  const out = new Map<string, { cantidad: number; eta: string | null; destinos: string[] }>();
+  for (const [codigo, e] of pdfFact) {
+    const extra = e.qty - (recibidas.get(codigo) ?? 0) - (odooOg.get(codigo) ?? 0);
+    if (extra > 0.0001) {
+      out.set(codigo, {
+        cantidad: extra,
+        eta: e.etas.length ? [...e.etas].sort()[0] : null,
+        destinos: [...e.destinos].sort(),
+      });
+    }
+  }
+  return out;
+}
+
 export function computeSaldos(
   ordenGlobal: OrdenGlobal,
   odooFacturas: FacturaLinea[],

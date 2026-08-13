@@ -3,6 +3,7 @@ import { requireAuth } from '@/lib/auth/server';
 import { CAN_VIEW_INVENTARIOS } from '@/lib/auth/roles';
 import { createServiceRoleClient } from '@/lib/supabase/server';
 import type { ModeloRow, VentasRow } from '@/app/(authenticated)/inventarios/reyma/engine';
+import { computePdfTransito } from '@/app/(authenticated)/inventarios/reyma-vivo/saldos';
 import type {
   FacturaLinea,
   FacturaPdfLinea,
@@ -90,7 +91,8 @@ interface PoLineaRowDb {
 }
 interface FacturaPdfRowDb {
   folio_fiscal: string; factura: string; guia: string | null; destino: string | null;
-  fecha: string; codigo: string; clave: string; cantidad: number; precio_unit: number;
+  fecha: string; eta: string | null; codigo: string; clave: string;
+  cantidad: number; precio_unit: number;
 }
 
 async function fetchAll<T>(
@@ -198,7 +200,7 @@ export async function GET() {
           .eq('sync_id', run.id).range(a, b)),
       fetchAll<FacturaPdfRowDb>((a, b) =>
         service.from('reyma_facturas_pdf')
-          .select('folio_fiscal, factura, guia, destino, fecha, codigo, clave, cantidad, precio_unit')
+          .select('folio_fiscal, factura, guia, destino, fecha, eta, codigo, clave, cantidad, precio_unit')
           .range(a, b)),
     ]);
     const overrideByCod = new Map<string, OverrideRowDb>();
@@ -298,6 +300,25 @@ export async function GET() {
       }
     }
 
+    // PDF-implied tránsito (Alexis' rule with the merged facturado source —
+    // the mail facturas run days ahead of Odoo's vendor bills; see saldos.ts).
+    // Global column only: per-bodega MRP keeps Odoo-only tránsito until the
+    // pdf destino → bodega-key mapping is confirmed with Alexis.
+    const ogForTransito = ordenGlobalRaw[0];
+    const pdfTransito = ogForTransito
+      ? computePdfTransito(
+          ogForTransito.po_name,
+          ogForTransito.mes.slice(0, 7),
+          poLineasRaw,
+          transito.map((t) => ({ po_name: t.po_name, codigo: t.codigo, cantidad_pendiente: t.cantidad_pendiente })),
+          facturasPdfRaw.map((f) => ({
+            folioFiscal: f.folio_fiscal, factura: f.factura, guia: f.guia, destino: f.destino,
+            fecha: f.fecha, eta: f.eta, codigo: f.codigo, clave: f.clave,
+            cantidad: f.cantidad, precioUnit: f.precio_unit,
+          })),
+        )
+      : new Map<string, { cantidad: number; eta: string | null; destinos: string[] }>();
+
     const rows: VivoRow[] = products.map((p) => {
       const st = stockIdx.get(p.codigo) ?? {};
       const ov = overrideByCod.get(p.codigo);
@@ -316,7 +337,7 @@ export async function GET() {
         zac: st['ZAC'] ?? 0,
         pat: st['PAT'] ?? 0,
         psx: psxContada.get(p.codigo) ?? 0,
-        transito: transitoNormal.get(p.codigo) ?? 0,
+        transito: (transitoNormal.get(p.codigo) ?? 0) + (pdfTransito.get(p.codigo)?.cantidad ?? 0),
         proyeccion: tieneOverride ? (ov.cajas as number) : proyeccionDefault(p.codigo),
         proyOverride: tieneOverride,
         ventaPend: 0,
@@ -349,6 +370,22 @@ export async function GET() {
         notaAutor: nota?.autor ?? null,
       };
     });
+    // Synthetic detail rows for the PDF-implied tránsito, so the Datos tab
+    // shows provenance (which cajas come from mail facturas not yet in Odoo).
+    for (const [codigo, t] of pdfTransito) {
+      transitoDetalle.push({
+        codigo,
+        poName: `${ogForTransito!.po_name} · facturas PDF`,
+        fechaPlaneada: null,
+        cantidad: t.cantidad,
+        destino: t.destinos.join(', ') || null,
+        esEntregaDirecta: false,
+        esFechaPasada: false,
+        eta: t.eta,
+        nota: 'Facturado en PDF del proveedor, aún no registrado en Odoo',
+        notaAutor: null,
+      });
+    }
 
     const ncRow = ncRaw[0];
     const ncConfig: NcConfig = ncRow
@@ -397,7 +434,8 @@ export async function GET() {
       : null;
     const facturasPdf: FacturaPdfLinea[] = facturasPdfRaw.map((f) => ({
       folioFiscal: f.folio_fiscal, factura: f.factura, guia: f.guia, destino: f.destino,
-      fecha: f.fecha, codigo: f.codigo, clave: f.clave, cantidad: f.cantidad, precioUnit: f.precio_unit,
+      fecha: f.fecha, eta: f.eta, codigo: f.codigo, clave: f.clave,
+      cantidad: f.cantidad, precioUnit: f.precio_unit,
     }));
 
     const payload: ReymaVivoPayload = {
