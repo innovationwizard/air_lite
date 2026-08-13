@@ -25,7 +25,8 @@ export const dynamic = 'force-dynamic';
  *   patio is returned as its own column (visible, NOT in the engine math —
  *   the workbook's Existencias column excludes patio; folding it in is a
  *   Wilmer-facing decision, not a silent change).
- *   pending === null  → unknown (no manual entry) → flags.pendingUnknown.
+ *   pending === null  → unknown (no manual entry, or the capture was cleared
+ *   with a qty-null entry — 20260813000001) → flags.pendingUnknown.
  *
  * RBAC: defense-in-depth — middleware `check_route_access` (route_permissions,
  * migration 20260724000003) + in-handler requireAuth(CAN_VIEW_COMPRAS).
@@ -43,7 +44,8 @@ interface InputRow {
 interface ProductRef { id: number; sku: string | null; name: string }
 interface SupplierLink { product_id: number; supplier_id: number }
 interface SupplierRef { id: number; name: string }
-interface OverrideRow { product_id: number; qty: number; created_at: string }
+/** qty === null = a CLEAR entry: the manual capture was removed (20260813000001). */
+interface OverrideRow { product_id: number; qty: number | null; created_at: string }
 interface ComercialRow {
   product_id: number; bodega: string | null; quantity: number;
   motivo: string; created_at: string;
@@ -104,9 +106,11 @@ export async function GET(request: Request) {
         supplierByProduct.set(l.product_id, supplierById.get(l.supplier_id) ?? '');
       }
     }
-    // Latest-entry-wins merges (rows arrive ordered newest-first).
+    // Latest-entry-wins merges (rows arrive ordered newest-first). A latest
+    // entry with qty null is a CLEAR: the map stores null, and consumers
+    // treat it exactly like "no override".
     const latest = (rows: OverrideRow[]) => {
-      const m = new Map<number, number>();
+      const m = new Map<number, number | null>();
       for (const r of rows) if (!m.has(r.product_id)) m.set(r.product_id, r.qty);
       return m;
     };
@@ -127,7 +131,9 @@ export async function GET(request: Request) {
       const ref = productById.get(r.product_id);
       const pending = pendingByProduct.get(r.product_id) ?? null;
       const existNet = r.existencias - r.reserved - (pending ?? 0);
-      const transOverride = transitoByProduct.get(r.product_id);
+      // undefined (no entry) and null (cleared) both fall back to the synced
+      // transit; only a real number overrides it.
+      const transOverride = transitoByProduct.get(r.product_id) ?? null;
       const trans = transOverride ?? r.transito;
       const adic = comercialByProduct.get(r.product_id)?.qty ?? 0;
       if (r.as_of > maxAsOf) maxAsOf = r.as_of;
@@ -157,7 +163,7 @@ export async function GET(request: Request) {
         patio: round1(r.patio),
         pending,
         trans: round1(trans),
-        transOverridden: transOverride !== undefined,
+        transOverridden: transOverride !== null,
         adic: round1(adic),
         p6: round1(r.p6),
         p3: round1(r.p3),

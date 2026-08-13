@@ -39,10 +39,6 @@ export function badRequest(message: string): Response {
   });
 }
 
-export function isFiniteNonNegative(n: unknown): n is number {
-  return typeof n === 'number' && Number.isFinite(n) && n >= 0;
-}
-
 export function isPositiveInt(n: unknown): n is number {
   return typeof n === 'number' && Number.isInteger(n) && n > 0;
 }

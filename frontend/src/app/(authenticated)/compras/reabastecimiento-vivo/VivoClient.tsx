@@ -2,8 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  AlertTriangle, Boxes, CloudOff, PackageCheck, Pencil, RefreshCw, Search,
+  AlertTriangle, Boxes, CloudOff, PackageCheck, Pencil, RefreshCw, Search, X,
 } from 'lucide-react';
+import { MAX_MANUAL_QTY } from '@/lib/compras/qty';
 import {
   type ProductRow, type Sev, sugerido, doh as dohOf, sev, fmt,
 } from '../reabastecimiento/engine';
@@ -56,10 +57,12 @@ const COL_TIP = {
     + 'Semáforo aprobado 2026-08-06: crítico < 3 · bajo < 7 · normal 7–30 · exceso > 30.',
   trans:
     'Órdenes de compra confirmadas con fecha de entrega FUTURA (fechas pasadas no cuentan). '
-    + 'Editable: tu valor manual reemplaza al sincronizado (p. ej. el mensual de Carvajal).',
+    + 'Editable: tu valor manual reemplaza al sincronizado (p. ej. el mensual de Carvajal). '
+    + 'El botón ✕ quita tu captura y vuelve al valor sincronizado.',
   pend:
     'Pendiente de tomar reserva — captura manual (no existe en ningún sistema). '
-    + '¿? significa sin dato, no cero. Resta de la exist. neta.',
+    + '¿? significa sin dato, no cero. Resta de la exist. neta. '
+    + 'El botón ✕ quita la captura y vuelve a ¿? (sin dato).',
   adic: 'Adicional comercial del mes vigente (forecast comercial).',
   sug:
     'Sugerido = max(0, forecast − max(0, exist. neta + tránsito − proyección)) + adicional. '
@@ -126,14 +129,27 @@ export function VivoClient() {
 
   useEffect(() => { load(bodega); }, [bodega, load]);
 
-  /** Optimistic local recompute with the imported engine, then persist + refetch. */
+  /**
+   * Optimistic local recompute with the imported engine, then persist +
+   * refetch. qty === null CLEARS the manual capture (pendiente → ¿?,
+   * tránsito → valor sincronizado); the client can't compute that revert
+   * locally (it doesn't hold the synced tránsito), so clears skip the
+   * optimistic step and let the silent refetch repaint.
+   */
   const commitEdit = useCallback(async (
     row: ApiRow,
     kind: 'transito' | 'pendiente',
-    qty: number,
+    qty: number | null,
   ) => {
     setSaveError(null);
-    setPayload((prev) => {
+    if (qty !== null && qty > MAX_MANUAL_QTY) {
+      setSaveError(
+        `No se guardó el cambio de ${kind} (${row.cod}): supera el máximo de captura manual `
+        + `(${fmt(MAX_MANUAL_QTY)}). Si el valor real es mayor, reportalo con el botón de bugs.`,
+      );
+      return;
+    }
+    if (qty !== null) setPayload((prev) => {
       if (!prev) return prev;
       const rows = prev.rows.map((r) => {
         if (r.productId !== row.productId) return r;
@@ -373,6 +389,9 @@ export function VivoClient() {
                             edited={r.transOverridden}
                             label={`Tránsito ${r.cod}`}
                             onCommit={(v) => commitEdit(r, 'transito', v)}
+                            onClear={r.transOverridden
+                              ? () => commitEdit(r, 'transito', null) : undefined}
+                            clearTip="Quitar captura manual — vuelve al tránsito sincronizado"
                           />
                         </td>
                         <td className="px-3 py-2 border-b border-gray-100 text-right">
@@ -382,6 +401,9 @@ export function VivoClient() {
                             unknown={r.flags.pendingUnknown}
                             label={`Pendiente de tomar reserva ${r.cod}`}
                             onCommit={(v) => commitEdit(r, 'pendiente', v)}
+                            onClear={r.pending !== null
+                              ? () => commitEdit(r, 'pendiente', null) : undefined}
+                            clearTip="Quitar captura manual — vuelve a ¿? (sin dato)"
                           />
                         </td>
                         <td className="px-3 py-2 border-b border-gray-100 text-right text-gray-500">{fmt(r.adic)}</td>
@@ -443,6 +465,8 @@ export function VivoClient() {
               pendiente de tomar reserva (captura manual — <b>¿?</b> significa sin dato, no cero).
               El patio se muestra aparte y no entra al cálculo, igual que en el Excel.
               Tránsito editable: tu valor manual reemplaza al sincronizado (p. ej. el mensual de Carvajal).
+              El botón ✕ junto a una captura manual la quita (tránsito vuelve al sincronizado;
+              pendiente vuelve a ¿?). Captura máxima: {fmt(MAX_MANUAL_QTY)} unidades.
             </p>
           </div>
         </div>
@@ -462,12 +486,15 @@ function Th({ children, left, tip }: { children: React.ReactNode; left?: boolean
   );
 }
 
-function QtyInput({ value, edited, unknown, label, onCommit }: {
+function QtyInput({ value, edited, unknown, label, onCommit, onClear, clearTip }: {
   value: number | null;
   edited: boolean;
   unknown?: boolean;
   label: string;
   onCommit: (v: number) => void;
+  /** Present only while a manual capture exists — appends a clear entry. */
+  onClear?: () => void;
+  clearTip?: string;
 }) {
   const [draft, setDraft] = useState<string>(value === null ? '' : String(Math.round(value)));
   useEffect(() => { setDraft(value === null ? '' : String(Math.round(value))); }, [value]);
@@ -482,6 +509,7 @@ function QtyInput({ value, edited, unknown, label, onCommit }: {
       <input
         type="number"
         min={0}
+        max={MAX_MANUAL_QTY}
         value={draft}
         placeholder={unknown ? '—' : undefined}
         aria-label={label}
@@ -492,6 +520,17 @@ function QtyInput({ value, edited, unknown, label, onCommit }: {
           edited ? 'border-teal-500 ring-1 ring-teal-500' : 'border-gray-200'
         }`}
       />
+      {onClear && (
+        <button
+          type="button"
+          title={clearTip}
+          aria-label={`Quitar captura manual — ${label}`}
+          onClick={onClear}
+          className="text-gray-400 hover:text-red-600 transition"
+        >
+          <X size={13} />
+        </button>
+      )}
     </span>
   );
 }

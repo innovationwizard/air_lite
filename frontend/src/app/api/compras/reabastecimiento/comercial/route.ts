@@ -2,9 +2,9 @@ import { NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/server';
 import { CAN_VIEW_COMPRAS } from '@/lib/auth/roles';
 import { createServiceRoleClient } from '@/lib/supabase/server';
+import { validateManualQty } from '@/lib/compras/qty';
 import {
   badRequest,
-  isFiniteNonNegative,
   isPositiveInt,
   knownBodegas,
   normalizeMonth,
@@ -36,11 +36,12 @@ export async function POST(request: Request) {
     return badRequest('cuerpo JSON inválido');
   }
 
-  const { productId, quantity, motivo, area, note } = body;
+  const { productId, motivo, area, note } = body;
   const month = normalizeMonth(body.month);
   if (!isPositiveInt(productId)) return badRequest('productId debe ser un entero positivo');
   if (!month) return badRequest("month debe ser 'YYYY-MM' o 'YYYY-MM-DD'");
-  if (!isFiniteNonNegative(quantity)) return badRequest('quantity debe ser un número ≥ 0');
+  const quantity = validateManualQty(body.quantity);
+  if (!quantity.ok) return badRequest(quantity.error.replace(/^qty/, 'quantity'));
   if (!MOTIVOS.includes(motivo as typeof MOTIVOS[number])) {
     return badRequest(`motivo debe ser uno de: ${MOTIVOS.join(', ')}`);
   }
@@ -63,7 +64,7 @@ export async function POST(request: Request) {
         product_id: productId,
         bodega,
         month,
-        quantity,
+        quantity: quantity.qty,
         motivo,
         area: area ?? null,
         note: typeof note === 'string' ? note.slice(0, 1000) : null,

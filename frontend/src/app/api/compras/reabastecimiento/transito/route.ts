@@ -2,7 +2,8 @@ import { NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/server';
 import { CAN_VIEW_COMPRAS } from '@/lib/auth/roles';
 import { createServiceRoleClient } from '@/lib/supabase/server';
-import { badRequest, isFiniteNonNegative, isPositiveInt, knownBodegas } from '../lib';
+import { validateManualQtyOrClear } from '@/lib/compras/qty';
+import { badRequest, isPositiveInt, knownBodegas } from '../lib';
 
 export const dynamic = 'force-dynamic';
 
@@ -12,8 +13,10 @@ export const dynamic = 'force-dynamic';
  * Manual in-transit override (Carvajal monthly fallback):
  *   { productId, bodega, qty, effectiveWeek?: 'YYYY-MM-DD', note? }
  *
- * Append-only (`transito_overrides`); the GET merge REPLACES the synced
- * transit with the latest entry per product×bodega.
+ * qty: number (capped at MAX_MANUAL_QTY — incident 2026-08-12) REPLACES the
+ * synced transit; null CLEARS the override so the synced value applies again.
+ * Append-only (`transito_overrides`); the GET merge applies the latest entry
+ * per product×bodega.
  */
 export async function POST(request: Request) {
   const auth = await requireAuth(CAN_VIEW_COMPRAS);
@@ -26,9 +29,10 @@ export async function POST(request: Request) {
     return badRequest('cuerpo JSON inválido');
   }
 
-  const { productId, bodega, qty, effectiveWeek, note } = body;
+  const { productId, bodega, effectiveWeek, note } = body;
   if (!isPositiveInt(productId)) return badRequest('productId debe ser un entero positivo');
-  if (!isFiniteNonNegative(qty)) return badRequest('qty debe ser un número ≥ 0');
+  const qty = validateManualQtyOrClear(body.qty);
+  if (!qty.ok) return badRequest(qty.error);
   if (effectiveWeek !== undefined
       && !(typeof effectiveWeek === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(effectiveWeek))) {
     return badRequest("effectiveWeek debe ser 'YYYY-MM-DD'");
@@ -45,7 +49,7 @@ export async function POST(request: Request) {
       .insert({
         product_id: productId,
         bodega,
-        qty,
+        qty: qty.qty,
         effective_week: effectiveWeek ?? null,
         note: typeof note === 'string' ? note.slice(0, 1000) : null,
         created_by: auth.id,
