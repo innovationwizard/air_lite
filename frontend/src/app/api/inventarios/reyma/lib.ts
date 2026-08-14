@@ -9,8 +9,16 @@ import { CAN_VIEW_INVENTARIOS } from '@/lib/auth/roles';
 import { createServiceRoleClient } from '@/lib/supabase/server';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
+/**
+ * Ancho de la columna `autor` en la BD (migración 20260814000001). El corte aquí
+ * es defensa, no la regla: para personas nunca se acerca (display_name es
+ * VARCHAR(100)); el espacio existe para las cargas de ingesta, donde `autor`
+ * lleva la procedencia completa del dato.
+ */
+export const AUTOR_MAX = 500;
+
 export function autor(user: AuthUser): string {
-  return (user.displayName || user.email || 'desconocido').slice(0, 120);
+  return (user.displayName || user.email || 'desconocido').slice(0, AUTOR_MAX);
 }
 
 export function badRequest(message: string): NextResponse {
