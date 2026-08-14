@@ -110,10 +110,17 @@ export const PAGE_PERMISSIONS: Record<string, Role[]> = {
 
 /**
  * Get the default landing page for a role.
+ *
+ * `focus` is injectable so the post-rollout behaviour stays reachable and
+ * testable while ROLLOUT_FOCUS is populated: pass `{}` to get the landing page
+ * a role WILL have once the temporary confinement is lifted.
  */
-export function getDefaultPage(role: Role | string): string {
-  const focus = ROLLOUT_FOCUS[role as Role];
-  if (focus) return focus;
+export function getDefaultPage(
+  role: Role | string,
+  focus: Partial<Record<Role, string>> = ROLLOUT_FOCUS,
+): string {
+  const focused = focus[role as Role];
+  if (focused) return focused;
   switch (role) {
     case ROLES.SUPERUSER:
       return '/superuser';

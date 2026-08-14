@@ -96,13 +96,22 @@ describe('getDefaultPage', () => {
   });
 
   it('rollout focus (TEMPORARY, 2026-08-11): compras/inventario land on their live page', () => {
-    // When ROLLOUT_FOCUS is emptied, these revert to /compras and /inventarios/reyma.
     expect(getDefaultPage('compras')).toBe('/compras/reabastecimiento-vivo');
     expect(getDefaultPage('inventario')).toBe('/inventarios/reyma-vivo');
+  });
+
+  it('without the focus map, roles revert to their silo landing page', () => {
+    // Este es el comportamiento que vuelve cuando se vacíe ROLLOUT_FOCUS: se
+    // prueba inyectando {} para que el camino post-rollout no quede sin cubrir
+    // (ni sin verificar) mientras dure el confinamiento temporal.
+    expect(getDefaultPage('compras', {})).toBe('/compras');
+    expect(getDefaultPage('inventario', {})).toBe('/inventarios/reyma');
+    expect(getDefaultPage('superuser', {})).toBe('/superuser');
   });
 
   it('falls back to /backtest for roles without a specific landing page', () => {
     expect(getDefaultPage('ventas')).toBe('/backtest');
     expect(getDefaultPage('nonsense')).toBe('/backtest');
+    expect(getDefaultPage('ventas', {})).toBe('/backtest');
   });
 });
