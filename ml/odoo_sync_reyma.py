@@ -64,6 +64,7 @@ import json
 import logging
 import os
 import sys
+import time
 import urllib.parse
 import urllib.request
 import xmlrpc.client
@@ -110,22 +111,64 @@ SUPABASE_BATCH = 500
 
 # ─── Odoo client (same shape as odoo_sync_reabastecimiento) ──────────────────
 
-def connect_odoo():
+# Connection retry (incident 2026-08-14 03:00 GT: the hourly Wilmer cron died
+# before creating its sync_runs row — Odoo unreachable during their nightly
+# window — and Railway mailed "Deploy Crashed!". One blip should not page
+# anyone: retry a few times, and if it is still down, RECORD the failure so the
+# gap is visible in the app's own history instead of only in Railway email.
+ODOO_CONNECT_ATTEMPTS = 3
+ODOO_CONNECT_BACKOFF_S = 60
+
+
+def record_failed_run(kind, message):
+    """Best-effort 'failed' row in sync_runs. Never raises: this runs on a path
+    that is already failing, and losing the breadcrumb must not mask the cause."""
+    if not SUPABASE_URL or not SUPABASE_KEY:
+        return
+    try:
+        now = datetime.now(timezone.utc).isoformat()
+        sb_request('POST', 'sync_runs',
+                   {'kind': kind, 'status': 'failed', 'finished_at': now,
+                    'note': str(message)[:500]})
+        logger.info('recorded failed sync_run (kind=%s)', kind)
+    except Exception:
+        logger.warning('could not record the failed run in sync_runs', exc_info=True)
+
+
+def connect_odoo(kind='reyma'):
     if not all([ODOO_URL, ODOO_DB, ODOO_USERNAME, ODOO_API_KEY]):
-        logger.error('Missing Odoo env vars: ODOO_URL, ODOO_DB, ODOO_USERNAME, ODOO_API_KEY')
+        msg = 'Missing Odoo env vars: ODOO_URL, ODOO_DB, ODOO_USERNAME, ODOO_API_KEY'
+        logger.error(msg)
+        record_failed_run(kind, msg)  # config error: no retry, but leave the trace
         sys.exit(1)
-    common = xmlrpc.client.ServerProxy(f'{ODOO_URL}/xmlrpc/2/common', allow_none=True)
-    uid = common.authenticate(ODOO_DB, ODOO_USERNAME, ODOO_API_KEY, {})
-    if not uid:
-        logger.error('Odoo authentication failed')
-        sys.exit(1)
-    models = xmlrpc.client.ServerProxy(f'{ODOO_URL}/xmlrpc/2/object', allow_none=True)
-    logger.info('Odoo connected: uid=%s db=%s', uid, ODOO_DB)
 
-    def execute(model, method, *args, **kwargs):
-        return models.execute_kw(ODOO_DB, uid, ODOO_API_KEY, model, method, list(args), kwargs)
+    last = None
+    for attempt in range(1, ODOO_CONNECT_ATTEMPTS + 1):
+        try:
+            common = xmlrpc.client.ServerProxy(f'{ODOO_URL}/xmlrpc/2/common', allow_none=True)
+            uid = common.authenticate(ODOO_DB, ODOO_USERNAME, ODOO_API_KEY, {})
+            if not uid:
+                # Also retried: during maintenance Odoo answers but refuses auth.
+                raise RuntimeError('Odoo authentication returned no uid')
+            models = xmlrpc.client.ServerProxy(f'{ODOO_URL}/xmlrpc/2/object', allow_none=True)
+            logger.info('Odoo connected: uid=%s db=%s (attempt %d)', uid, ODOO_DB, attempt)
 
-    return execute
+            def execute(model, method, *args, **kwargs):
+                return models.execute_kw(ODOO_DB, uid, ODOO_API_KEY, model, method,
+                                         list(args), kwargs)
+
+            return execute
+        except Exception as e:
+            last = e
+            logger.warning('Odoo connect attempt %d/%d failed: %s',
+                           attempt, ODOO_CONNECT_ATTEMPTS, e)
+            if attempt < ODOO_CONNECT_ATTEMPTS:
+                time.sleep(ODOO_CONNECT_BACKOFF_S)
+
+    msg = f'Odoo unreachable after {ODOO_CONNECT_ATTEMPTS} attempts: {last}'
+    logger.error(msg)
+    record_failed_run(kind, msg)
+    sys.exit(1)
 
 
 def odoo_read_all(execute, model, domain, fields, page=1000):
