@@ -65,8 +65,10 @@ describe('resolverEta', () => {
     expect(r).toEqual({ fecha: '2026-08-19', fuente: 'calculada', calculadaDistinta: null });
   });
 
-  it('la ETA manual gana y expone la calculada cuando difiere (caso real de Alexis)', () => {
-    // G-225 Petén: factura 12-ago, Alexis escribió 17-ago; con default 4 sale 18-ago.
+  it('la ETA manual gana y expone la calculada cuando difiere', () => {
+    // El override se conserva para excepciones reales (un furgón que Alexis sabe
+    // atrasado). Ninguna fila lo usa hoy: las ETAs de carpeta se borraron el
+    // 2026-08-14 cuando él confirmó que la calculada era la correcta.
     const r = resolverEta(
       { fecha: '2026-08-12', destino: 'bodega-peten', eta: '2026-08-17' }, CONFIG);
     expect(r.fecha).toBe('2026-08-17');
@@ -88,16 +90,20 @@ describe('resolverEta', () => {
   });
 });
 
-describe('etaCalculada — las 3 ETAs que Alexis escribió a mano', () => {
-  it('con 3 días hábiles reproduce sus tres ETAs exactamente', () => {
-    const c: EtaConfig = { porDestino: {}, default: 3 };
-    expect(etaCalculada({ fecha: '2026-08-11', destino: 'bodega-zacapa' }, c)).toBe('2026-08-14');
-    expect(etaCalculada({ fecha: '2026-08-12', destino: 'bodega-peten' }, c)).toBe('2026-08-17');
-    expect(etaCalculada({ fecha: '2026-08-12', destino: 'bodega-san-jose' }, c)).toBe('2026-08-17');
-  });
-
-  it('con el default 4 sale un día después que las suyas (diferencia a resolver, P2)', () => {
-    expect(etaCalculada({ fecha: '2026-08-11', destino: 'bodega-zacapa' }, CONFIG)).toBe('2026-08-17');
-    expect(etaCalculada({ fecha: '2026-08-12', destino: 'bodega-peten' }, CONFIG)).toBe('2026-08-18');
+describe('etaCalculada — las facturas reales de agosto 2026', () => {
+  // Regla confirmada por Alexis el 2026-08-14: 4 días hábiles desde la fecha
+  // IMPRESA de la factura. (Las estimaciones de los nombres de carpeta — 14-ago,
+  // 17-ago — resultaron erróneas y se borraron; no son casos de prueba válidos.)
+  it('reproduce la ETA de cada furgón de agosto', () => {
+    const casos: Array<[string, string, string]> = [
+      ['2026-08-07', 'bodega-san-jose', '2026-08-13'], // G-216..219, viernes → jueves
+      ['2026-08-10', 'bodega-san-jose', '2026-08-14'], // G-220, lunes → viernes
+      ['2026-08-11', 'bodega-zacapa', '2026-08-17'],   // G-223, martes → lunes
+      ['2026-08-12', 'bodega-peten', '2026-08-18'],    // G-225, miércoles → martes
+      ['2026-08-13', 'bodega-san-jose', '2026-08-19'], // G-226, jueves → miércoles
+    ];
+    for (const [fecha, destino, esperado] of casos) {
+      expect(etaCalculada({ fecha, destino }, CONFIG)).toBe(esperado);
+    }
   });
 });
