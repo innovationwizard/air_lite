@@ -145,20 +145,8 @@ def connect_odoo(kind='reyma'):
     last = None
     for attempt in range(1, ODOO_CONNECT_ATTEMPTS + 1):
         try:
-            common = xmlrpc.client.ServerProxy(f'{ODOO_URL}/xmlrpc/2/common', allow_none=True)
-            uid = common.authenticate(ODOO_DB, ODOO_USERNAME, ODOO_API_KEY, {})
-            if not uid:
-                # Also retried: during maintenance Odoo answers but refuses auth.
-                raise RuntimeError('Odoo authentication returned no uid')
-            models = xmlrpc.client.ServerProxy(f'{ODOO_URL}/xmlrpc/2/object', allow_none=True)
-            logger.info('Odoo connected: uid=%s db=%s (attempt %d)', uid, ODOO_DB, attempt)
-
-            def execute(model, method, *args, **kwargs):
-                return models.execute_kw(ODOO_DB, uid, ODOO_API_KEY, model, method,
-                                         list(args), kwargs)
-
-            return execute
-        except Exception as e:
+            return _connect_once(attempt)
+        except Exception as e:  # noqa: BLE001 — cualquier fallo de red/auth se reintenta
             last = e
             logger.warning('Odoo connect attempt %d/%d failed: %s',
                            attempt, ODOO_CONNECT_ATTEMPTS, e)
@@ -169,6 +157,26 @@ def connect_odoo(kind='reyma'):
     logger.error(msg)
     record_failed_run(kind, msg)
     sys.exit(1)
+
+
+def _connect_once(attempt):
+    """Un intento de conexión. Vive fuera del bucle a propósito: el closure
+    `execute` captura uid/models, y definirlo dentro del `for` los ligaría a
+    variables del bucle (ruff B023) — frágil ante cualquier refactor que no
+    retorne de inmediato. Misma forma que odoo_sync_reabastecimiento."""
+    common = xmlrpc.client.ServerProxy(f'{ODOO_URL}/xmlrpc/2/common', allow_none=True)
+    uid = common.authenticate(ODOO_DB, ODOO_USERNAME, ODOO_API_KEY, {})
+    if not uid:
+        # También se reintenta: en mantenimiento Odoo responde pero rechaza auth.
+        raise RuntimeError('Odoo authentication returned no uid')
+    models = xmlrpc.client.ServerProxy(f'{ODOO_URL}/xmlrpc/2/object', allow_none=True)
+    logger.info('Odoo connected: uid=%s db=%s (attempt %d)', uid, ODOO_DB, attempt)
+
+    def execute(model, method, *args, **kwargs):
+        return models.execute_kw(ODOO_DB, uid, ODOO_API_KEY, model, method,
+                                 list(args), kwargs)
+
+    return execute
 
 
 def odoo_read_all(execute, model, domain, fields, page=1000):
@@ -325,7 +333,7 @@ def sync_stock(execute, code_to_opid, issues, dry_run, sync_id):
         if b:
             loc_to_bodega[loc['id']] = b
             known_ids.add(loc['id'])
-    missing = set(LOCATION_TO_BODEGA) - {l['complete_name'] for l in locs}
+    missing = set(LOCATION_TO_BODEGA) - {ln['complete_name'] for ln in locs}
     if missing:
         issues.add('error', 'stock', f'Ubicaciones mapeadas no encontradas en Odoo: {sorted(missing)}')
     quants = odoo_read_all(execute, 'stock.quant',
@@ -366,17 +374,17 @@ def sync_pendientes(execute, code_to_opid, issues, dry_run, sync_id):
          ['state', 'in', ORDERED_STATES],
          ['create_date', '>=', desde]],  # 60d window: Odoo auto-cancela ~2 meses; la regla de 8 días descarta lo viejo
         ['product_id', 'product_uom_qty', 'qty_delivered', 'order_id', 'create_date'])
-    pend_lines = [l for l in lines
-                  if float(l['product_uom_qty'] or 0) - float(l['qty_delivered'] or 0) > 1e-6]
-    order_ids = sorted({l['order_id'][0] for l in pend_lines})
+    pend_lines = [ln for ln in lines
+                  if float(ln['product_uom_qty'] or 0) - float(ln['qty_delivered'] or 0) > 1e-6]
+    order_ids = sorted({ln['order_id'][0] for ln in pend_lines})
     orders = odoo_read_all(execute, 'sale.order', [['id', 'in', order_ids]],
                            ['name', 'date_order', 'warehouse_id']) if order_ids else []
     ometa = {o['id']: o for o in orders}
     now = datetime.now(timezone.utc)
     rows = []
-    for l in pend_lines:
-        o = ometa.get(l['order_id'][0], {})
-        fecha = (o.get('date_order') or l['create_date'] or '').replace(' ', 'T')
+    for ln in pend_lines:
+        o = ometa.get(ln['order_id'][0], {})
+        fecha = (o.get('date_order') or ln['create_date'] or '').replace(' ', 'T')
         edad = None
         if fecha:
             edad = round((now - datetime.fromisoformat(fecha).replace(tzinfo=timezone.utc)).total_seconds() / 86400, 2)
@@ -384,11 +392,11 @@ def sync_pendientes(execute, code_to_opid, issues, dry_run, sync_id):
         bodega = PICKING_WH_TO_DESTINO.get(wh.strip()[:1])
         rows.append({
             'sync_id': sync_id,
-            'codigo': opid_to_code[l['product_id'][0]],
+            'codigo': opid_to_code[ln['product_id'][0]],
             'picking': o.get('name'),
             'bodega_origen': bodega,
             'fecha_programada': (fecha + 'Z') if fecha else None,
-            'cantidad': round(float(l['product_uom_qty'] or 0) - float(l['qty_delivered'] or 0), 4),
+            'cantidad': round(float(ln['product_uom_qty'] or 0) - float(ln['qty_delivered'] or 0), 4),
             'edad_dias': edad,
         })
     viejos = sum(1 for r in rows if r['edad_dias'] is not None and r['edad_dias'] > 8)
@@ -413,7 +421,7 @@ def sync_transito(execute, code_to_opid, issues, dry_run, sync_id):
          ['order_id.state', 'in', ['purchase', 'done']],
          ['product_id', 'in', list(opid_to_code)]],
         ['order_id', 'product_id', 'product_qty', 'qty_received', 'qty_invoiced', 'date_planned'])
-    order_ids = sorted({l['order_id'][0] for l in lines})
+    order_ids = sorted({ln['order_id'][0] for ln in lines})
     orders = odoo_read_all(execute, 'purchase.order', [['id', 'in', order_ids]],
                            ['name', 'picking_type_id']) if order_ids else []
     order_meta = {}
@@ -427,23 +435,23 @@ def sync_transito(execute, code_to_opid, issues, dry_run, sync_id):
     today = date.today().isoformat()
     rows, pasadas = [], 0
     saldo_oc = 0.0  # ordered − invoiced: aún no despachado por el proveedor (NO es tránsito)
-    for l in lines:
-        inv = float(l['qty_invoiced'] or 0)
-        rec = float(l['qty_received'] or 0)
-        saldo_oc += max(0.0, float(l['product_qty'] or 0) - inv)
+    for ln in lines:
+        inv = float(ln['qty_invoiced'] or 0)
+        rec = float(ln['qty_received'] or 0)
+        saldo_oc += max(0.0, float(ln['product_qty'] or 0) - inv)
         pend = inv - rec  # tránsito Alexis: facturado (furgón despachado) no recibido
         if pend <= 1e-6:
             continue
-        name, destino, pt_name = order_meta.get(l['order_id'][0], (l['order_id'][1], 'SJ', '?'))
+        name, destino, pt_name = order_meta.get(ln['order_id'][0], (ln['order_id'][1], 'SJ', '?'))
         if destino == 'SJ' and not pt_name.startswith('1'):
             issues.add('warning', 'transit',
-                       f'PO {name}: picking type {pt_name!r} sin destino conocido — asumido SJ', l['order_id'][0])
-        fecha = (l['date_planned'] or '')[:10] or None
+                       f'PO {name}: picking type {pt_name!r} sin destino conocido — asumido SJ', ln['order_id'][0])
+        fecha = (ln['date_planned'] or '')[:10] or None
         pasada = bool(fecha and fecha < today)
         pasadas += 1 if pasada else 0
         rows.append({
             'sync_id': sync_id,
-            'codigo': opid_to_code[l['product_id'][0]],
+            'codigo': opid_to_code[ln['product_id'][0]],
             'po_name': name,
             'fecha_planeada': fecha,
             'cantidad_pendiente': round(pend, 4),
@@ -487,7 +495,7 @@ def sync_ventas(execute, code_to_opid, issues, dry_run, sync_id):
     # bodega del pedido (L3.5, MRP regional): warehouse del sale.order. Tiendas y
     # no-mapeadas NO generan fila por bodega (Alexis las excluye) pero SÍ suman
     # al GLOBAL — nada se pierde, solo no se regionaliza.
-    order_ids = sorted({l['order_id'][0] for l in lines if l.get('order_id')})
+    order_ids = sorted({ln['order_id'][0] for ln in lines if ln.get('order_id')})
     wh_by_order = {}
     for i in range(0, len(order_ids), 5000):
         for o in odoo_read_all(execute, 'sale.order',
@@ -496,13 +504,13 @@ def sync_ventas(execute, code_to_opid, issues, dry_run, sync_id):
             wh_by_order[o['id']] = PICKING_WH_TO_DESTINO.get(wh.strip()[:1])
     so_agg = defaultdict(float)
     so_agg_bod = defaultdict(float)
-    for l in lines:
-        cod = opid_to_code[l['product_id'][0]]
-        d = l['create_date'][:7]  # YYYY-MM
-        qty = float(l['qty_delivered'] or 0)
+    for ln in lines:
+        cod = opid_to_code[ln['product_id'][0]]
+        d = ln['create_date'][:7]  # YYYY-MM
+        qty = float(ln['qty_delivered'] or 0)
         key = (cod, int(d[:4]), int(d[5:7]))
         so_agg[key] += qty
-        bod = wh_by_order.get(l['order_id'][0]) if l.get('order_id') else None
+        bod = wh_by_order.get(ln['order_id'][0]) if ln.get('order_id') else None
         if bod:
             so_agg_bod[key + (bod,)] += qty
     now_iso = datetime.now(timezone.utc).isoformat()
@@ -580,9 +588,9 @@ def sync_facturas(execute, scope, code_to_opid, issues, dry_run, sync_id):
             [['move_id', '=', mv['id']], ['product_id', '!=', False],
              ['product_id', 'in', list(opid_to_code)]],
             ['product_id', 'quantity', 'price_unit'])
-        for l in lines:
-            cod = opid_to_code[l['product_id'][0]]
-            precio = float(l['price_unit'] or 0)
+        for ln in lines:
+            cod = opid_to_code[ln['product_id'][0]]
+            precio = float(ln['price_unit'] or 0)
             rows.append({
                 'sync_id': sync_id,
                 'factura': mv['name'],
@@ -590,7 +598,7 @@ def sync_facturas(execute, scope, code_to_opid, issues, dry_run, sync_id):
                 'referencia': (mv['ref'] or '')[:120] or None,
                 'tipo': 'factura' if mv['move_type'] == 'in_invoice' else 'nota_credito',
                 'codigo': cod,
-                'cantidad': float(l['quantity'] or 0),
+                'cantidad': float(ln['quantity'] or 0),
                 'precio_unit': precio,
             })
             base = scope.get(cod, {}).get('precio_factura')
@@ -645,20 +653,20 @@ def sync_orden_global(execute, code_to_opid, issues, dry_run, sync_id):
                               [['order_id', '=', pos[0]['id']]],
                               ['product_id', 'product_qty', 'qty_received', 'price_unit'])
         unmapped = []
-        for l in lines:
-            pid = l['product_id'][0] if l['product_id'] else None
+        for ln in lines:
+            pid = ln['product_id'][0] if ln['product_id'] else None
             cod = opid_to_code.get(pid)
             if cod is None:
                 # never drop: keep the line under a sentinel código + flag it
                 cod = f'odoo:{pid}'[:20]
-                unmapped.append(l['product_id'][1] if l['product_id'] else str(pid))
+                unmapped.append(ln['product_id'][1] if ln['product_id'] else str(pid))
             rows.append({
                 'sync_id': sync_id,
                 'po_name': po_name,
                 'codigo': cod,
-                'cajas': float(l['product_qty'] or 0),
-                'recibidas': float(l['qty_received'] or 0),
-                'precio_unit': float(l['price_unit'] or 0) or None,
+                'cajas': float(ln['product_qty'] or 0),
+                'recibidas': float(ln['qty_received'] or 0),
+                'precio_unit': float(ln['price_unit'] or 0) or None,
             })
         if unmapped:
             issues.add('warning', 'orden_global',

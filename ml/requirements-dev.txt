@@ -1,3 +1,18 @@
 pytest>=8.0.0,<10.0.0
 pytest-cov>=5.0.0,<8.0.0
-ruff>=0.11.0,<1.0.0
+
+# Ruff PINNED EXACTO a propósito (2026-08-14). El rango anterior
+# (ruff>=0.11.0,<1.0.0) dejaba entrar cualquier minor nueva, y ruff cambia su
+# conjunto de reglas POR DEFECTO entre minors: el mismo `ruff check .` daba 10
+# errores con 0.15.8 y 42 con 0.16.3 — CI se puso en rojo sin que nadie tocara
+# una línea de código. Con el pin, `ruff check .` significa lo mismo en local
+# que en CI, y subir de versión es un cambio deliberado (con su propia PR y su
+# propio triage), no una sorpresa de un martes cualquiera.
+#
+# Al subir a 0.16.x hay ~39 hallazgos preexistentes esperando triage: 20 son
+# BLE001 (blind-except) que en los syncs/probes son DELIBERADOS — la regla
+# "el parser no falla ni pierde datos" —, y el resto (DTZ de fechas naive,
+# UP de typing, imports desordenados) sí vale la pena arreglar. Ese día,
+# además, conviene fijar un [tool.ruff] con `select` explícito para que el
+# conjunto de reglas sea una decisión nuestra y no el default de turno.
+ruff==0.15.8
