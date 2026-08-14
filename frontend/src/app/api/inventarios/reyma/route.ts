@@ -5,6 +5,7 @@ import { createServiceRoleClient } from '@/lib/supabase/server';
 import type { ModeloRow, VentasRow } from '@/app/(authenticated)/inventarios/reyma/engine';
 import { computePdfTransito } from '@/app/(authenticated)/inventarios/reyma-vivo/saldos';
 import type {
+  EtaConfigPayload,
   FacturaLinea,
   FacturaPdfLinea,
   NcConfig,
@@ -16,6 +17,7 @@ import type {
   TransitoDetalle,
   VivoRow,
 } from '@/app/(authenticated)/inventarios/reyma-vivo/types';
+import { DIAS_HABILES_DEFAULT, resolverEta } from '@/app/(authenticated)/inventarios/reyma-vivo/eta';
 
 export const dynamic = 'force-dynamic';
 
@@ -82,6 +84,9 @@ interface NotaRowDb { po_name: string; eta: string | null; nota: string | null; 
 interface FacturaRowDb {
   factura: string; fecha: string | null; referencia: string | null;
   tipo: 'factura' | 'nota_credito'; codigo: string; cantidad: number; precio_unit: number;
+}
+interface EtaConfigRowDb {
+  destino: string; dias_habiles: number; autor: string; created_at: string;
 }
 interface PlanRowDb { semana: string; payload: unknown; autor: string; created_at: string }
 interface PedidoRowDb { mes: string; payload: unknown; autor: string; created_at: string }
@@ -153,7 +158,7 @@ export async function GET() {
     ]);
 
     // ── L3 write-path state (append-only history; latest row wins)
-    const [overridesRaw, ncRaw, notasRaw, facturasRaw, planesRaw, pedidosRaw, ordenGlobalRaw, poLineasRaw, facturasPdfRaw] = await Promise.all([
+    const [overridesRaw, ncRaw, notasRaw, facturasRaw, planesRaw, pedidosRaw, ordenGlobalRaw, poLineasRaw, facturasPdfRaw, etaConfigRaw] = await Promise.all([
       fetchAll<OverrideRowDb>((a, b) =>
         service.from('reyma_proyeccion_overrides')
           .select('codigo, cajas, autor, created_at')
@@ -202,7 +207,29 @@ export async function GET() {
         service.from('reyma_facturas_pdf')
           .select('folio_fiscal, factura, guia, destino, fecha, eta, codigo, clave, cantidad, precio_unit')
           .range(a, b)),
+      fetchAll<EtaConfigRowDb>((a, b) =>
+        service.from('reyma_eta_config')
+          .select('destino, dias_habiles, autor, created_at')
+          .order('created_at', { ascending: false }).range(a, b)),
     ]);
+
+    // ETA config: última fila por destino manda (append-only, mismo patrón que
+    // los overrides). Default del módulo si un destino no tiene fila.
+    const etaPorDestino: Record<string, number> = {};
+    const etaDetalle: EtaConfigPayload['detalle'] = [];
+    for (const c of etaConfigRaw) {
+      if (etaPorDestino[c.destino] !== undefined) continue; // primera = más reciente
+      etaPorDestino[c.destino] = c.dias_habiles;
+      etaDetalle.push({
+        destino: c.destino, diasHabiles: c.dias_habiles,
+        autor: c.autor, fecha: c.created_at,
+      });
+    }
+    const etaConfig: EtaConfigPayload = {
+      porDestino: etaPorDestino,
+      default: DIAS_HABILES_DEFAULT,
+      detalle: etaDetalle.sort((x, y) => x.destino.localeCompare(y.destino)),
+    };
     const overrideByCod = new Map<string, OverrideRowDb>();
     for (const o of overridesRaw) {
       if (!overrideByCod.has(o.codigo)) overrideByCod.set(o.codigo, o); // first = latest
@@ -311,9 +338,13 @@ export async function GET() {
           ogForTransito.mes.slice(0, 7),
           poLineasRaw,
           transito.map((t) => ({ po_name: t.po_name, codigo: t.codigo, cantidad_pendiente: t.cantidad_pendiente })),
+          // ETA efectiva (manual > calculada) para que el tránsito muestre la
+          // fecha buena aunque nadie la haya tecleado — Lote 1.
           facturasPdfRaw.map((f) => ({
             folioFiscal: f.folio_fiscal, factura: f.factura, guia: f.guia, destino: f.destino,
-            fecha: f.fecha, eta: f.eta, codigo: f.codigo, clave: f.clave,
+            fecha: f.fecha,
+            eta: resolverEta({ fecha: f.fecha, destino: f.destino, eta: f.eta }, etaConfig).fecha,
+            codigo: f.codigo, clave: f.clave,
             cantidad: f.cantidad, precioUnit: f.precio_unit,
           })),
         )
@@ -462,6 +493,7 @@ export async function GET() {
       ultimoPedido,
       ordenGlobal,
       facturasPdf,
+      etaConfig,
     };
     return NextResponse.json(payload);
   } catch (e) {

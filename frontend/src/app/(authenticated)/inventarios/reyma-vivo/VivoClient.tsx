@@ -21,6 +21,7 @@ import {
 } from './planificacion';
 import type { ReymaVivoPayload, VivoRow } from './types';
 import { computeSaldos } from './saldos';
+import { diasHabilesDe, resolverEta } from './eta';
 
 function esc(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -858,6 +859,7 @@ function TabCumplimiento({ payload }: { payload: ReymaVivoPayload }) {
           </tbody>
         </table>
       </div>
+      <FacturasEta payload={payload} />
       {saldos.fueraDePedido.length > 0 && (
         <div className="mt-3 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-800">
           Facturado FUERA de {og.poName} ({saldos.fueraDePedido.length} productos):{' '}
@@ -865,6 +867,114 @@ function TabCumplimiento({ payload }: { payload: ReymaVivoPayload }) {
           del MRP semanal que la orden global no traía (el caso que Alexis ajusta en Odoo), o facturas de otra OC.
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * Lote 1 — facturas del proveedor con su ETA. Alexis: "a partir de esa factura
+ * en PDF calculamos el ETA… son cuatro días hábiles" y "muchos me preguntan:
+ * ¿y cuándo entra la bandeja esta 1052?".
+ * La ETA manual gana sobre la calculada, y cuando difieren se muestran AMBAS —
+ * la diferencia es un hallazgo para conversar, no algo que la app deba esconder.
+ */
+function FacturasEta({ payload }: { payload: ReymaVivoPayload }) {
+  const filas = useMemo(() => {
+    const porFactura = new Map<string, {
+      factura: string; guia: string | null; destino: string | null;
+      fecha: string | null; etaManual: string | null; cajas: number; lineas: number;
+    }>();
+    for (const f of payload.facturasPdf) {
+      const e = porFactura.get(f.factura) ?? {
+        factura: f.factura, guia: f.guia, destino: f.destino,
+        fecha: f.fecha, etaManual: f.eta, cajas: 0, lineas: 0,
+      };
+      e.cajas += f.cantidad;
+      e.lineas += 1;
+      if (f.eta && !e.etaManual) e.etaManual = f.eta;
+      porFactura.set(f.factura, e);
+    }
+    return [...porFactura.values()]
+      .map((f) => ({
+        ...f,
+        eta: resolverEta({ fecha: f.fecha, destino: f.destino, eta: f.etaManual }, payload.etaConfig),
+      }))
+      .sort((a, b) => (b.fecha ?? '').localeCompare(a.fecha ?? ''));
+  }, [payload.facturasPdf, payload.etaConfig]);
+
+  if (!filas.length) return null;
+  const cfg = payload.etaConfig;
+  const resumenCfg = Object.entries(cfg.porDestino)
+    .map(([d, n]) => `${d.replace('bodega-', '')}: ${n}`)
+    .join(' · ') || `todas: ${cfg.default}`;
+
+  return (
+    <div className="mt-5">
+      <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-1">
+        Facturas del proveedor y su ETA
+      </h4>
+      <div className="mb-2 text-[11px] text-slate-500">
+        ETA = fecha de la factura + días hábiles del destino (sáb y dom no cuentan; feriados
+        todavía no). Días hábiles configurados — <b>{resumenCfg}</b>. La ETA escrita a mano gana
+        sobre la calculada; si difieren, se muestran las dos.
+      </div>
+      <div className="overflow-x-auto">
+        <table className="text-xs border-collapse min-w-full">
+          <thead className="bg-slate-50">
+            <tr>
+              <th className={TH}>Factura</th>
+              <th className={TH}>Guía</th>
+              <th className={TH}>Destino</th>
+              <th className={TH}>Fecha factura</th>
+              <th className={TH}>ETA</th>
+              <th className={THR}>Cajas</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filas.map((f) => (
+              <tr key={f.factura} className="border-t border-slate-100 hover:bg-slate-50">
+                <td className={`${TD} font-mono`}>{f.factura}</td>
+                <td className={`${TD} text-slate-500`}>{f.guia ?? '—'}</td>
+                <td className={TD}>
+                  {(f.destino ?? '—').replace('bodega-', '')}
+                  {f.destino === 'entrega-directa' && (
+                    <span className="ml-1 rounded bg-slate-100 px-1 text-[10px] text-slate-600">directa</span>
+                  )}
+                </td>
+                <td className={TD}>{f.fecha ?? '—'}</td>
+                <td className={TD}>
+                  {f.eta.fecha ? (
+                    <>
+                      <b>{f.eta.fecha}</b>
+                      <span
+                        className={`ml-1 rounded px-1 text-[10px] ${
+                          f.eta.fuente === 'manual'
+                            ? 'bg-emerald-100 text-emerald-700'
+                            : 'bg-slate-100 text-slate-600'
+                        }`}
+                        title={f.eta.fuente === 'manual'
+                          ? 'ETA declarada a mano (gana sobre la calculada)'
+                          : `Calculada: ${f.fecha} + ${diasHabilesDe(f.destino, cfg)} días hábiles`}
+                      >
+                        {f.eta.fuente === 'manual' ? 'manual' : 'calculada'}
+                      </span>
+                      {f.eta.calculadaDistinta && (
+                        <span
+                          className="ml-1 text-amber-600"
+                          title={`La calculada con la config actual daría ${f.eta.calculadaDistinta} — revisar los días hábiles de este destino`}
+                        >
+                          (calc. {f.eta.calculadaDistinta})
+                        </span>
+                      )}
+                    </>
+                  ) : '—'}
+                </td>
+                <td className={TDR}>{qty(f.cajas)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

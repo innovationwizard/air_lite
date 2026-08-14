@@ -150,4 +150,13 @@ export interface ReymaVivoPayload {
   ordenGlobal: OrdenGlobal | null;
   /** C7/L4: facturas capturadas de los PDFs del proveedor (fuente adelantada). */
   facturasPdf: FacturaPdfLinea[];
+  /** Lote 1: días hábiles de ETA por bodega (configurable; default 4). */
+  etaConfig: EtaConfigPayload;
+}
+
+export interface EtaConfigPayload {
+  porDestino: Record<string, number>;
+  default: number;
+  /** Quién fijó cada valor y cuándo — para el tooltip de procedencia. */
+  detalle: Array<{ destino: string; diasHabiles: number; autor: string; fecha: string }>;
 }
