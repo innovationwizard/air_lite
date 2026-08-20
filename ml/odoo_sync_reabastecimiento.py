@@ -53,9 +53,11 @@ import logging
 import os
 import sys
 import time
+import unicodedata
 import urllib.parse
 import urllib.request
 import xmlrpc.client
+from collections import defaultdict
 from datetime import datetime, timezone
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
@@ -76,6 +78,28 @@ INCLUDE_DRAFT_TRANSIT = False
 
 # Ordered-demand states (OQ-D minor open: flagged as assumption in sync_issues).
 ORDERED_STATES = ['sale', 'done']
+
+# ── G4 · invoiced demand (Raquel's lens) ─────────────────────────────────────
+# Her filter, verbatim from David demonstrating it in Odoo (2026-07-28,
+# Ventas → Análisis de facturas): "todas las facturas que no estén en borrador…
+# y todo aquello que no esté cancelado… y el tipo de ingreso… yo no voy a
+# mostrar algo que tenga como bancos o circular… y aparte es un tema de gastos".
+# account.invoice.report itself is DENIED to uid 199 (measured 2026-08-20), but
+# it is only a view over account.move.line, which is readable — so the filter is
+# reproduced on the underlying table.
+INVOICED_MOVE_TYPES = ['out_invoice', 'out_refund']   # refunds negated, as the report does
+INVOICED_ACCOUNT_TYPES = ['income', 'income_other']   # "el tipo de ingreso", never bancos/circular/gastos
+
+# Journal → warehouse. The journal name is the only link between a customer
+# invoice and a bodega (invoices carry no warehouse_id, and 52.5% of lines have
+# no sale order to inherit one from — measured 2026-08-20). Names verbatim from
+# production; matching is accent- and case-insensitive, and anything unmatched
+# is flagged, never silently bucketed.
+CD_JOURNAL_TO_WH = {
+    'facturas cd sjvn': '1CET',
+    'facturas cd zacapa': '4ZAC',
+    'facturas cd peten': '3PET',
+}
 
 SUPABASE_BATCH = 500
 
@@ -531,6 +555,113 @@ def month_windows(today):
     return minus_months(first_of_current, 3), minus_months(first_of_current, 6), first_of_current
 
 
+def _strip_accents(text):
+    """Fold accents so 'Petén' and 'Peten' are the same journal."""
+    return ''.join(c for c in unicodedata.normalize('NFD', text or '')
+                   if unicodedata.category(c) != 'Mn').lower().strip()
+
+
+def classify_invoice_journal(name):
+    """Which perimeter an invoice journal belongs to.
+
+    Returns ('bodega', warehouse_code) for the distribution centres,
+    ('tienda', journal_name) for retail stores — their own perimeter, never
+    merged into a purchasing bodega (decision 2026-08-20: tiendas also place
+    their own sale orders, so folding their invoices into San José would
+    double-count) — or ('otros', journal_name) for anything else, which the
+    caller reports as an issue.
+    """
+    flat = _strip_accents(name)
+    if flat in CD_JOURNAL_TO_WH:
+        return ('bodega', CD_JOURNAL_TO_WH[flat])
+    if 'tienda' in flat:
+        return ('tienda', name)
+    return ('otros', name)
+
+
+def aggregate_invoiced(rows6, rows3, bodega_codes):
+    """Fold invoiced quantities into the same shape as ordered velocity.
+
+    rows*: iterables of (product_id, journal_name, qty) with refunds already
+    negated. Returns (by_bodega, tiendas, unmapped).
+
+    Monthly averages over the SAME windows as p6/p3 (÷6, ÷3) — a comparison
+    between differently-averaged numbers would be worse than no comparison.
+    'General' mirrors the ordered side: ordered General is every warehouse, so
+    invoiced General is every journal (CD + tiendas + otros); the page states
+    that perimeter in the column tooltip.
+    """
+    wh_to_bodega = {code: bodega for bodega, codes in bodega_codes.items() for code in codes}
+    by_bodega = defaultdict(lambda: defaultdict(lambda: {'f6': 0.0, 'f3': 0.0}))
+    tiendas = defaultdict(lambda: {'f6': 0.0, 'f3': 0.0})
+    unmapped = defaultdict(float)
+    for rows, key, months in ((rows6, 'f6', 6.0), (rows3, 'f3', 3.0)):
+        for pid, journal, qty in rows:
+            kind, target = classify_invoice_journal(journal)
+            share = qty / months
+            by_bodega['General'][pid][key] += share
+            if kind == 'bodega':
+                bodega = wh_to_bodega.get(target)
+                if bodega:
+                    by_bodega[bodega][pid][key] += share
+                else:
+                    unmapped[journal] += qty
+            elif kind == 'tienda':
+                tiendas[(pid, target)][key] += share
+            else:
+                unmapped[journal] += qty
+    return ({b: dict(v) for b, v in by_bodega.items()}, dict(tiendas), dict(unmapped))
+
+
+def sync_invoiced(execute, bodega_codes, issues):
+    """G4 — invoiced demand per product, on Raquel's filter (display only).
+
+    Never an engine input: the Sugerido stays ordered-driven (H1, Wilmer:
+    "hemos comprado mal y re mal, históricamente").
+    """
+    today = datetime.now(timezone.utc).date()
+    start3, start6, end = month_windows(today)
+    accounts = execute('account.account', 'search_read',
+                       [['account_type', 'in', INVOICED_ACCOUNT_TYPES]], fields=['id'])
+    account_ids = [a['id'] for a in accounts]
+    issues.add('info', 'sales',
+               f'invoiced windows: f3 {start3}->{end}, f6 {start6}->{end}; filtro Raquel = '
+               f'posted, {INVOICED_MOVE_TYPES} (notas de crédito en negativo), '
+               f'{len(account_ids)} cuentas de ingreso, líneas de producto')
+
+    def grouped(start):
+        out = []
+        for move_type, sign in (('out_invoice', 1), ('out_refund', -1)):
+            domain = [['parent_state', '=', 'posted'],
+                      ['move_type', '=', move_type],
+                      ['account_id', 'in', account_ids],
+                      ['display_type', '=', 'product'],
+                      ['date', '>=', str(start)], ['date', '<', str(end)]]
+            # move_type is a non-stored related field: filterable, NOT groupable
+            # (measured 2026-08-20: "Cannot convert field move_type to SQL"),
+            # hence one pass per type instead of grouping by it.
+            groups = execute('account.move.line', 'read_group', domain,
+                             ['quantity'], ['product_id', 'journal_id'],
+                             lazy=False, limit=40000)
+            for g in groups:
+                if g.get('product_id') and g.get('journal_id'):
+                    out.append((g['product_id'][0], g['journal_id'][1],
+                                (g.get('quantity') or 0.0) * sign))
+        return out
+
+    by_bodega, tiendas, unmapped = aggregate_invoiced(
+        grouped(start6), grouped(start3), bodega_codes)
+    if unmapped:
+        detail = ', '.join(f'{j} ({q:,.0f})' for j, q in sorted(unmapped.items(), key=lambda x: -abs(x[1])))
+        issues.add('warning', 'sales',
+                   f'{len(unmapped)} diarios de factura sin bodega ni tienda — contados solo en '
+                   f'General y listados aquí, nunca repartidos a ciegas: {detail[:400]}')
+    for bodega, per_product in sorted(by_bodega.items()):
+        logger.info('invoiced %s: %d products', bodega, len(per_product))
+    logger.info('invoiced tiendas: %d product×tienda rows', len(tiendas))
+    return by_bodega, tiendas
+
+
 def sync_velocity(execute, bodega_codes, wh_ids_by_code, issues):
     """p3/p6 monthly averages of ORDERED qty per product per bodega.
     General = all warehouses (no filter)."""
@@ -704,7 +835,7 @@ WINDOW_BY_BODEGA = {'General': 10}  # measured: General=10, locations=5
 DEFAULT_WINDOW = 5
 
 
-def assemble_inputs(product_map, stock, velocity, transit, seasonal, sync_id, issues):
+def assemble_inputs(product_map, stock, velocity, transit, seasonal, invoiced, sync_id, issues):
     """Join everything into reabastecimiento_inputs rows. pending_reserve is
     NEVER set (decision 2026-07-30 — manual only)."""
     as_of = datetime.now(timezone.utc).isoformat()
@@ -720,6 +851,8 @@ def assemble_inputs(product_map, stock, velocity, transit, seasonal, sync_id, is
                 continue
             st = stock[bodega].get(opid, {})
             vel = velocity.get(bodega, {}).get(opid, {})
+            # G4: invoiced lens, display only — never read by the engine.
+            fac = invoiced.get(bodega, {}).get(opid, {})
             rows.append({
                 'product_id': sb_pid,
                 'bodega': bodega,
@@ -730,6 +863,8 @@ def assemble_inputs(product_map, stock, velocity, transit, seasonal, sync_id, is
                 'reserved': round(st.get('reserved', 0.0), 4),
                 'patio': round(st.get('patio', 0.0), 4),
                 'transito': round(transit.get(opid, 0.0), 4),
+                'f6': round(fac.get('f6', 0.0), 4),
+                'f3': round(fac.get('f3', 0.0), 4),
                 'win': win,
                 'as_of': as_of,
                 'source_sync_id': sync_id,
@@ -738,6 +873,31 @@ def assemble_inputs(product_map, stock, velocity, transit, seasonal, sync_id, is
         issues.add('warning', 'product',
                    f'{len(unmapped)} Odoo products with stock/sales have no Supabase '
                    f'products row — rows skipped (ids sample: {sorted(unmapped)[:10]})')
+    return rows
+
+
+def assemble_tiendas(product_map, tiendas, sync_id, issues):
+    """Rows for `invoiced_tiendas` — the retail perimeter, kept separate from
+    the purchasing bodegas so nothing is merged behind anyone's back."""
+    as_of = datetime.now(timezone.utc).isoformat()
+    rows, unmapped = [], set()
+    for (opid, tienda), vals in tiendas.items():
+        sb_pid = product_map.get(str(opid))
+        if not sb_pid:
+            unmapped.add(opid)
+            continue
+        rows.append({
+            'product_id': sb_pid,
+            'tienda': tienda[:80],
+            'f6': round(vals.get('f6', 0.0), 4),
+            'f3': round(vals.get('f3', 0.0), 4),
+            'as_of': as_of,
+            'source_sync_id': sync_id,
+        })
+    if unmapped:
+        issues.add('warning', 'sales',
+                   f'{len(unmapped)} productos facturados en tiendas sin fila en products — '
+                   f'filas omitidas (ids: {sorted(unmapped)[:10]})')
     return rows
 
 
@@ -771,9 +931,11 @@ def main():
         velocity = sync_velocity(execute, bodega_codes, wh_ids_by_code, issues)
         seasonal = sync_seasonal(execute, sku_to_opid, issues)
         transit = sync_transit(execute, issues)
+        invoiced, tiendas = sync_invoiced(execute, bodega_codes, issues)
 
         rows = assemble_inputs(product_map, stock, velocity, transit, seasonal,
-                               sync_id, issues)
+                               invoiced, sync_id, issues)
+        tienda_rows = assemble_tiendas(product_map, tiendas, sync_id, issues)
 
         # DATA HORIZON — the newest business activity in Odoo (NOT the sync
         # time). Surfaced so the UI never claims freshness the data lacks
@@ -790,6 +952,8 @@ def main():
             'odoo_products': n_odoo_products, 'products_inserted': n_inserted,
             'input_rows': len(rows), 'bodegas': sorted(stock.keys()),
             'transit_products': len(transit), 'issues': len(issues.rows),
+            'invoiced_rows': sum(1 for r in rows if r['f6'] or r['f3']),
+            'tienda_rows': len(tienda_rows),
             'data_horizon': horizon or None,
         }
         logger.info('assembled: %s', counts)
@@ -801,6 +965,8 @@ def main():
 
         sb_insert_batched('reabastecimiento_inputs', rows,
                           on_conflict='product_id,bodega')
+        sb_insert_batched('invoiced_tiendas', tienda_rows,
+                          on_conflict='product_id,tienda')
         # Purge rows this run did NOT touch: products that vanished from Odoo
         # (or lost all data) would otherwise serve a stale snapshot forever —
         # measured 2026-08-06: the mis-matched bolsa 11011048 kept showing the
@@ -814,6 +980,15 @@ def main():
             if stale:
                 issues.add('info', 'stock',
                            f'{len(stale)} filas de inputs purgadas (productos sin datos en esta '
+                           f'corrida — instantáneas viejas no deben sobrevivir)')
+        if run_start:
+            stale_t = sb_request(
+                'DELETE',
+                f'invoiced_tiendas?as_of=lt.{urllib.parse.quote(run_start)}',
+                prefer='return=representation') or []
+            if stale_t:
+                issues.add('info', 'sales',
+                           f'{len(stale_t)} filas de tiendas purgadas (sin facturación en esta '
                            f'corrida — instantáneas viejas no deben sobrevivir)')
         for issue in issues.rows:
             issue['sync_id'] = sync_id

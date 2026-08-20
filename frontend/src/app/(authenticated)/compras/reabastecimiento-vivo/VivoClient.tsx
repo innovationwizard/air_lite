@@ -64,6 +64,17 @@ const COL_TIP = {
     + '¿? significa sin dato, no cero. Resta de la exist. neta. '
     + 'El botón ✕ quita la captura y vuelve a ¿? (sin dato).',
   adic: 'Adicional comercial del mes vigente (forecast comercial).',
+  ord: 'ORDENADO — la base de Wilmer y la ÚNICA que alimenta el Sugerido. '
+    + 'Promedio mensual de cantidad ordenada (sale.order.line, estados venta y hecho; '
+    + 'excluye cotización, cotización enviada y cancelado), por bodega de la orden.',
+  fact: 'FACTURADO — la base de Raquel/contabilidad, SOLO informativa: no toca el Sugerido. '
+    + 'Filtro de ella (2026-07-28): facturas publicadas, ni borrador ni canceladas, '
+    + 'cuentas de INGRESO (nunca bancos, circular ni gastos); las notas de crédito restan. '
+    + 'Por bodega = diario del CD correspondiente. En General = todos los diarios, '
+    + 'igual que Ordenado General es todas las bodegas.',
+  gap: 'Facturado 3m − Ordenado 3m, en % de lo ordenado. '
+    + 'Un delta grande no es un error: son perímetros distintos. '
+    + 'Lo facturado en tiendas se muestra aparte, abajo, y NUNCA se suma a una bodega.',
   sug:
     'Sugerido = max(0, forecast − max(0, exist. neta + tránsito − proyección)) + adicional. '
     + 'Forecast: promedio(6m, 3m, estacional) × 1.1 en General; promedio(6m, 3m) por bodega. '
@@ -77,6 +88,8 @@ interface ApiRow {
   pending: number | null;
   trans: number; transOverridden: boolean;
   adic: number; p6: number; p3: number; h: number; win: 10 | 5;
+  /** G4 invoiced lens — display only, never fed to the engine. null = sync has not computed it. */
+  f6: number | null; f3: number | null;
   doh: number; sug: number;
   flags: { pendingUnknown: boolean; seasonalLowConfidence: boolean };
 }
@@ -87,8 +100,13 @@ interface ApiMeta {
     counts?: { data_horizon?: string | null };
   } | null;
 }
+interface Tiendas {
+  porTienda: { tienda: string; f6: number; f3: number }[];
+  total: { f6: number; f3: number };
+  productos: number;
+}
 interface ApiPayload {
-  bodega: string; bodegas: string[]; rows: ApiRow[]; meta: ApiMeta;
+  bodega: string; bodegas: string[]; rows: ApiRow[]; tiendas?: Tiendas; meta: ApiMeta;
 }
 
 function engineRowOf(r: ApiRow, exist: number, trans: number): ProductRow {
@@ -360,6 +378,11 @@ export function VivoClient() {
                     <Th tip={COL_TIP.trans}><span className="inline-flex items-center gap-1">Tránsito <Pencil size={11} /></span></Th>
                     <Th tip={COL_TIP.pend}><span className="inline-flex items-center gap-1">Pend. reserva <Pencil size={11} /></span></Th>
                     <Th tip={COL_TIP.adic}>Adic.</Th>
+                    <Th tip={COL_TIP.ord}>Ord. 6m</Th>
+                    <Th tip={COL_TIP.ord}>Ord. 3m</Th>
+                    <Th tip={COL_TIP.fact}>Fact. 6m</Th>
+                    <Th tip={COL_TIP.fact}>Fact. 3m</Th>
+                    <Th tip={COL_TIP.gap}>Δ</Th>
                     <Th tip={COL_TIP.sug}>Sugerido</Th>
                   </tr>
                 </thead>
@@ -407,6 +430,17 @@ export function VivoClient() {
                           />
                         </td>
                         <td className="px-3 py-2 border-b border-gray-100 text-right text-gray-500">{fmt(r.adic)}</td>
+                        <td className="px-3 py-2 border-b border-gray-100 text-right text-gray-700">{fmt(r.p6)}</td>
+                        <td className="px-3 py-2 border-b border-gray-100 text-right text-gray-700">{fmt(r.p3)}</td>
+                        <td className="px-3 py-2 border-b border-gray-100 text-right text-indigo-700">
+                          {r.f6 === null ? <span className="text-gray-300" title="Sin calcular todavía">¿?</span> : fmt(r.f6)}
+                        </td>
+                        <td className="px-3 py-2 border-b border-gray-100 text-right text-indigo-700">
+                          {r.f3 === null ? <span className="text-gray-300" title="Sin calcular todavía">¿?</span> : fmt(r.f3)}
+                        </td>
+                        <td className="px-3 py-2 border-b border-gray-100 text-right">
+                          <GapCell ordered={r.p3} invoiced={r.f3} />
+                        </td>
                         <td className={`px-3 py-2 border-b border-gray-100 text-right font-bold ${r.sug > 0 ? 'text-teal-700' : 'text-gray-400'}`}
                             title={r.flags.seasonalLowConfidence ? 'Estacional sin datos — confianza baja' : undefined}>
                           {fmt(r.sug)}{r.flags.seasonalLowConfidence ? <span className="text-amber-500">*</span> : null}
@@ -423,6 +457,7 @@ export function VivoClient() {
             {list.length > 400 ? ' (primeros 400 — refiná con filtros)' : ''} · bodega <b>{bodega}</b>
             {' '}· <span className="text-amber-600">*</span> = estacional con confianza baja
           </div>
+          {payload?.tiendas ? <TiendasPanel tiendas={payload.tiendas} /> : null}
         </div>
 
         <div className="space-y-4">
@@ -471,6 +506,81 @@ export function VivoClient() {
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+/**
+ * G4 — the delta between the two lenses, stated plainly.
+ *
+ * A big delta is NOT an error and must never read like one: Wilmer's ordered
+ * basis and Raquel's invoiced basis cover different perimeters. Measured
+ * 2026-08-20 for July: on the distribution centres the two agree within 4.1%;
+ * company-wide they differ by 113%, and that difference is retail store
+ * billing, which appears in its own panel below the table.
+ */
+function GapCell({ ordered, invoiced }: { ordered: number; invoiced: number | null }) {
+  if (invoiced === null) return <span className="text-gray-300">—</span>;
+  if (!ordered) {
+    return invoiced
+      ? <span className="text-indigo-600 text-xs" title="Facturado sin nada ordenado en la ventana">solo fact.</span>
+      : <span className="text-gray-300">—</span>;
+  }
+  const pct = ((invoiced - ordered) / ordered) * 100;
+  const tone = Math.abs(pct) < 10 ? 'text-gray-400'
+    : Math.abs(pct) < 30 ? 'text-amber-600' : 'text-indigo-600';
+  return (
+    <span className={`text-xs ${tone}`} title={`Facturado 3m ${invoiced} vs ordenado 3m ${ordered}`}>
+      {pct > 0 ? '+' : ''}{pct.toFixed(0)}%
+    </span>
+  );
+}
+
+/**
+ * G4 — the retail perimeter, shown apart on purpose.
+ *
+ * Wilmer 2026-08-06 said tienda demand is a traslado that "al final es un
+ * número para San José", but tiendas also place their own sale orders, so
+ * folding these invoices into a bodega would double-count. Decision
+ * 2026-08-20: show the split and let Wilmer and Raquel settle it with the
+ * numbers in front of them.
+ */
+function TiendasPanel({ tiendas }: { tiendas: Tiendas }) {
+  if (!tiendas.porTienda.length) return null;
+  return (
+    <div className="mt-4 rounded-lg border border-indigo-200 bg-indigo-50/40 p-4">
+      <h3 className="text-sm font-semibold text-indigo-900">
+        Facturado en tiendas — perímetro aparte, fuera del abasto
+      </h3>
+      <p className="mt-1 text-[11px] text-indigo-900/70 max-w-3xl">
+        Estas ventas están en el reporte de Raquel y <b>no</b> en la base de Wilmer: las tiendas
+        facturan al público sin orden de venta. No se suman a ninguna bodega ni al Sugerido —
+        se muestran para que la diferencia entre los dos reportes tenga nombre en vez de discutirse.
+        {' '}<b>{tiendas.productos}</b> productos.
+      </p>
+      <table className="mt-3 text-xs tabular-nums">
+        <thead>
+          <tr className="text-[10px] uppercase tracking-wide text-indigo-900/60">
+            <th className="text-left font-semibold px-3 py-1.5">Tienda</th>
+            <th className="text-right font-semibold px-3 py-1.5">Fact. 6m</th>
+            <th className="text-right font-semibold px-3 py-1.5">Fact. 3m</th>
+          </tr>
+        </thead>
+        <tbody>
+          {tiendas.porTienda.map((t) => (
+            <tr key={t.tienda} className="border-t border-indigo-100">
+              <td className="px-3 py-1.5 text-left text-indigo-900">{t.tienda}</td>
+              <td className="px-3 py-1.5 text-right text-indigo-800">{fmt(t.f6)}</td>
+              <td className="px-3 py-1.5 text-right text-indigo-800">{fmt(t.f3)}</td>
+            </tr>
+          ))}
+          <tr className="border-t-2 border-indigo-200 font-semibold">
+            <td className="px-3 py-1.5 text-left text-indigo-900">Total tiendas</td>
+            <td className="px-3 py-1.5 text-right text-indigo-900">{fmt(tiendas.total.f6)}</td>
+            <td className="px-3 py-1.5 text-right text-indigo-900">{fmt(tiendas.total.f3)}</td>
+          </tr>
+        </tbody>
+      </table>
     </div>
   );
 }

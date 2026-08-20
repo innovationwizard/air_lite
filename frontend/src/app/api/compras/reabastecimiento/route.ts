@@ -36,12 +36,16 @@ interface InputRow {
   product_id: number;
   bodega: string;
   p6: number; p3: number; h: number;
+  /** G4 invoiced lens (Raquel's filter). NULL = not yet computed by the sync. Display only. */
+  f6: number | null; f3: number | null;
   existencias: number; reserved: number;
   pending_reserve: number | null;
   patio: number; transito: number;
   win: number; as_of: string;
 }
 interface ProductRef { id: number; sku: string | null; name: string }
+/** G4 — retail perimeter, deliberately never merged into a purchasing bodega. */
+interface TiendaRow { product_id: number; tienda: string; f6: number; f3: number }
 interface SupplierLink { product_id: number; supplier_id: number }
 interface SupplierRef { id: number; name: string }
 /** qty === null = a CLEAR entry: the manual capture was removed (20260813000001). */
@@ -70,7 +74,7 @@ export async function GET(request: Request) {
 
     const monthStart = `${new Date().toISOString().slice(0, 7)}-01`;
 
-    const [inputs, products, links, suppliers, transitoOv, pendingOv, comercial, lastSync] =
+    const [inputs, products, links, suppliers, transitoOv, pendingOv, comercial, tiendaRows, lastSync] =
       await Promise.all([
         fetchAll<InputRow>((a, b) =>
           service.from('reabastecimiento_inputs').select('*').eq('bodega', bodega).range(a, b)),
@@ -91,6 +95,8 @@ export async function GET(request: Request) {
             .select('product_id, bodega, quantity, motivo, created_at')
             .eq('month', monthStart)
             .order('created_at', { ascending: false }).range(a, b)),
+        fetchAll<TiendaRow>((a, b) =>
+          service.from('invoiced_tiendas').select('product_id, tienda, f6, f3').range(a, b)),
         service.from('sync_runs').select('id, status, started_at, finished_at, counts')
           .eq('kind', 'reabastecimiento').order('started_at', { ascending: false })
           .limit(1).maybeSingle(),
@@ -167,6 +173,10 @@ export async function GET(request: Request) {
         adic: round1(adic),
         p6: round1(r.p6),
         p3: round1(r.p3),
+        // G4: the invoiced lens travels beside the ordered one and never
+        // touches engineRow — the Sugerido stays ordered-driven (H1).
+        f6: r.f6 === null ? null : round1(r.f6),
+        f3: r.f3 === null ? null : round1(r.f3),
         h: round1(r.h),
         win: engineRow.win,
         doh: round1(doh(engineRow)),
@@ -178,10 +188,34 @@ export async function GET(request: Request) {
       };
     });
 
+    // G4 — the retail perimeter, aggregated per journal and kept apart from
+    // every purchasing bodega. In July 2026 this block was 501,014 units, ~0%
+    // of them traceable to a sale order: it is the whole reason Wilmer's and
+    // Raquel's totals differ, so it is shown, labelled, and never folded in.
+    const porTiendaMap = new Map<string, { f6: number; f3: number }>();
+    for (const t of tiendaRows) {
+      const acc = porTiendaMap.get(t.tienda) ?? { f6: 0, f3: 0 };
+      acc.f6 += t.f6;
+      acc.f3 += t.f3;
+      porTiendaMap.set(t.tienda, acc);
+    }
+    const porTienda = [...porTiendaMap.entries()]
+      .map(([tienda, v]) => ({ tienda, f6: round1(v.f6), f3: round1(v.f3) }))
+      .sort((a, b) => b.f6 - a.f6);
+    const tiendas = {
+      porTienda,
+      total: {
+        f6: round1(porTienda.reduce((s, t) => s + t.f6, 0)),
+        f3: round1(porTienda.reduce((s, t) => s + t.f3, 0)),
+      },
+      productos: porTiendaMap.size ? new Set(tiendaRows.map((t) => t.product_id)).size : 0,
+    };
+
     return NextResponse.json({
       bodega,
       bodegas,
       rows,
+      tiendas,
       meta: {
         count: rows.length,
         asOf: maxAsOf || null,
