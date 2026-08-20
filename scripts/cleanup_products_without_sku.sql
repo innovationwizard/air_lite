@@ -55,9 +55,24 @@ SELECT
   (SELECT count(*) FROM no_sku) - (SELECT count(*) FROM referenced)   AS to_delete,
   (SELECT count(*) FROM product_suppliers ps
      WHERE ps.product_id IN (SELECT id FROM no_sku))                  AS supplier_links_to_delete;
--- Baseline 2026-08-20 20:30 UTC: products 13,956 · with_sku 1,668 · without_sku
--- 12,288 · referenced ~48 · to_delete ~12,240 · links ~746. (without_sku keeps
--- growing by 50/hour until the fix is deployed.)
+-- MEASURED 2026-08-20 20:35 UTC (preview run via PostgREST, per-table reference
+-- check): products 13,956 · with_sku 1,668 · without_sku 12,288 ·
+-- referenced_kept 2 · to_delete 12,286 · supplier_links 746.
+--   The only two referenced rows are id 13910 ('Descuento ') and 13924
+--   ('88001005'), held by reabastecimiento_inputs from the 20:00 run. Every
+--   other code-less row — including the 48 from the March load — is referenced
+--   by nothing: inventory_daily, stock_moves, sale_order_lines, demand_daily,
+--   revenue_daily and purchase_order_lines all report zero references to them.
+--   Once the fixed sync runs, the stale-inputs purge releases those last two
+--   and a second pass clears them.
+-- without_sku keeps growing by 50/hour until the fix is deployed.
+--
+-- RUN 2026-08-20 ~20:25 UTC by Jorge in the Supabase SQL editor. Result verified
+-- via REST: products 13,956 -> 1,670 · without_sku 12,288 -> 2 · product_suppliers
+-- 2,307 -> 1,561 (746 links) · rows with a SKU unchanged at 1,668. The two
+-- survivors are ids 13910 ('Descuento ') and 13924 ('88001005'), still held by
+-- reabastecimiento_inputs. Re-run STEP 1 once a fixed sync has purged those
+-- input rows and they will go too. The script is idempotent — safe to re-run.
 
 
 -- ── STEP 1 · CLEANUP (transactional — all or nothing) ───────────────────────
@@ -100,6 +115,11 @@ SELECT count(*) AS products_after,
 FROM products;
 
 COMMIT;   -- ← or ROLLBACK; if anything looks off
+
+-- Final state, after the commit.
+SELECT count(*) AS products,
+       count(*) FILTER (WHERE sku IS NULL) AS without_sku
+FROM products;
 
 
 -- ── STEP 2 · VERIFY (after the next hourly run) ─────────────────────────────
