@@ -269,6 +269,51 @@ def general_exist_location_ids(by_name):
             if n.endswith('/Existencias') and not n.startswith(excluded)]
 
 
+def product_label(p):
+    """Human-readable identity for an Odoo product record (name, else odoo id)."""
+    return (p.get('name') or '').strip() or f"odoo:{p['id']}"
+
+
+def plan_catalog_rows(odoo_products, by_sku, stored_oid_by_row):
+    """Decide, for every Odoo product, whether it maps to an existing Supabase
+    row, needs its integration key repaired, or is genuinely new. Pure — no I/O.
+
+    Returns (by_odoo_id, oid_repairs, new_rows, no_sku).
+
+    Products with an empty ``default_code`` go to ``no_sku`` and are NEVER
+    inserted: SKU is the only stable key (odoo_id drifts on every build,
+    2026-08-06), so a code-less row cannot be matched on the next run and would
+    be inserted again — measured 2026-08-20 in production, 50 such products
+    (servicios, descuentos, pruebas) had grown ``products`` to 13,806 rows at
+    ~1,200/day, and two of them ('Descuento', '88001005') reached Wilmer's
+    table with sales velocity. The caller reports them as an issue.
+    """
+    by_odoo_id = {}   # str(new-build odoo id) -> supabase product id
+    oid_repairs = []  # (supabase row id, current odoo id) — stale integration keys to heal
+    new_rows, no_sku = [], []
+    for p in odoo_products:
+        oid = str(p['id'])
+        sku = p.get('default_code') or None
+        if not sku:
+            no_sku.append(p)
+        elif sku in by_sku:
+            row_id = by_sku[sku]
+            by_odoo_id[oid] = row_id
+            if stored_oid_by_row.get(row_id) != oid:
+                oid_repairs.append((row_id, oid))
+        else:
+            new_rows.append({
+                'odoo_id': oid,
+                'sku': sku,
+                'name': product_label(p)[:255],
+                'category': (p['categ_id'][1][:100] if p.get('categ_id') else None),
+                'cost': p.get('standard_price') or None,
+                'list_price': p.get('list_price') or None,
+                'stock_uom': (p['uom_id'][1][:50] if p.get('uom_id') else None),
+            })
+    return by_odoo_id, oid_repairs, new_rows, no_sku
+
+
 def sync_catalog(execute, issues, dry_run):
     """Insert-missing products/suppliers/product_suppliers. Never mutates existing
     rows (the running app reads them); mismatches become issues.
@@ -301,27 +346,16 @@ def sync_catalog(execute, issues, dry_run):
                    f'{dup_skus} duplicate SKUs already present in Supabase products '
                    f'(first row wins for matching) — review separately')
 
-    by_odoo_id = {}   # str(new-build odoo id) -> supabase product id
-    oid_repairs = []  # (supabase row id, current odoo id) — stale integration keys to heal
-    new_rows = []
-    for p in odoo_products:
-        oid = str(p['id'])
-        sku = p.get('default_code') or None
-        if sku and sku in by_sku:
-            row_id = by_sku[sku]
-            by_odoo_id[oid] = row_id
-            if stored_oid_by_row.get(row_id) != oid:
-                oid_repairs.append((row_id, oid))
-        else:
-            new_rows.append({
-                'odoo_id': oid,
-                'sku': sku,
-                'name': (p.get('name') or '')[:255] or f'odoo:{oid}',
-                'category': (p['categ_id'][1][:100] if p.get('categ_id') else None),
-                'cost': p.get('standard_price') or None,
-                'list_price': p.get('list_price') or None,
-                'stock_uom': (p['uom_id'][1][:50] if p.get('uom_id') else None),
-            })
+    by_odoo_id, oid_repairs, new_rows, no_sku = plan_catalog_rows(
+        odoo_products, by_sku, stored_oid_by_row)
+    if no_sku:
+        names = ', '.join(sorted(product_label(p)[:40] for p in no_sku))
+        issues.add('warning', 'product',
+                   f'{len(no_sku)} Odoo products without default_code — NOT imported. SKU is '
+                   f'the only stable key, so a code-less row can never be re-matched: until '
+                   f'2026-08-20 each run inserted them again (products grew to 13.8K rows for '
+                   f'1.6K real products). Give one a code in Odoo if it must be planned: '
+                   f'{names[:1500]}')
     if oid_repairs:
         issues.add('info', 'product',
                    f'{len(oid_repairs)} stored odoo_ids stale vs this build — repaired to the '
