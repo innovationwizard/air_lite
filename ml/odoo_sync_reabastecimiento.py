@@ -555,6 +555,55 @@ def month_windows(today):
     return minus_months(first_of_current, 3), minus_months(first_of_current, 6), first_of_current
 
 
+# ── Unit-of-measure conversion (root cause of Wilmer's 2026-08-20 report) ────
+# Sale and invoice lines are expressed in the LINE's UoM, not the product's
+# stock UoM. Reading `product_uom_qty` / `quantity` raw mixes bundles with
+# loose units. Measured: DOMO GP-10X15 (77202156) is stocked in FARDO50 (a
+# bundle of 50); the CDs order it in FARDO50 but the tiendas sell it in
+# "Unidad FD", so 960 individual domos were counted as 960 fardos — General p3
+# read 479/month against a true 165, and the page suggested buying 257 fardos
+# when the honest answer was 0. 441 products were inflated this way, some 100×.
+# Odoo UoM: qty_reference = qty ÷ uom.factor; qty_in_stock_uom = qty_reference
+# × stock_uom.factor. Purchase lines were measured clean (0/6000 mismatched),
+# so tránsito is untouched by this.
+def fold_uom_groups(groups, factors, stock_uom_by_product, qty_key, uom_key, extra_key=None):
+    """Sum read_group rows into the product's stock UoM.
+
+    `groups` are Odoo read_group dicts carrying product_id, a quantity and the
+    line's UoM. Returns (totals, unconverted) where totals is keyed by
+    product id — or by (product id, extra) when `extra_key` is given — and
+    `unconverted` counts rows whose UoM could not be resolved. Those rows are
+    still summed at face value and reported: dropping demand silently is worse
+    than an over-count we can see.
+    """
+    totals, unconverted = defaultdict(float), 0
+    for g in groups:
+        if not g.get('product_id'):
+            continue
+        pid = g['product_id'][0]
+        qty = g.get(qty_key) or 0.0
+        line_uom = g.get(uom_key)
+        stock_uom_id = stock_uom_by_product.get(pid)
+        line_factor = factors.get(line_uom[0]) if line_uom else None
+        stock_factor = factors.get(stock_uom_id)
+        if line_factor and stock_factor:
+            qty = qty / line_factor * stock_factor
+        elif line_uom or stock_uom_id:
+            unconverted += 1
+        key = pid if extra_key is None else (pid, g[extra_key][1] if g.get(extra_key) else None)
+        totals[key] += qty
+    return dict(totals), unconverted
+
+
+def load_uom_context(execute):
+    """(uom id -> factor, product id -> stock uom id). Fetched once per run."""
+    factors = {u['id']: u['factor'] for u in
+               execute('uom.uom', 'search_read', [], fields=['id', 'factor'])}
+    stock_uom = {p['id']: (p['uom_id'][0] if p.get('uom_id') else None) for p in
+                 execute('product.product', 'search_read', [], fields=['id', 'uom_id'])}
+    return factors, stock_uom
+
+
 def _strip_accents(text):
     """Fold accents so 'Petén' and 'Peten' are the same journal."""
     return ''.join(c for c in unicodedata.normalize('NFD', text or '')
@@ -613,7 +662,7 @@ def aggregate_invoiced(rows6, rows3, bodega_codes):
     return ({b: dict(v) for b, v in by_bodega.items()}, dict(tiendas), dict(unmapped))
 
 
-def sync_invoiced(execute, bodega_codes, issues):
+def sync_invoiced(execute, bodega_codes, issues, uom_ctx):
     """G4 — invoiced demand per product, on Raquel's filter (display only).
 
     Never an engine input: the Sugerido stays ordered-driven (H1, Wilmer:
@@ -629,7 +678,11 @@ def sync_invoiced(execute, bodega_codes, issues):
                f'posted, {INVOICED_MOVE_TYPES} (notas de crédito en negativo), '
                f'{len(account_ids)} cuentas de ingreso, líneas de producto')
 
+    factors, stock_uom = uom_ctx
+    unconverted_total = 0
+
     def grouped(start):
+        nonlocal unconverted_total
         out = []
         for move_type, sign in (('out_invoice', 1), ('out_refund', -1)):
             domain = [['parent_state', '=', 'posted'],
@@ -641,12 +694,18 @@ def sync_invoiced(execute, bodega_codes, issues):
             # (measured 2026-08-20: "Cannot convert field move_type to SQL"),
             # hence one pass per type instead of grouping by it.
             groups = execute('account.move.line', 'read_group', domain,
-                             ['quantity'], ['product_id', 'journal_id'],
+                             ['quantity'], ['product_id', 'journal_id', 'product_uom_id'],
                              lazy=False, limit=40000)
-            for g in groups:
-                if g.get('product_id') and g.get('journal_id'):
-                    out.append((g['product_id'][0], g['journal_id'][1],
-                                (g.get('quantity') or 0.0) * sign))
+            # Invoice lines carry the same UoM trap as sale lines — measured
+            # 2026-08-20: ~49% of them are billed in a unit other than the
+            # product's stock UoM.
+            totals, unconverted = fold_uom_groups(
+                groups, factors, stock_uom, 'quantity', 'product_uom_id',
+                extra_key='journal_id')
+            unconverted_total += unconverted
+            for (pid, journal), qty in totals.items():
+                if journal:
+                    out.append((pid, journal, qty * sign))
         return out
 
     by_bodega, tiendas, unmapped = aggregate_invoiced(
@@ -658,24 +717,41 @@ def sync_invoiced(execute, bodega_codes, issues):
                    f'General y listados aquí, nunca repartidos a ciegas: {detail[:400]}')
     for bodega, per_product in sorted(by_bodega.items()):
         logger.info('invoiced %s: %d products', bodega, len(per_product))
+    if unconverted_total:
+        issues.add('warning', 'sales',
+                   f'{unconverted_total} grupos de factura sin unidad resoluble — sumados tal cual '
+                   f'y reportados')
     logger.info('invoiced tiendas: %d product×tienda rows', len(tiendas))
     return by_bodega, tiendas
 
 
-def sync_velocity(execute, bodega_codes, wh_ids_by_code, issues):
-    """p3/p6 monthly averages of ORDERED qty per product per bodega.
-    General = all warehouses (no filter)."""
+def sync_velocity(execute, bodega_codes, wh_ids_by_code, issues, uom_ctx):
+    """p3/p6 monthly averages of ORDERED qty per product per bodega, in the
+    product's STOCK UoM. General = all warehouses (no filter)."""
     today = datetime.now(timezone.utc).date()
     start3, start6, end = month_windows(today)
+    factors, stock_uom = uom_ctx
     issues.add('info', 'sales',
                f'velocity windows: p3 {start3}->{end}, p6 {start6}->{end}; '
-               f'states={ORDERED_STATES} (assumption, OQ-D)')
+               f'states={ORDERED_STATES} (assumption, OQ-D); cantidades convertidas '
+               f'a la unidad de stock del producto (las tiendas venden por unidad, '
+               f'los CD por fardo/caja — bug medido 2026-08-20)')
+    unconverted_total = 0
 
     def grouped(domain):
+        nonlocal unconverted_total
         groups = execute('sale.order.line', 'read_group', domain,
-                         ['product_uom_qty'], ['product_id'], lazy=False)
-        return {g['product_id'][0]: g.get('product_uom_qty') or 0.0
-                for g in groups if g.get('product_id')}
+                         ['product_uom_qty'], ['product_id', 'product_uom'],
+                         lazy=False, limit=40000)
+        totals, unconverted = fold_uom_groups(
+            groups, factors, stock_uom, 'product_uom_qty', 'product_uom')
+        unconverted_total += unconverted
+        return totals
+
+    # Month-to-date: "compara la venta del mes vs el promedio" (Wilmer 2026-08-20).
+    # `end` is the first day of the CURRENT month, so this window is exactly the
+    # part of the month the averages cannot see yet.
+    mtd_dias = today.day
 
     result = {}
     targets = dict(bodega_codes)
@@ -689,9 +765,17 @@ def sync_velocity(execute, bodega_codes, wh_ids_by_code, issues):
                              ['order_id.date_order', '<', str(end)]])
         q3 = grouped(base + [['order_id.date_order', '>=', str(start3)],
                              ['order_id.date_order', '<', str(end)]])
-        result[bodega] = {pid: {'p6': q6.get(pid, 0.0) / 6.0, 'p3': q3.get(pid, 0.0) / 3.0}
-                          for pid in set(q6) | set(q3)}
+        qm = grouped(base + [['order_id.date_order', '>=', str(end)]])
+        result[bodega] = {pid: {'p6': q6.get(pid, 0.0) / 6.0,
+                                'p3': q3.get(pid, 0.0) / 3.0,
+                                'mtd': qm.get(pid, 0.0),
+                                'mtd_dias': mtd_dias}
+                          for pid in set(q6) | set(q3) | set(qm)}
         logger.info('velocity %s: %d products', bodega, len(result[bodega]))
+    if unconverted_total:
+        issues.add('warning', 'sales',
+                   f'{unconverted_total} grupos de venta sin unidad resoluble — sumados tal cual '
+                   f'y reportados (nunca descartados); revisar uom del producto o de la línea')
     return result
 
 
@@ -865,6 +949,8 @@ def assemble_inputs(product_map, stock, velocity, transit, seasonal, invoiced, s
                 'transito': round(transit.get(opid, 0.0), 4),
                 'f6': round(fac.get('f6', 0.0), 4),
                 'f3': round(fac.get('f3', 0.0), 4),
+                'mtd': round(vel.get('mtd', 0.0), 4),
+                'mtd_dias': vel.get('mtd_dias'),
                 'win': win,
                 'as_of': as_of,
                 'source_sync_id': sync_id,
@@ -927,11 +1013,12 @@ def main():
         wh_ids_by_code = {w['code']: w['id'] for w in whs}
 
         product_map, sku_to_opid, n_odoo_products, n_inserted = sync_catalog(execute, issues, dry_run)
+        uom_ctx = load_uom_context(execute)
         stock = sync_stock(execute, by_name, bodega_codes, issues)
-        velocity = sync_velocity(execute, bodega_codes, wh_ids_by_code, issues)
+        velocity = sync_velocity(execute, bodega_codes, wh_ids_by_code, issues, uom_ctx)
         seasonal = sync_seasonal(execute, sku_to_opid, issues)
         transit = sync_transit(execute, issues)
-        invoiced, tiendas = sync_invoiced(execute, bodega_codes, issues)
+        invoiced, tiendas = sync_invoiced(execute, bodega_codes, issues, uom_ctx)
 
         rows = assemble_inputs(product_map, stock, velocity, transit, seasonal,
                                invoiced, sync_id, issues)

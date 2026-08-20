@@ -72,6 +72,10 @@ const COL_TIP = {
     + 'cuentas de INGRESO (nunca bancos, circular ni gastos); las notas de crédito restan. '
     + 'Por bodega = diario del CD correspondiente. En General = todos los diarios, '
     + 'igual que Ordenado General es todas las bodegas.',
+  mes: 'Venta ORDENADA del mes en curso (parcial) y el ritmo que implica para 30 días. '
+    + 'Es la comparación que pidió Wilmer el 2026-08-20: la venta del mes contra el promedio. '
+    + 'Los promedios de 6 y 3 meses van por detrás cuando la demanda se mueve; esta columna '
+    + 'muestra lo que ellos todavía no ven. No alimenta el Sugerido.',
   gap: 'Facturado 3m − Ordenado 3m, en % de lo ordenado. '
     + 'Un delta grande no es un error: son perímetros distintos. '
     + 'Lo facturado en tiendas se muestra aparte, abajo, y NUNCA se suma a una bodega.',
@@ -90,8 +94,11 @@ interface ApiRow {
   adic: number; p6: number; p3: number; h: number; win: 10 | 5;
   /** G4 invoiced lens — display only, never fed to the engine. null = sync has not computed it. */
   f6: number | null; f3: number | null;
+  /** Venta del mes en curso (parcial), días transcurridos y ritmo a 30 días. Display only. */
+  mtd: number | null; mtdDias: number | null; mtdRitmo: number | null;
+  seasonalMotivo: string | null;
   doh: number; sug: number;
-  flags: { pendingUnknown: boolean; seasonalLowConfidence: boolean };
+  flags: { pendingUnknown: boolean; seasonalLowConfidence: boolean; seasonalExcluded: boolean };
 }
 interface ApiMeta {
   count: number; asOf: string | null; month: string;
@@ -380,6 +387,7 @@ export function VivoClient() {
                     <Th tip={COL_TIP.adic}>Adic.</Th>
                     <Th tip={COL_TIP.ord}>Ord. 6m</Th>
                     <Th tip={COL_TIP.ord}>Ord. 3m</Th>
+                    <Th tip={COL_TIP.mes}>Mes en curso</Th>
                     <Th tip={COL_TIP.fact}>Fact. 6m</Th>
                     <Th tip={COL_TIP.fact}>Fact. 3m</Th>
                     <Th tip={COL_TIP.gap}>Δ</Th>
@@ -432,6 +440,9 @@ export function VivoClient() {
                         <td className="px-3 py-2 border-b border-gray-100 text-right text-gray-500">{fmt(r.adic)}</td>
                         <td className="px-3 py-2 border-b border-gray-100 text-right text-gray-700">{fmt(r.p6)}</td>
                         <td className="px-3 py-2 border-b border-gray-100 text-right text-gray-700">{fmt(r.p3)}</td>
+                        <td className="px-3 py-2 border-b border-gray-100 text-right">
+                          <MesEnCurso mtd={r.mtd} dias={r.mtdDias} ritmo={r.mtdRitmo} p3={r.p3} />
+                        </td>
                         <td className="px-3 py-2 border-b border-gray-100 text-right text-indigo-700">
                           {r.f6 === null ? <span className="text-gray-300" title="Sin calcular todavía">¿?</span> : fmt(r.f6)}
                         </td>
@@ -442,8 +453,12 @@ export function VivoClient() {
                           <GapCell ordered={r.p3} invoiced={r.f3} />
                         </td>
                         <td className={`px-3 py-2 border-b border-gray-100 text-right font-bold ${r.sug > 0 ? 'text-teal-700' : 'text-gray-400'}`}
-                            title={r.flags.seasonalLowConfidence ? 'Estacional sin datos — confianza baja' : undefined}>
-                          {fmt(r.sug)}{r.flags.seasonalLowConfidence ? <span className="text-amber-500">*</span> : null}
+                            title={r.flags.seasonalExcluded
+                              ? `Sin término estacional — ${r.seasonalMotivo ?? ''} Forecast = promedio(6m, 3m) × 1.1.`
+                              : r.flags.seasonalLowConfidence ? 'Estacional sin datos — confianza baja' : undefined}>
+                          {fmt(r.sug)}
+                          {r.flags.seasonalLowConfidence ? <span className="text-amber-500">*</span> : null}
+                          {r.flags.seasonalExcluded ? <span className="text-indigo-500">†</span> : null}
                         </td>
                       </tr>
                     );
@@ -456,6 +471,9 @@ export function VivoClient() {
             Mostrando <b>{Math.min(400, list.length)}</b> de <b>{list.length}</b> productos
             {list.length > 400 ? ' (primeros 400 — refiná con filtros)' : ''} · bodega <b>{bodega}</b>
             {' '}· <span className="text-amber-600">*</span> = estacional con confianza baja
+            {list.some((r) => r.flags.seasonalExcluded)
+              ? <> · <span className="text-indigo-500">†</span> = sin término estacional por decisión explícita (ver el tooltip del Sugerido)</>
+              : null}
           </div>
           {payload?.tiendas ? <TiendasPanel tiendas={payload.tiendas} /> : null}
         </div>
@@ -519,6 +537,30 @@ export function VivoClient() {
  * company-wide they differ by 113%, and that difference is retail store
  * billing, which appears in its own panel below the table.
  */
+/**
+ * "Compara la venta del mes vs el promedio" — Wilmer, 2026-08-20.
+ *
+ * The month-to-date figure with the days elapsed, plus the 30-day pace it
+ * implies. The day count is never omitted: a partial month read as a full one
+ * is exactly the misreading this column exists to prevent.
+ */
+function MesEnCurso({ mtd, dias, ritmo, p3 }: {
+  mtd: number | null; dias: number | null; ritmo: number | null; p3: number;
+}) {
+  if (mtd === null || dias === null) return <span className="text-gray-300">—</span>;
+  const tone = !p3 || ritmo === null ? 'text-gray-500'
+    : ritmo > p3 * 1.15 ? 'text-teal-700 font-semibold'
+      : ritmo < p3 * 0.85 ? 'text-amber-700' : 'text-gray-600';
+  return (
+    <span className={tone}
+          title={`${fmt(mtd)} ordenado en ${dias} día${dias === 1 ? '' : 's'} del mes`
+            + (ritmo !== null ? ` · ritmo ${fmt(ritmo)}/30 días vs promedio 3m ${fmt(p3)}` : '')}>
+      {fmt(mtd)}
+      <span className="text-gray-400 text-[11px]"> /{dias}d</span>
+    </span>
+  );
+}
+
 function GapCell({ ordered, invoiced }: { ordered: number; invoiced: number | null }) {
   if (invoiced === null) return <span className="text-gray-300">—</span>;
   if (!ordered) {

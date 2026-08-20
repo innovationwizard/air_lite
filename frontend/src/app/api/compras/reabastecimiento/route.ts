@@ -32,10 +32,50 @@ export const dynamic = 'force-dynamic';
  * migration 20260724000003) + in-handler requireAuth(CAN_VIEW_COMPRAS).
  */
 
+/**
+ * SEASONAL EXCEPTIONS — per-SKU, by explicit decision, NOT a rule.
+ *
+ * Wilmer's forecast is `(p6 + p3 + h) / 3 × 1.1`, where `h` is the same-month
+ * figure from prior years (his workbook reads it from a `Vta 2020-2024` sheet).
+ * The app sources it from Odoo's `sales.history`, whose coverage is thin:
+ * measured 2026-08-20 for agosto, no product has 3 years of data, 493 have 2,
+ * 255 have exactly 1 and 213 have none.
+ *
+ * Removing the term means the two-way mean `(p6 + p3) / 2` — NOT `h = 0`,
+ * which would still divide by 3 and understate the forecast further
+ * (77205049: h=0 gives 4,053, worse than the 3,977 that was reported wrong).
+ * The engine is Wilmer's own math and is deliberately not edited; the
+ * substitution happens here, on the way in, and is flagged on the row so the
+ * page can say out loud that this SKU is not using its seasonal term.
+ *
+ * Each entry carries who decided it, when, and why. Revisit when the seasonal
+ * source improves — an entry that outlives its reason is a silent lie about
+ * how a number was produced.
+ */
+const SEASONAL_EXCLUDED: Record<string, { desde: string; motivo: string }> = {
+  // Jorge, 2026-08-20, after Wilmer reported the Sugerido as too low:
+  // "this product's demand is rising significantly over the last three months.
+  // For this product only, remove h from the formula."
+  // Measured: demand feb→jul 2026 = 2,935 · 4,194 · 6,140 · 5,084 · 5,786 · 6,459
+  // (fardos), while its entire SAE history is jul-2024→mar-2025, so h for
+  // agosto rests on ONE year and that month was the product's ramp-up (96 units
+  // the month before, 2,686 that month, 4,074/5,442/4,888 after). Averaging a
+  // ramp-up month against live demand cut the forecast by ~17%: Sugerido 3,977
+  // where the two-way mean gives 6,081.
+  '77205049': {
+    desde: '2026-08-20',
+    motivo: 'Condiciones de mercado excepcionales para este SKU: demanda en alza sostenida y '
+      + 'un histórico estacional de un solo año que además es su mes de arranque. Decisión de '
+      + 'Jorge, SOLO para este código.',
+  },
+};
+
 interface InputRow {
   product_id: number;
   bodega: string;
   p6: number; p3: number; h: number;
+  /** Month-to-date ordered demand + the days elapsed. Display only. */
+  mtd: number | null; mtd_dias: number | null;
   /** G4 invoiced lens (Raquel's filter). NULL = not yet computed by the sync. Display only. */
   f6: number | null; f3: number | null;
   existencias: number; reserved: number;
@@ -144,8 +184,15 @@ export async function GET(request: Request) {
       const adic = comercialByProduct.get(r.product_id)?.qty ?? 0;
       if (r.as_of > maxAsOf) maxAsOf = r.as_of;
 
+      const cod = ref?.sku ?? `#${r.product_id}`;
+      // Substituting h with the mean of p6 and p3 makes the three-way average
+      // collapse to exactly (p6 + p3) / 2 — the seasonal term removed, with the
+      // engine untouched.
+      const seasonalExcluded = Boolean(SEASONAL_EXCLUDED[cod]);
+      const hEffective = seasonalExcluded ? (r.p6 + r.p3) / 2 : r.h;
+
       const engineRow: ProductRow = {
-        cod: ref?.sku ?? `#${r.product_id}`,
+        cod,
         desc: ref?.name ?? '',
         prov: supplierByProduct.get(r.product_id) ?? '',
         exist: existNet,
@@ -154,7 +201,7 @@ export async function GET(request: Request) {
         sug: 0,
         p6: r.p6,
         p3: r.p3,
-        h: r.h,
+        h: hEffective,
         adic,
         win: r.win === 10 ? 10 : 5,
       };
@@ -177,14 +224,23 @@ export async function GET(request: Request) {
         // touches engineRow — the Sugerido stays ordered-driven (H1).
         f6: r.f6 === null ? null : round1(r.f6),
         f3: r.f3 === null ? null : round1(r.f3),
+        // `h` reports what the sync actually measured; the exception is a
+        // separate, visible flag — never a quietly rewritten number.
         h: round1(r.h),
+        mtd: r.mtd === null ? null : round1(r.mtd),
+        mtdDias: r.mtd_dias,
+        mtdRitmo: r.mtd === null || !r.mtd_dias
+          ? null
+          : round1((r.mtd / r.mtd_dias) * 30),
         win: engineRow.win,
         doh: round1(doh(engineRow)),
         sug: round1(sugerido(engineRow, trans)),
         flags: {
           pendingUnknown: pending === null,
           seasonalLowConfidence: engineRow.win === 10 && r.h === 0,
+          seasonalExcluded,
         },
+        seasonalMotivo: SEASONAL_EXCLUDED[cod]?.motivo ?? null,
       };
     });
 
