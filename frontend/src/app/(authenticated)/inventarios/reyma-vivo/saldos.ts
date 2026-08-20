@@ -6,12 +6,24 @@
  *   - 'odoo': vendor bills posted in Odoo (reyma_facturas) — authoritative.
  *   - 'pdf':  factura PDFs from the supplier mail (reyma_facturas_pdf) — they
  *     arrive DAYS before contabilidad posts them (manifest R2), so they lead.
- * Dedupe rule: if an Odoo bill's ref/name contains a PDF factura number
- * (e.g. '171849'), that PDF factura is superseded — Odoo wins, the PDF rows
- * are excluded from totals and reported in `supersededPdf` so the UI can say
- * so instead of double-counting.
+ * Dedupe: NO se adivina acá. Los pares factura-PDF ↔ bill-de-Odoo los produce
+ * `conciliacion.ts` (escalera de reglas + asignación 1:1) y se persisten con
+ * procedencia en `reyma_factura_match`. Este módulo sólo recibe la lista de
+ * enlaces y excluye esas facturas PDF del total, reportándolas en
+ * `supersededPdf` para que la UI lo diga en vez de contar dos veces.
+ *
+ * La regla vieja (buscar el número de factura dentro del `ref` de la bill) se
+ * eliminó el 2026-08-20: no podía dispararse nunca porque REYMA escribe la
+ * descripción de la OC en ese campo, y la misma mercadería se estaba contando
+ * dos veces (N14 del manifest — fill 55.9% mostrado contra 40.5% real).
  */
 import type { FacturaLinea, FacturaPdfLinea, OrdenGlobal } from './types';
+
+/** Par enlazado que viene de la conciliación persistida. */
+export interface EnlaceAplicado {
+  factura: string; // 'F171849' — la factura PDF que Odoo ya tiene
+  odooFactura: string; // 'BILL/2026/08/0054'
+}
 
 export interface FacturadoPorCodigo {
   codigo: string;
@@ -54,17 +66,21 @@ export function mergeFacturado(
   odooFacturas: FacturaLinea[],
   pdfFacturas: FacturaPdfLinea[],
   mes: string, // 'YYYY-MM'
+  enlaces: EnlaceAplicado[] = [],
 ): { porCodigo: Map<string, FacturadoPorCodigo>; supersededPdf: string[] } {
   const odooMes = odooFacturas.filter((f) => mesDe(f.fecha) === mes);
   const pdfMes = pdfFacturas.filter((f) => mesDe(f.fecha) === mes);
 
-  // Odoo refs/names that mention a PDF factura number supersede that factura.
-  const odooText = odooMes
-    .map((f) => `${f.factura} ${f.referencia ?? ''}`)
-    .join(' ');
-  const pdfNumbers = [...new Set(pdfMes.map((f) => f.factura))];
+  // Una factura PDF queda superseded SÓLO si la conciliación la enlazó con una
+  // bill de Odoo que efectivamente está sumando este mes. Si la bill no está en
+  // el mes, el enlace no aplica y el PDF sigue contando (si no, desaparecería
+  // de los dos lados).
+  const odooDelMes = new Set(odooMes.map((f) => f.factura));
+  const pdfDelMes = new Set(pdfMes.map((f) => f.factura));
   const superseded = new Set(
-    pdfNumbers.filter((num) => odooText.includes(num.replace(/^F/, ''))),
+    enlaces
+      .filter((e) => odooDelMes.has(e.odooFactura) && pdfDelMes.has(e.factura))
+      .map((e) => e.factura),
   );
 
   const porCodigo = new Map<string, FacturadoPorCodigo>();
@@ -141,6 +157,7 @@ export function computeSaldos(
   ordenGlobal: OrdenGlobal,
   odooFacturas: FacturaLinea[],
   pdfFacturas: FacturaPdfLinea[],
+  enlaces: EnlaceAplicado[] = [],
 ): SaldosResult {
   const mes = ordenGlobal.mes.slice(0, 7);
   // Entregas directas discount their PZ11 child POs, never the orden global.
@@ -154,6 +171,7 @@ export function computeSaldos(
     odooFacturas.filter((f) => !esDirectaOdoo(f)),
     pdfFacturas.filter((f) => f.destino !== 'entrega-directa'),
     mes,
+    enlaces,
   );
   const directasMes = directasPdf.filter((f) => f.fecha.slice(0, 7) === mes);
   const directasExcluidas = {

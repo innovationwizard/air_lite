@@ -5,6 +5,7 @@ import { createServiceRoleClient } from '@/lib/supabase/server';
 import type { ModeloRow, VentasRow } from '@/app/(authenticated)/inventarios/reyma/engine';
 import { computePdfTransito } from '@/app/(authenticated)/inventarios/reyma-vivo/saldos';
 import type {
+  EnlaceFactura,
   EtaConfigPayload,
   FacturaLinea,
   FacturaPdfLinea,
@@ -99,6 +100,11 @@ interface FacturaPdfRowDb {
   fecha: string; eta: string | null; codigo: string; clave: string;
   cantidad: number; precio_unit: number;
 }
+/** N14: enlace persistido PDF ↔ Odoo (append-only, última fila por par manda). */
+interface MatchRowDb {
+  folio_fiscal: string; factura: string; odoo_factura: string;
+  tier: number; regla: string; estado: string; autor: string; created_at: string;
+}
 
 async function fetchAll<T>(
   query: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>,
@@ -158,7 +164,7 @@ export async function GET() {
     ]);
 
     // ── L3 write-path state (append-only history; latest row wins)
-    const [overridesRaw, ncRaw, notasRaw, facturasRaw, planesRaw, pedidosRaw, ordenGlobalRaw, poLineasRaw, facturasPdfRaw, etaConfigRaw] = await Promise.all([
+    const [overridesRaw, ncRaw, notasRaw, facturasRaw, planesRaw, pedidosRaw, ordenGlobalRaw, poLineasRaw, facturasPdfRaw, etaConfigRaw, matchRaw] = await Promise.all([
       fetchAll<OverrideRowDb>((a, b) =>
         service.from('reyma_proyeccion_overrides')
           .select('codigo, cajas, autor, created_at')
@@ -210,6 +216,10 @@ export async function GET() {
       fetchAll<EtaConfigRowDb>((a, b) =>
         service.from('reyma_eta_config')
           .select('destino, dias_habiles, autor, created_at')
+          .order('created_at', { ascending: false }).range(a, b)),
+      fetchAll<MatchRowDb>((a, b) =>
+        service.from('reyma_factura_match')
+          .select('folio_fiscal, factura, odoo_factura, tier, regla, estado, autor, created_at')
           .order('created_at', { ascending: false }).range(a, b)),
     ]);
 
@@ -463,6 +473,22 @@ export async function GET() {
             })),
         }
       : null;
+    // N14 — enlaces vigentes: la última fila por par (folio, bill) manda, y los
+    // rechazos NO se publican como enlace (vetan el par, no lo crean). La cola
+    // de excepciones la calcula el cliente con el mismo motor puro.
+    const enlaceVisto = new Set<string>();
+    const enlacesFactura: EnlaceFactura[] = [];
+    for (const m of matchRaw) {
+      const k = `${m.folio_fiscal}|${m.odoo_factura}`;
+      if (enlaceVisto.has(k)) continue; // primera = más reciente
+      enlaceVisto.add(k);
+      enlacesFactura.push({
+        folioFiscal: m.folio_fiscal, factura: m.factura, odooFactura: m.odoo_factura,
+        tier: m.tier as EnlaceFactura['tier'], regla: m.regla,
+        estado: m.estado as EnlaceFactura['estado'], autor: m.autor, fecha: m.created_at,
+      });
+    }
+
     const facturasPdf: FacturaPdfLinea[] = facturasPdfRaw.map((f) => ({
       folioFiscal: f.folio_fiscal, factura: f.factura, guia: f.guia, destino: f.destino,
       fecha: f.fecha, eta: f.eta, codigo: f.codigo, clave: f.clave,
@@ -493,6 +519,7 @@ export async function GET() {
       ultimoPedido,
       ordenGlobal,
       facturasPdf,
+      enlacesFactura,
       etaConfig,
     };
     return NextResponse.json(payload);

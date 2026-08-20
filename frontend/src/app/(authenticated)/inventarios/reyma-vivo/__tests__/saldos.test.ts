@@ -30,16 +30,38 @@ describe('mergeFacturado', () => {
     expect(supersededPdf).toEqual([]);
   });
 
-  it('dedupes: an Odoo bill whose ref carries the factura number supersedes the PDF', () => {
+  it('dedupes using the persisted link (N14: the ref is NOT parsed any more)', () => {
     const { porCodigo, supersededPdf } = mergeFacturado(
-      [odoo('BILL/2026/08/0031', '77201046', 666, { referencia: 'FACT 171849 ORDEN AGOSTO' })],
+      // El `ref` dice la descripción de la OC, como en producción — antes esto
+      // no dedupeaba y la mercadería se contaba dos veces.
+      [odoo('BILL/2026/08/0031', '77201046', 666, { referencia: 'PEDIDO AGOSTO 2026' })],
       [pdf('F171849', '77201046', 666), pdf('F171850', '77201046', 151)],
-      '2026-08');
+      '2026-08',
+      [{ factura: 'F171849', odooFactura: 'BILL/2026/08/0031' }]);
     expect(supersededPdf).toEqual(['F171849']);
     // 666 from Odoo + 151 from the non-superseded PDF; never 666 twice
     expect(porCodigo.get('77201046')?.total).toBe(817);
     expect(porCodigo.get('77201046')?.odoo).toBe(666);
     expect(porCodigo.get('77201046')?.pdf).toBe(151);
+  });
+
+  it('sin enlace no dedupea: el `ref` con el número ya NO cuenta (regla eliminada)', () => {
+    const { supersededPdf, porCodigo } = mergeFacturado(
+      [odoo('BILL/1', '77201046', 666, { referencia: 'FACT 171849 ORDEN AGOSTO' })],
+      [pdf('F171849', '77201046', 666)],
+      '2026-08');
+    expect(supersededPdf).toEqual([]);
+    expect(porCodigo.get('77201046')?.total).toBe(1332); // se ve el doble conteo, no se esconde
+  });
+
+  it('un enlace a una bill de OTRO mes no supersede (si no, desaparecería de los dos lados)', () => {
+    const { supersededPdf, porCodigo } = mergeFacturado(
+      [odoo('BILL/JUL', '77201046', 666, { fecha: '2026-07-31' })],
+      [pdf('F171849', '77201046', 666)],
+      '2026-08',
+      [{ factura: 'F171849', odooFactura: 'BILL/JUL' }]);
+    expect(supersededPdf).toEqual([]);
+    expect(porCodigo.get('77201046')?.total).toBe(666);
   });
 
   it('notas de crédito subtract; other months are excluded', () => {

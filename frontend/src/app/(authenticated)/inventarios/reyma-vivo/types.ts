@@ -114,6 +114,22 @@ export interface FacturaPdfLinea {
   precioUnit: number;
 }
 
+/**
+ * N14 — enlace persistido factura PDF ↔ vendor bill de Odoo, con su
+ * procedencia. Viene de `reyma_factura_match` (append-only, última fila por
+ * par manda). El payload trae SÓLO las filas vigentes.
+ */
+export interface EnlaceFactura {
+  folioFiscal: string;
+  factura: string; // 'F171849'
+  odooFactura: string; // 'BILL/2026/08/0054'
+  tier: 0 | 1 | 2;
+  regla: string;
+  estado: 'auto' | 'confirmado' | 'rechazado';
+  autor: string;
+  fecha: string;
+}
+
 export interface ReymaVivoPayload {
   sync: {
     id: string;
@@ -150,6 +166,12 @@ export interface ReymaVivoPayload {
   ordenGlobal: OrdenGlobal | null;
   /** C7/L4: facturas capturadas de los PDFs del proveedor (fuente adelantada). */
   facturasPdf: FacturaPdfLinea[];
+  /**
+   * N14: enlaces vigentes de conciliación. `computeSaldos` los usa para no
+   * contar dos veces la misma factura; la cola de excepciones se calcula en el
+   * cliente con el mismo motor puro.
+   */
+  enlacesFactura: EnlaceFactura[];
   /** Lote 1: días hábiles de ETA por bodega (configurable; default 4). */
   etaConfig: EtaConfigPayload;
 }

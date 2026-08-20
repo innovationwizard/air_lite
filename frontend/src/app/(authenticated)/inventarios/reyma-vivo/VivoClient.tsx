@@ -19,8 +19,9 @@ import {
   OBJETIVO_SEMANAS_REGIONAL_DEFAULT,
   type PlanFurgon,
 } from './planificacion';
-import type { ReymaVivoPayload, VivoRow } from './types';
+import type { EnlaceFactura, ReymaVivoPayload, VivoRow } from './types';
 import { computeSaldos } from './saldos';
+import { conciliar, type Enlace, type Excepcion } from './conciliacion';
 import { diasHabilesDe, resolverEta } from './eta';
 
 function esc(s: string): string {
@@ -695,15 +696,245 @@ function TabMrp({
 
 // ---------------------------------------------------------------- cumplimiento (C7)
 
+/**
+ * N14 — Conciliación factura PDF ↔ vendor bill de Odoo: enlaces vigentes con su
+ * procedencia + cola de excepciones.
+ *
+ * La cola sólo trae lo que un humano tiene que resolver. Que una factura PDF no
+ * tenga contraparte en Odoo NO es excepción: es el estado normal (el PDF llega
+ * días antes que contabilidad).
+ */
+const MOTIVO_ETIQUETA: Record<Excepcion['motivo'], string> = {
+  AMBIGUO: 'Ambigua',
+  FECHA_DISCREPA: 'Fecha discrepa',
+  LINEAS_DISCREPAN: 'Líneas discrepan',
+  MONTO_DISCREPA: 'Monto discrepa',
+};
+
+function PanelConciliacion({
+  mes, efectivos, persistidos, excepciones, odooSinPdf,
+}: {
+  mes: string;
+  /** Salida del motor: los enlaces que YA están descontando del facturado. */
+  efectivos: Enlace[];
+  /** Filas de reyma_factura_match: el rastro auditable + los overrides. */
+  persistidos: EnlaceFactura[];
+  excepciones: Excepcion[];
+  odooSinPdf: string[];
+}) {
+  const [msg, setMsg] = useState<string | null>(null);
+  const [ocupado, setOcupado] = useState(false);
+  const [abierto, setAbierto] = useState(false);
+  const filaPersistida = new Map(persistidos.map((e) => [`${e.folioFiscal}|${e.odooFactura}`, e]));
+  const rechazados = persistidos.filter((e) => e.estado === 'rechazado');
+  // Enlaces que el motor está aplicando pero que todavía no tienen fila: el
+  // número ya es correcto, lo que falta es dejar el rastro.
+  const sinPersistir = efectivos.filter(
+    (e) => !filaPersistida.has(`${e.folioFiscal}|${e.odooFactura}`),
+  );
+
+  const correr = async () => {
+    setOcupado(true);
+    const err = await postJson('/api/inventarios/reyma/conciliacion', { accion: 'ejecutar', mes });
+    setOcupado(false);
+    setMsg(err ?? 'Conciliación ejecutada — recargá para ver los enlaces nuevos.');
+  };
+  const decidir = async (x: Excepcion, odooFactura: string, estado: 'confirmado' | 'rechazado') => {
+    setOcupado(true);
+    const err = await postJson('/api/inventarios/reyma/conciliacion', {
+      accion: 'decidir', mes, folioFiscal: x.folioFiscal, factura: x.factura, odooFactura, estado,
+    });
+    setOcupado(false);
+    setMsg(err ?? `${x.factura} ${estado === 'confirmado' ? 'enlazada' : 'desligada'} de ${odooFactura} — recargá.`);
+  };
+
+  return (
+    <div className="mb-3 rounded border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] text-slate-600">
+      <div className="flex flex-wrap items-center gap-2">
+        <b className="text-slate-700">Conciliación PDF ↔ Odoo</b>
+        <span>
+          {efectivos.length} enlace{efectivos.length === 1 ? '' : 's'} aplicado{efectivos.length === 1 ? '' : 's'}
+          {sinPersistir.length > 0 && (
+            <span className="ml-1 rounded bg-slate-200 px-1">
+              {sinPersistir.length} sin registrar
+            </span>
+          )}
+          {rechazados.length > 0 && ` · ${rechazados.length} par${rechazados.length === 1 ? '' : 'es'} rechazado${rechazados.length === 1 ? '' : 's'} a mano`}
+          {excepciones.length > 0 && (
+            <span className="ml-1 rounded bg-amber-100 px-1 font-semibold text-amber-800">
+              {excepciones.length} en cola
+            </span>
+          )}
+          {odooSinPdf.length > 0 && ` · ${odooSinPdf.length} bill(s) de Odoo sin PDF`}
+        </span>
+        <button
+          type="button" onClick={correr} disabled={ocupado}
+          className="rounded border border-slate-300 bg-white px-2 py-0.5 font-medium hover:bg-slate-100 disabled:opacity-50"
+        >
+          Ejecutar conciliación
+        </button>
+        <button
+          type="button" onClick={() => setAbierto((v) => !v)}
+          className="rounded border border-slate-300 bg-white px-2 py-0.5 hover:bg-slate-100"
+        >
+          {abierto ? 'Ocultar detalle' : 'Ver detalle'}
+        </button>
+        {msg && <span className="text-slate-700">{msg}</span>}
+      </div>
+
+      {abierto && (
+        <div className="mt-2 space-y-3">
+          {efectivos.length > 0 && (
+            <div>
+              <div className="mb-1 font-semibold text-slate-700">
+                Enlaces aplicados (procedencia)
+              </div>
+              <div className="overflow-x-auto">
+                <table className="min-w-full text-[11px]">
+                  <thead className="text-slate-500">
+                    <tr>
+                      {['Factura PDF', 'Bill de Odoo', 'Tier', 'Regla', 'Estado', 'Quién / cuándo'].map((h) => (
+                        <th key={h} className="px-2 py-1 text-left font-medium">{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {efectivos.map((e) => {
+                      const fila = filaPersistida.get(`${e.folioFiscal}|${e.odooFactura}`);
+                      return (
+                        <tr key={`${e.folioFiscal}|${e.odooFactura}`} className="border-t border-slate-200">
+                          <td className="px-2 py-1 font-mono">{e.factura}</td>
+                          <td className="px-2 py-1 font-mono">{e.odooFactura}</td>
+                          <td className="px-2 py-1 tabular-nums">{e.tier}</td>
+                          <td className="px-2 py-1">{e.regla}</td>
+                          <td className="px-2 py-1">
+                            <span className={e.estado === 'confirmado'
+                              ? 'rounded bg-emerald-100 px-1 font-semibold text-emerald-800'
+                              : 'rounded bg-slate-200 px-1'}
+                            >
+                              {e.estado}
+                            </span>
+                          </td>
+                          <td className="px-2 py-1 text-slate-500">
+                            {fila
+                              ? `${fila.autor} · ${fila.fecha.slice(0, 10)}`
+                              : 'sin registrar — apretá «Ejecutar conciliación» para dejar el rastro'}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {excepciones.length > 0 && (
+            <div>
+              <div className="mb-1 font-semibold text-slate-700">
+                Cola de excepciones — necesitan una decisión humana
+              </div>
+              <div className="space-y-2">
+                {excepciones.map((x) => (
+                  <div key={x.folioFiscal} className="rounded border border-amber-200 bg-amber-50 px-2 py-1.5">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="rounded bg-amber-200 px-1 font-semibold text-amber-900">
+                        {MOTIVO_ETIQUETA[x.motivo]}
+                      </span>
+                      <b className="font-mono">{x.factura}</b>
+                      <span className="text-slate-600">{x.detalle}</span>
+                    </div>
+                    <table className="mt-1 min-w-full text-[11px]">
+                      <thead className="text-slate-500">
+                        <tr>
+                          {['Bill candidata', 'Por qué', 'Total PDF', 'Total Odoo', 'Fecha PDF', 'Fecha Odoo', ''].map((h) => (
+                            <th key={h} className="px-2 py-0.5 text-left font-medium">{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {x.candidatos.map((c) => (
+                          <tr key={c.odooFactura} className="border-t border-amber-200">
+                            <td className="px-2 py-0.5 font-mono">{c.odooFactura}</td>
+                            <td className="px-2 py-0.5">{c.regla}</td>
+                            <td className="px-2 py-0.5 tabular-nums">${fmt(c.evidencia.totalPdf)}</td>
+                            <td className="px-2 py-0.5 tabular-nums">${fmt(c.evidencia.totalOdoo)}</td>
+                            <td className="px-2 py-0.5">{c.evidencia.fechaPdf}</td>
+                            <td className="px-2 py-0.5">{c.evidencia.fechaOdoo ?? '—'}</td>
+                            <td className="px-2 py-0.5">
+                              <button
+                                type="button" disabled={ocupado}
+                                onClick={() => decidir(x, c.odooFactura, 'confirmado')}
+                                className="mr-1 rounded border border-emerald-300 bg-white px-1.5 py-0.5 font-medium text-emerald-700 hover:bg-emerald-50 disabled:opacity-50"
+                              >
+                                Es la misma
+                              </button>
+                              <button
+                                type="button" disabled={ocupado}
+                                onClick={() => decidir(x, c.odooFactura, 'rechazado')}
+                                className="rounded border border-slate-300 bg-white px-1.5 py-0.5 hover:bg-slate-100 disabled:opacity-50"
+                              >
+                                No lo es
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {odooSinPdf.length > 0 && (
+            <div className="text-slate-600">
+              <b className="text-slate-700">Bills de Odoo sin factura PDF:</b>{' '}
+              <span className="font-mono">{odooSinPdf.join(', ')}</span> — puede ser que el PDF
+              nunca llegó al grupo. No bloquea el conteo (esas bills ya suman por el lado Odoo).
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function TabCumplimiento({ payload }: { payload: ReymaVivoPayload }) {
   const og = payload.ordenGlobal;
   const pedido = payload.ultimoPedido;
   const rowsByCod = useMemo(() => new Map(payload.rows.map((r) => [r.cod, r])), [payload.rows]);
 
   // Preferred baseline: the real Odoo PO (C7, unblocked 2026-08-12 by PO-P-3003).
+  // N14 — el motor puro corre acá con las DECISIONES HUMANAS ya persistidas
+  // (confirmaciones y rechazos de reyma_factura_match) como entrada. Su salida
+  // es el conjunto efectivo de enlaces.
+  //
+  // Deliberado: el número NO depende de que alguien haya apretado el botón. La
+  // persistencia es rastro auditable y canal de override — no la condición para
+  // que el fill rate esté bien. Si el dedupe dependiera de una fila escrita,
+  // una carga nueva sin conciliar volvería a mostrar el doble conteo de N14.
+  const conciliacion = useMemo(() => {
+    if (!og) return null;
+    return conciliar(
+      payload.facturas, payload.facturasPdf, og.mes.slice(0, 7),
+      payload.enlacesFactura.map((e) => ({
+        folioFiscal: e.folioFiscal, odooFactura: e.odooFactura, estado: e.estado,
+        tier: e.tier, regla: e.regla, autor: e.autor, fecha: e.fecha,
+      })),
+    );
+  }, [og, payload.facturas, payload.facturasPdf, payload.enlacesFactura]);
+  const enlacesAplicados = useMemo(
+    () => (conciliacion?.enlaces ?? []).map((e) => ({
+      factura: e.factura, odooFactura: e.odooFactura,
+    })),
+    [conciliacion],
+  );
   const saldos = useMemo(
-    () => (og && og.lineas.length ? computeSaldos(og, payload.facturas, payload.facturasPdf) : null),
-    [og, payload.facturas, payload.facturasPdf],
+    () => (og && og.lineas.length
+      ? computeSaldos(og, payload.facturas, payload.facturasPdf, enlacesAplicados)
+      : null),
+    [og, payload.facturas, payload.facturasPdf, enlacesAplicados],
   );
   const datos = useMemo(() => {
     if (!saldos || !og) return null;
@@ -780,6 +1011,13 @@ function TabCumplimiento({ payload }: { payload: ReymaVivoPayload }) {
             && ` · ${saldos.supersededPdf.length} facturas PDF ya registradas en Odoo (deduplicadas): ${saldos.supersededPdf.join(', ')}.`}
         </div>
       )}
+      <PanelConciliacion
+        mes={og.mes.slice(0, 7)}
+        efectivos={conciliacion?.enlaces ?? []}
+        persistidos={payload.enlacesFactura}
+        excepciones={conciliacion?.excepciones ?? []}
+        odooSinPdf={conciliacion?.odooSinPdf ?? []}
+      />
       {saldos.directasExcluidas.cajas > 0 && (
         <div className="mb-3 rounded border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] text-slate-600">
           Entregas directas del mes ({saldos.directasExcluidas.facturas.join(', ')}:{' '}
