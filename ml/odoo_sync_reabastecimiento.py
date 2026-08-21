@@ -6,7 +6,8 @@ engine inputs measured from MAYO2026.xlsx (docs/compras/MAYO2026_XLSX_MANIFEST.m
 
 Design decisions (docs/compras/REABASTECIMIENTO_LIVE_PROGRESS.md B2):
   - Bodegas come from the `bodega_map` table (confirmed 2026-07-28: purchasing
-    scope = 1CET 'San Jose VN' + 4ZAC/3PET 'Zacapa-Petén'). 'General' is a
+    scope = 1CET 'San Jose VN' + 4ZAC 'Zacapa' + 3PET 'Petén', separadas el
+    2026-08-21 por W11 — ver 20260821000002). 'General' is a
     computed DISPLAY aggregate: every */Existencias location EXCEPT 5DEP
     (reempaque — no sales, occasional stock); Entrada stays OUT of the
     aggregate (patio shown separately). Rule: Wilmer 2026-08-06 ("todas las

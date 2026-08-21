@@ -16,7 +16,15 @@ The rules these tests lock:
 """
 from odoo_sync_reabastecimiento import aggregate_invoiced, classify_invoice_journal
 
-BODEGAS = {'San Jose VN': ['1CET'], 'Zacapa-Petén': ['3PET', '4ZAC']}
+# Mapeo vigente desde 2026-08-21 (W11, migración 20260821000002): Zacapa y
+# Petén dejaron de estar fusionadas. Wilmer: "Zacapa me debe de dar la venta de
+# ambos, pero separada y sumada".
+BODEGAS = {'San Jose VN': ['1CET'], 'Petén': ['3PET'], 'Zacapa': ['4ZAC']}
+
+# El plegado de VARIOS códigos en una bodega sigue siendo una capacidad real de
+# aggregate_invoiced (es como se arma cualquier agregado), así que se prueba
+# aparte con un mapeo propio en vez de darla por muerta con la fusión.
+BODEGAS_AGRUPADAS = {'Z&P': ['3PET', '4ZAC']}
 
 
 # ── classify_invoice_journal ──────────────────────────────────────────────────
@@ -52,10 +60,22 @@ def test_monthly_average_uses_six_and_three():
     assert by_bodega['San Jose VN'][1] == {'f6': 100.0, 'f3': 100.0}
 
 
-def test_zacapa_and_peten_fold_into_one_bodega():
+def test_zacapa_and_peten_are_separate_bodegas():
+    """Desde W11 cada CD responde por su cuenta: Zacapa guarda stock que va de
+    paso a Petén, y la cifra fusionada era justo la que Zacapa le discutía."""
     by_bodega, _, _ = aggregate_invoiced(
         [(1, 'Facturas CD Zacapa', 600.0), (1, 'Facturas CD Petén', 1200.0)], [], BODEGAS)
-    assert by_bodega['Zacapa-Petén'][1]['f6'] == 300.0
+    assert by_bodega['Zacapa'][1]['f6'] == 100.0
+    assert by_bodega['Petén'][1]['f6'] == 200.0
+
+
+def test_several_warehouse_codes_can_still_fold_into_one_bodega():
+    """La capacidad de plegar varios códigos en un agregado no desapareció con
+    la separación — es como se construye cualquier bodega compuesta."""
+    by_bodega, _, _ = aggregate_invoiced(
+        [(1, 'Facturas CD Zacapa', 600.0), (1, 'Facturas CD Petén', 1200.0)],
+        [], BODEGAS_AGRUPADAS)
+    assert by_bodega['Z&P'][1]['f6'] == 300.0
 
 
 def test_credit_notes_reduce_the_average():

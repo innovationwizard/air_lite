@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { MAX_MANUAL_QTY } from '@/lib/compras/qty';
 import { type Tendencia } from '@/lib/compras/tendencia';
+import { ExportCarvajal } from './ExportCarvajal';
 import {
   type ProductRow, type Sev, sugerido, doh as dohOf, sev, fmt,
 } from '../reabastecimiento/engine';
@@ -38,9 +39,16 @@ const BODEGA_TIP: Record<string, string> = {
   'San Jose VN':
     'Existencias de 1CET/Existencias (Bodega Central) únicamente. '
     + 'No incluye tiendas, Zona 11, ni Entrada/patio (el patio se muestra aparte).',
-  'Zacapa-Petén':
-    'Existencias de 4ZAC/Existencias (Zacapa) + 3PET/Existencias (Petén). '
-    + 'No incluye Entrada/patio.',
+  // Separadas el 2026-08-21 (W11): antes eran una sola bodega 'Zacapa-Petén'.
+  // Wilmer: "Zacapa me debe de dar la venta de ambos, pero separada y sumada" —
+  // acá va la parte SEPARADA; el total de las dos todavía no tiene vista propia.
+  Zacapa:
+    'Existencias de 4ZAC/Existencias (Zacapa) únicamente. No incluye Entrada/patio. '
+    + '⚠️ Zacapa abastece a Petén, así que parte de esta existencia va de paso — '
+    + 'no toda es demanda de Zacapa.',
+  'Petén':
+    'Existencias de 3PET/Existencias (Petén) únicamente. No incluye Entrada/patio. '
+    + 'Petén se abastece DESDE Zacapa, no directamente de San José.',
 };
 
 const COL_TIP = {
@@ -400,6 +408,11 @@ export function VivoClient() {
               <TrendingUp size={13} strokeWidth={3} />
               Solo en alza ({alza.creciente})
             </label>
+            <div className="ml-auto">
+              {/* Takes the list exactly as filtered and sorted on screen — that
+                  order becomes the sheet's Prioridad column. */}
+              <ExportCarvajal productIds={list.map((r) => r.productId)} bodega={bodega} />
+            </div>
           </div>
 
           {alza.noEvaluable > 0 && alza.total > 0 ? (
