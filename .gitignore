@@ -118,6 +118,7 @@ docs/reconciliation/backup_*.json
 
 # Documentation / working notes — kept local, not version-controlled
 docs/
+BUG_REPORT_MECHANISM_SSD.md
 
 # Client-provided working drops (Alexis xlsx + meeting transcripts) — local only
 20260804/
