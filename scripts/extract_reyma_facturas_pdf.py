@@ -45,6 +45,14 @@ DETALLE = re.compile(
 CONTINUACION = re.compile(r'^\s{40,}(?P<texto>\S.*?)\s*$')
 FIN_DETALLE = re.compile(r'^\s*DAP\b')
 
+# Conteo de BULTOS al final de la descripción. REYMA factura la bolsa poliseda
+# POR PESO (unidad KGM) y el número de bultos viaja SÓLO acá — Alexis, verbatim
+# (2026-08-20): «él lo pone en la descripción, no está como que en la cantidad».
+# Es el insumo de la conversión a la unidad de compra de Odoo (MILLAR/ML):
+# bultos × rollos_por_bulto. Se captura siempre que aparezca, sea cual sea la
+# unidad — content-based, no atado a KGM.
+BULTOS = re.compile(r'\b(?P<bultos>\d+(?:\.\d+)?)\s+BLTS\b')
+
 
 def num(s: str) -> float:
     return float(s.replace(',', ''))
@@ -104,6 +112,7 @@ def extraer(pdf: Path) -> dict:
                 'descripcion': g['descripcion'].strip(),
                 'precio_unitario': num(g['precio']),
                 'importe': num(g['importe']),
+                'bultos': '',  # se completa si la descripción lo trae (ver BULTOS)
                 'linea_verbatim': cruda.rstrip(),
             })
             continue
@@ -111,6 +120,9 @@ def extraer(pdf: Path) -> dict:
         if c and lineas:
             lineas[-1]['descripcion'] += ' ' + c.group('texto')
             lineas[-1]['linea_verbatim'] += '\n' + cruda.rstrip()
+            b = BULTOS.search(lineas[-1]['descripcion'])
+            if b:
+                lineas[-1]['bultos'] = num(b.group('bultos'))
 
     # Validación 1 — cantidad × precio = importe, línea a línea.
     for ln in lineas:
@@ -154,15 +166,17 @@ def main() -> int:
         unidades = sorted({ln['unidad'] for ln in fa['lineas']})
         print(f"  unidades={unidades}")
         for ln in fa['lineas']:
+            blt = f"  ({ln['bultos']:,.0f} BLTS)" if ln['bultos'] != '' else ''
             print(f"    {ln['linea']:>2} {ln['cantidad']:>10,.2f} {ln['unidad']:<4} "
-                  f"{ln['identificador']:<14} ${ln['precio_unitario']:>8,.2f} ${ln['importe']:>11,.2f}")
+                  f"{ln['identificador']:<14} ${ln['precio_unitario']:>8,.2f} "
+                  f"${ln['importe']:>11,.2f}{blt}")
         print()
 
     if args.out:
         campos = ['archivo', 'factura', 'pv', 'folio_fiscal', 'fecha', 'hora', 't_cambio',
                   'oc_in_band', 'op', 'conf', 'observ_destino', 'sha256',
                   'linea', 'cantidad', 'unidad', 'clave_sat', 'identificador',
-                  'descripcion', 'precio_unitario', 'importe', 'linea_verbatim']
+                  'descripcion', 'precio_unitario', 'importe', 'bultos', 'linea_verbatim']
         with args.out.open('w', newline='', encoding='utf-8') as fh:
             w = csv.DictWriter(fh, fieldnames=campos)
             w.writeheader()
