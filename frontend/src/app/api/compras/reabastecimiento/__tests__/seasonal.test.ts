@@ -1,14 +1,25 @@
 /**
- * The seasonal exception, 2026-08-20.
+ * The seasonal term on 77205049 — the measurements behind the trend alert.
  *
- * Wilmer reported 77205049's Sugerido as too low: "es un producto que esta
- * teniendo mayor demanda y sugiere 3,977 pero para 30 dias es muy bajo".
+ * Wilmer reported this Sugerido as too low (2026-08-20): "es un producto que
+ * esta teniendo mayor demanda y sugiere 3,977 pero para 30 dias es muy bajo".
  * Its `h` for agosto rested on a single ramp-up month (ago-2024: 2,686, with 96
- * the month before), so Jorge decided to drop the seasonal term for THIS SKU.
+ * the month before), so the seasonal term was dragging the forecast down.
  *
- * Removing the term is NOT h = 0 — the formula still divides by three, so
- * zeroing it makes the forecast WORSE. It is the two-way mean, reached by
- * substituting h with (p6 + p3) / 2, which leaves Wilmer's engine untouched.
+ * ⚠️ HISTORY: on 2026-08-20 this SKU was added to `SEASONAL_EXCLUDED` in the
+ * route, which substituted `h` and lifted the Sugerido to 6,081. On 2026-08-21
+ * Jorge REMOVED it: a per-SKU override rewrites how a number was produced
+ * without saying so, and it does not scale to the 282 products the thin
+ * seasonal source distorts. The Sugerido is back to its engine value and the
+ * row now carries the ▲ rising-trend flag instead — a notification, not a
+ * changed number, which is what Wilmer actually asked for.
+ *
+ * These assertions therefore no longer describe live behaviour for this SKU.
+ * They are kept because they are the MEASUREMENT that justifies the alert: they
+ * pin exactly how much a one-year seasonal figure moves a Sugerido, and they
+ * prove the trap that `h = 0` is a third and WORSE answer — the formula still
+ * divides by three. If anyone reaches for the per-SKU override again, this is
+ * the arithmetic they need to have read first.
  */
 import {
   forecast,

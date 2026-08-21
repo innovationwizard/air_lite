@@ -7,6 +7,7 @@ import {
   sugerido,
   doh,
 } from '@/app/(authenticated)/compras/reabastecimiento/engine';
+import { evaluarTendencia } from '@/lib/compras/tendencia';
 import { GENERAL_BODEGA, fetchAll, knownBodegas } from './lib';
 
 export const dynamic = 'force-dynamic';
@@ -42,33 +43,33 @@ export const dynamic = 'force-dynamic';
  * 255 have exactly 1 and 213 have none.
  *
  * Removing the term means the two-way mean `(p6 + p3) / 2` — NOT `h = 0`,
- * which would still divide by 3 and understate the forecast further
- * (77205049: h=0 gives 4,053, worse than the 3,977 that was reported wrong).
- * The engine is Wilmer's own math and is deliberately not edited; the
- * substitution happens here, on the way in, and is flagged on the row so the
- * page can say out loud that this SKU is not using its seasonal term.
+ * which would still divide by 3 and understate the forecast further.
  *
- * Each entry carries who decided it, when, and why. Revisit when the seasonal
- * source improves — an entry that outlives its reason is a silent lie about
- * how a number was produced.
+ * ⚠️ THE REGISTRY IS DELIBERATELY EMPTY (Jorge, 2026-08-21).
+ * `77205049` lived here from 2026-08-20 and was REMOVED: a per-SKU override
+ * silently rewrites how a number was produced, and it does not scale to the
+ * 282 products the thin seasonal source distorts. It is replaced by the
+ * NOTIFICATION Wilmer actually asked for — the rising-trend flag
+ * (`@/lib/compras/tendencia`), which changes no number and hands him the
+ * decision: *"yo voy a revisar ya mejor mi Odoo y yo digo: ah sí, este amerita
+ * que le suba la punta."*
+ *
+ * Consequence, stated plainly: 77205049's Sugerido returns to its engine value.
+ * Measured 2026-08-20 — on the snapshot Wilmer was looking at, 3,977 with the
+ * term vs 5,019 without; on that day's live data, 5,039 vs 6,081. So the number
+ * he called too LOW comes back, ~1,042 below what the override was showing.
+ * It now carries the ▲ trend flag instead, so the correction becomes his,
+ * visible, and per-product. Its measured monthly demand (General, feb→jul 2026:
+ * 2,935 · 4,194 · 6,140 · 5,084 · 5,786 · 6,459) makes the last three months a
+ * strict rise, so the flag fires on it. ⚠️ Per bodega, though: the series is
+ * per product × bodega, so a bodega whose own last three months do not rise
+ * will correctly show no flag on the same SKU.
+ *
+ * The mechanism stays because the escape hatch is worth having. Any future
+ * entry must carry who decided it, when, and why — an entry that outlives its
+ * reason is a silent lie about how a number was produced.
  */
-const SEASONAL_EXCLUDED: Record<string, { desde: string; motivo: string }> = {
-  // Jorge, 2026-08-20, after Wilmer reported the Sugerido as too low:
-  // "this product's demand is rising significantly over the last three months.
-  // For this product only, remove h from the formula."
-  // Measured: demand feb→jul 2026 = 2,935 · 4,194 · 6,140 · 5,084 · 5,786 · 6,459
-  // (fardos), while its entire SAE history is jul-2024→mar-2025, so h for
-  // agosto rests on ONE year and that month was the product's ramp-up (96 units
-  // the month before, 2,686 that month, 4,074/5,442/4,888 after). Averaging a
-  // ramp-up month against live demand cut the forecast by ~17%: Sugerido 3,977
-  // where the two-way mean gives 6,081.
-  '77205049': {
-    desde: '2026-08-20',
-    motivo: 'Condiciones de mercado excepcionales para este SKU: demanda en alza sostenida y '
-      + 'un histórico estacional de un solo año que además es su mes de arranque. Decisión de '
-      + 'Jorge, SOLO para este código.',
-  },
-};
+const SEASONAL_EXCLUDED: Record<string, { desde: string; motivo: string }> = {};
 
 interface InputRow {
   product_id: number;
@@ -78,6 +79,8 @@ interface InputRow {
   mtd: number | null; mtd_dias: number | null;
   /** G4 invoiced lens (Raquel's filter). NULL = not yet computed by the sync. Display only. */
   f6: number | null; f3: number | null;
+  /** {'YYYY-MM': qty} over the 6 complete months. NULL = sync has not written it yet. */
+  demanda_mensual: Record<string, number> | null;
   existencias: number; reserved: number;
   pending_reserve: number | null;
   patio: number; transito: number;
@@ -190,6 +193,9 @@ export async function GET(request: Request) {
       // engine untouched.
       const seasonalExcluded = Boolean(SEASONAL_EXCLUDED[cod]);
       const hEffective = seasonalExcluded ? (r.p6 + r.p3) / 2 : r.h;
+      // Display only — the trend NEVER touches engineRow. Wilmer asked to be
+      // warned, not to have the number changed for him.
+      const tendencia = evaluarTendencia(r.demanda_mensual);
 
       const engineRow: ProductRow = {
         cod,
@@ -235,10 +241,12 @@ export async function GET(request: Request) {
         win: engineRow.win,
         doh: round1(doh(engineRow)),
         sug: round1(sugerido(engineRow, trans)),
+        tendencia,
         flags: {
           pendingUnknown: pending === null,
           seasonalLowConfidence: engineRow.win === 10 && r.h === 0,
           seasonalExcluded,
+          tendenciaCreciente: tendencia.estado === 'creciente',
         },
         seasonalMotivo: SEASONAL_EXCLUDED[cod]?.motivo ?? null,
       };

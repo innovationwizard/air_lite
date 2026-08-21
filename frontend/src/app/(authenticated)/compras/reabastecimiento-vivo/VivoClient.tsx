@@ -2,9 +2,10 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  AlertTriangle, Boxes, CloudOff, PackageCheck, Pencil, RefreshCw, Search, X,
+  AlertTriangle, Boxes, CloudOff, PackageCheck, Pencil, RefreshCw, Search, TrendingUp, X,
 } from 'lucide-react';
 import { MAX_MANUAL_QTY } from '@/lib/compras/qty';
+import { type Tendencia } from '@/lib/compras/tendencia';
 import {
   type ProductRow, type Sev, sugerido, doh as dohOf, sev, fmt,
 } from '../reabastecimiento/engine';
@@ -76,6 +77,15 @@ const COL_TIP = {
     + 'Es la comparación que pidió Wilmer el 2026-08-20: la venta del mes contra el promedio. '
     + 'Los promedios de 6 y 3 meses van por detrás cuando la demanda se mueve; esta columna '
     + 'muestra lo que ellos todavía no ven. No alimenta el Sugerido.',
+  tend: 'TENDENCIA — ▲ ALZA marca los productos con DOS ALZAS SEGUIDAS: los últimos tres '
+    + 'meses completos subiendo uno sobre otro. Dos y no tres, a propósito — avisar lo antes '
+    + 'posible; una sola alza no significa nada y esperar una tercera llega tarde. '
+    + 'Es el aviso que pidió Wilmer el 2026-08-20: '
+    + '"que me tire un signo de advertencia y que diga que está subiendo… entonces yo voy a '
+    + 'revisar ya mejor mi Odoo y yo digo: ah sí, este amerita que le suba la punta". '
+    + 'NO cambia el Sugerido — la decisión sigue siendo suya. '
+    + 'El mes en curso no cuenta (está incompleto). '
+    + '¿? = todavía no se puede evaluar (falta la serie mensual); no significa "sin tendencia".',
   gap: 'Facturado 3m − Ordenado 3m, en % de lo ordenado. '
     + 'Un delta grande no es un error: son perímetros distintos. '
     + 'Lo facturado en tiendas se muestra aparte, abajo, y NUNCA se suma a una bodega.',
@@ -97,8 +107,13 @@ interface ApiRow {
   /** Venta del mes en curso (parcial), días transcurridos y ritmo a 30 días. Display only. */
   mtd: number | null; mtdDias: number | null; mtdRitmo: number | null;
   seasonalMotivo: string | null;
+  /** Rising-trend evaluation over the last 3 complete months. Display only. */
+  tendencia: Tendencia;
   doh: number; sug: number;
-  flags: { pendingUnknown: boolean; seasonalLowConfidence: boolean; seasonalExcluded: boolean };
+  flags: {
+    pendingUnknown: boolean; seasonalLowConfidence: boolean; seasonalExcluded: boolean;
+    tendenciaCreciente: boolean;
+  };
 }
 interface ApiMeta {
   count: number; asOf: string | null; month: string;
@@ -134,6 +149,7 @@ export function VivoClient() {
   const [prov, setProv] = useState('');
   const [onlySug, setOnlySug] = useState(false);
   const [onlyCrit, setOnlyCrit] = useState(false);
+  const [onlyAlza, setOnlyAlza] = useState(false);
 
   const load = useCallback(async (b: string, silent = false) => {
     if (!silent) setLoading(true);
@@ -222,6 +238,7 @@ export function VivoClient() {
           return false;
         if (onlySug && r.sug <= 0) return false;
         if (onlyCrit && r.doh >= 3) return false;
+        if (onlyAlza && !r.flags.tendenciaCreciente) return false;
         return true;
       })
       // Active products first (any demand or stock), urgency (DOH asc) within;
@@ -233,7 +250,18 @@ export function VivoClient() {
         if (aActive !== bActive) return bActive - aActive;
         return a.doh - b.doh;
       });
-  }, [payload, q, prov, onlySug, onlyCrit]);
+  }, [payload, q, prov, onlySug, onlyCrit, onlyAlza]);
+
+  // Counted over the WHOLE bodega, not the filtered list: the point of the
+  // number is to say how much is rising before any filter narrows the view.
+  const alza = useMemo(() => {
+    const rows = payload?.rows ?? [];
+    return {
+      creciente: rows.filter((r) => r.flags.tendenciaCreciente).length,
+      noEvaluable: rows.filter((r) => r.tendencia.estado === 'no-evaluable').length,
+      total: rows.length,
+    };
+  }, [payload]);
 
   const kpis = useMemo(() => {
     const need = list.filter((r) => r.sug > 0);
@@ -363,7 +391,27 @@ export function VivoClient() {
             <label className="text-xs text-gray-600 inline-flex items-center gap-1.5 cursor-pointer">
               <input type="checkbox" checked={onlyCrit} onChange={(e) => setOnlyCrit(e.target.checked)} /> Solo quiebre
             </label>
+            <label className={`text-xs inline-flex items-center gap-1.5 cursor-pointer rounded-full px-2.5 py-1 border font-semibold ${
+              onlyAlza
+                ? 'bg-amber-500 text-white border-amber-500'
+                : 'bg-amber-50 text-amber-800 border-amber-300 hover:bg-amber-100'}`}>
+              <input type="checkbox" className="accent-amber-600"
+                     checked={onlyAlza} onChange={(e) => setOnlyAlza(e.target.checked)} />
+              <TrendingUp size={13} strokeWidth={3} />
+              Solo en alza ({alza.creciente})
+            </label>
           </div>
+
+          {alza.noEvaluable > 0 && alza.total > 0 ? (
+            <div className="mx-3 mb-3 flex items-start gap-2 rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-xs text-gray-700">
+              <AlertTriangle size={14} className="mt-0.5 shrink-0 text-gray-500" />
+              <span>
+                <b>{alza.noEvaluable}</b> de {alza.total} productos todavía <b>no se pueden evaluar</b> por
+                tendencia — les falta la serie mensual, que se llena en la próxima sincronización.
+                Eso <b>no</b> quiere decir que no estén subiendo.
+              </span>
+            </div>
+          ) : null}
 
           {loading ? (
             <div className="p-10 text-center text-sm text-gray-500">Cargando datos en vivo…</div>
@@ -388,6 +436,7 @@ export function VivoClient() {
                     <Th tip={COL_TIP.ord}>Ord. 6m</Th>
                     <Th tip={COL_TIP.ord}>Ord. 3m</Th>
                     <Th tip={COL_TIP.mes}>Mes en curso</Th>
+                    <Th tip={COL_TIP.tend}>Tendencia</Th>
                     <Th tip={COL_TIP.fact}>Fact. 6m</Th>
                     <Th tip={COL_TIP.fact}>Fact. 3m</Th>
                     <Th tip={COL_TIP.gap}>Δ</Th>
@@ -397,8 +446,12 @@ export function VivoClient() {
                 <tbody className="tabular-nums">
                   {list.slice(0, 400).map((r) => {
                     const band = sev(r.doh);
+                    const alzaRow = r.flags.tendenciaCreciente;
                     return (
-                      <tr key={r.productId} className="hover:bg-teal-50/50">
+                      <tr key={r.productId}
+                          className={alzaRow
+                            ? 'bg-amber-50/70 hover:bg-amber-100/70 shadow-[inset_4px_0_0_0_rgb(245,158,11)]'
+                            : 'hover:bg-teal-50/50'}>
                         <td className="px-3 py-2 border-b border-gray-100 text-left">{r.cod}</td>
                         <td className="px-3 py-2 border-b border-gray-100 text-left">
                           <div className="truncate max-w-[240px] text-gray-800">{r.desc}</div>
@@ -443,6 +496,9 @@ export function VivoClient() {
                         <td className="px-3 py-2 border-b border-gray-100 text-right">
                           <MesEnCurso mtd={r.mtd} dias={r.mtdDias} ritmo={r.mtdRitmo} p3={r.p3} />
                         </td>
+                        <td className="px-3 py-2 border-b border-gray-100 text-center">
+                          <TendenciaCell t={r.tendencia} />
+                        </td>
                         <td className="px-3 py-2 border-b border-gray-100 text-right text-indigo-700">
                           {r.f6 === null ? <span className="text-gray-300" title="Sin calcular todavía">¿?</span> : fmt(r.f6)}
                         </td>
@@ -457,6 +513,10 @@ export function VivoClient() {
                               ? `Sin término estacional — ${r.seasonalMotivo ?? ''} Forecast = promedio(6m, 3m) × 1.1.`
                               : r.flags.seasonalLowConfidence ? 'Estacional sin datos — confianza baja' : undefined}>
                           {fmt(r.sug)}
+                          {alzaRow ? (
+                            <TrendingUp size={13} strokeWidth={3}
+                                        className="inline-block ml-1 -mt-0.5 text-amber-600" />
+                          ) : null}
                           {r.flags.seasonalLowConfidence ? <span className="text-amber-500">*</span> : null}
                           {r.flags.seasonalExcluded ? <span className="text-indigo-500">†</span> : null}
                         </td>
@@ -470,6 +530,8 @@ export function VivoClient() {
           <div className="text-xs text-gray-500 px-3 py-2.5 border-t border-gray-100">
             Mostrando <b>{Math.min(400, list.length)}</b> de <b>{list.length}</b> productos
             {list.length > 400 ? ' (primeros 400 — refiná con filtros)' : ''} · bodega <b>{bodega}</b>
+            {' '}· <span className="inline-flex items-center gap-1 font-semibold text-amber-700"><TrendingUp size={12} strokeWidth={3} />ALZA</span>
+            {' '}= dos alzas seguidas (3 meses completos subiendo) — aviso, no cambia el Sugerido
             {' '}· <span className="text-amber-600">*</span> = estacional con confianza baja
             {list.some((r) => r.flags.seasonalExcluded)
               ? <> · <span className="text-indigo-500">†</span> = sin término estacional por decisión explícita (ver el tooltip del Sugerido)</>
@@ -544,6 +606,48 @@ export function VivoClient() {
  * implies. The day count is never omitted: a partial month read as a full one
  * is exactly the misreading this column exists to prevent.
  */
+/**
+ * The rising-trend badge (Wilmer, 2026-08-20).
+ *
+ * Deliberately loud: he asked for a colour change or a warning sign, and the
+ * marker it replaces — a 1-character amber asterisk — is exactly the kind of
+ * thing that gets scrolled past. It is a NOTIFICATION: nothing here changes
+ * the Sugerido.
+ *
+ * The tooltip carries the three months and their quantities, so the alert
+ * argues for itself and he can see at a glance whether the rise is 5,084 →
+ * 6,459 or 1 → 3. Magnitude is shown rather than filtered, because no minimum
+ * was agreed and inventing one would hide real rises on slow movers.
+ *
+ * `no-evaluable` renders ¿? with the reason, never a blank or a dash: "we
+ * cannot tell" and "it is not rising" are different answers.
+ */
+function TendenciaCell({ t }: { t: Tendencia }) {
+  if (t.estado === 'no-evaluable') {
+    return (
+      <span className="text-gray-300 cursor-help"
+            title={`Tendencia no evaluable — ${t.motivo ?? 'sin dato'}. No significa que no esté subiendo.`}>
+        ¿?
+      </span>
+    );
+  }
+  if (t.estado === 'sin-tendencia') {
+    return <span className="text-gray-300" title="Sin dos alzas seguidas en los últimos 3 meses completos">—</span>;
+  }
+  const detalle = t.meses.map((m) => `${m.month}: ${fmt(m.qty)}`).join('  →  ');
+  const pct = t.alzaPct === null ? '' : `  (+${t.alzaPct.toFixed(0)}%)`;
+  return (
+    <span
+      className="inline-flex items-center gap-1 rounded-full bg-amber-500 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide text-white shadow-sm cursor-help"
+      title={`Dos alzas seguidas — ${detalle}${pct}. `
+        + 'Aviso para que lo revises en Odoo; el Sugerido no fue modificado.'}
+    >
+      <TrendingUp size={12} strokeWidth={3} />
+      Alza
+    </span>
+  );
+}
+
 function MesEnCurso({ mtd, dias, ritmo, p3 }: {
   mtd: number | null; dias: number | null; ritmo: number | null; p3: number;
 }) {

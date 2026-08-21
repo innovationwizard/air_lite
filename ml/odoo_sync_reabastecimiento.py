@@ -541,18 +541,38 @@ def _stock_for_locations(execute, exist_ids, patio_ids):
     return out
 
 
+def minus_months(d, n):
+    """`d` shifted back n whole months, keeping the day-of-month."""
+    y, m = d.year, d.month - n
+    while m <= 0:
+        y -= 1
+        m += 12
+    return d.replace(year=y, month=m)
+
+
 def month_windows(today):
     """(start_3mo, start_6mo, end) = last 3/6 COMPLETE calendar months."""
     first_of_current = today.replace(day=1)
+    return (minus_months(first_of_current, 3),
+            minus_months(first_of_current, 6),
+            first_of_current)
 
-    def minus_months(d, n):
-        y, m = d.year, d.month - n
-        while m <= 0:
-            y -= 1
-            m += 12
-        return d.replace(year=y, month=m)
 
-    return minus_months(first_of_current, 3), minus_months(first_of_current, 6), first_of_current
+# Months of monthly demand persisted per product x bodega. Six matches the p6
+# window, so the buckets partition exactly the same span the average covers and
+# can be cross-checked against it (see sync_velocity).
+DEMANDA_MESES = 6
+
+
+def month_buckets(today, n=DEMANDA_MESES):
+    """[(label, start, end)] for the last n COMPLETE calendar months, oldest
+    first. `end` is exclusive. The CURRENT month is never included: it is
+    partial, and treating it as a month would read as a fall on almost every
+    product for most of the month."""
+    first_of_current = today.replace(day=1)
+    starts = [minus_months(first_of_current, k) for k in range(n, 0, -1)]
+    bounds = starts + [first_of_current]
+    return [(starts[i].strftime('%Y-%m'), bounds[i], bounds[i + 1]) for i in range(n)]
 
 
 # ── Unit-of-measure conversion (root cause of Wilmer's 2026-08-20 report) ────
@@ -730,6 +750,7 @@ def sync_velocity(execute, bodega_codes, wh_ids_by_code, issues, uom_ctx):
     product's STOCK UoM. General = all warehouses (no filter)."""
     today = datetime.now(timezone.utc).date()
     start3, start6, end = month_windows(today)
+    buckets = month_buckets(today)
     factors, stock_uom = uom_ctx
     issues.add('info', 'sales',
                f'velocity windows: p3 {start3}->{end}, p6 {start6}->{end}; '
@@ -766,11 +787,44 @@ def sync_velocity(execute, bodega_codes, wh_ids_by_code, issues, uom_ctx):
         q3 = grouped(base + [['order_id.date_order', '>=', str(start3)],
                              ['order_id.date_order', '<', str(end)]])
         qm = grouped(base + [['order_id.date_order', '>=', str(end)]])
+
+        # Per-month buckets for the rising-trend alert (Wilmer 2026-08-20).
+        # Queried SEPARATELY instead of deriving p6/p3 from them: the averages
+        # are Wilmer's numbers and are not touched here. The two are then
+        # cross-checked below, so a divergence is reported instead of silently
+        # shipping a series that disagrees with the average beside it.
+        per_month = {}
+        for label, m_start, m_end in buckets:
+            per_month[label] = grouped(base + [['order_id.date_order', '>=', str(m_start)],
+                                               ['order_id.date_order', '<', str(m_end)]])
+
+        pids = set(q6) | set(q3) | set(qm)
+        for month_totals in per_month.values():
+            pids |= set(month_totals)
         result[bodega] = {pid: {'p6': q6.get(pid, 0.0) / 6.0,
                                 'p3': q3.get(pid, 0.0) / 3.0,
                                 'mtd': qm.get(pid, 0.0),
-                                'mtd_dias': mtd_dias}
-                          for pid in set(q6) | set(q3) | set(qm)}
+                                'mtd_dias': mtd_dias,
+                                # Explicit zeros: "did not sell" is a real
+                                # datapoint and the trend rule needs a complete,
+                                # gap-free series to judge adjacency.
+                                'demanda_mensual': {
+                                    label: round(per_month[label].get(pid, 0.0), 4)
+                                    for label, _s, _e in buckets}}
+                          for pid in pids}
+
+        # The 6 buckets partition exactly the p6 window, so their sum must equal
+        # it. If it does not, something about the windows or the UoM folding is
+        # wrong and the trend alert would be built on a different number than
+        # the average shown next to it -- report, never paper over.
+        sum_buckets = sum(sum(t.values()) for t in per_month.values())
+        sum_q6 = sum(q6.values())
+        if abs(sum_buckets - sum_q6) > max(1.0, abs(sum_q6) * 1e-6):
+            issues.add('warning', 'sales',
+                       f'{bodega}: la suma de los {len(buckets)} meses ({sum_buckets:.2f}) no '
+                       f'coincide con la ventana p6 ({sum_q6:.2f}) -- la serie mensual y el '
+                       f'promedio no vienen del mismo dato; revisar antes de confiar en la '
+                       f'alerta de tendencia')
         logger.info('velocity %s: %d products', bodega, len(result[bodega]))
     if unconverted_total:
         issues.add('warning', 'sales',
@@ -923,6 +977,14 @@ def assemble_inputs(product_map, stock, velocity, transit, seasonal, invoiced, s
     """Join everything into reabastecimiento_inputs rows. pending_reserve is
     NEVER set (decision 2026-07-30 — manual only)."""
     as_of = datetime.now(timezone.utc).isoformat()
+    # A product can have stock and NO sale line in the whole 6-month window: it
+    # then has no velocity entry at all. Its monthly demand is a known ZERO, not
+    # an unknown -- measured 2026-08-21, that is 596 of 2,970 rows. Writing NULL
+    # for them would make the page say "not evaluable yet, waiting on the next
+    # sync" forever about products the sync has already fully answered.
+    # NULL is reserved for exactly one thing: this column predates the row.
+    zero_series = {label: 0.0 for label, _s, _e in
+                   month_buckets(datetime.now(timezone.utc).date())}
     rows = []
     unmapped = set()
     for bodega in stock:
@@ -951,6 +1013,9 @@ def assemble_inputs(product_map, stock, velocity, transit, seasonal, invoiced, s
                 'f3': round(fac.get('f3', 0.0), 4),
                 'mtd': round(vel.get('mtd', 0.0), 4),
                 'mtd_dias': vel.get('mtd_dias'),
+                # Explicit zeros when the product had no sales at all in the
+                # window -- "did not sell" is an answer, not a missing value.
+                'demanda_mensual': vel.get('demanda_mensual') or zero_series,
                 'win': win,
                 'as_of': as_of,
                 'source_sync_id': sync_id,
