@@ -22,6 +22,12 @@ export interface ProductRow {
   h: number;       // seasonal same-month prior year (0 on location sheets)
   adic: number;    // Comercial "Adicional"
   win: 10 | 5;     // projection window: 10 (General) / 5 (locations)
+  /**
+   * Days of demand the Sugerido should cover. OPTIONAL: when absent the engine
+   * behaves exactly as the workbook does, so the xlsx parity page is untouched.
+   * See COBERTURA_DEFAULT_DIAS.
+   */
+  coberturaDias?: number;
 }
 
 export interface BodegaData {
@@ -31,12 +37,46 @@ export interface BodegaData {
 
 export type Dataset = Record<string, BodegaData>;
 
-/** forecast = mean(6-mo, 3-mo, seasonal) × 1.1  (General)  |  mean(6-mo, 3-mo)  (locations) */
+/**
+ * How many days of demand the Sugerido covers when nothing says otherwise.
+ *
+ * The workbook never states a horizon: `p6`, `p3` and the seasonal term are all
+ * MONTHLY averages, so the suggested quantity implicitly covers a month. Nobody
+ * chose 30 — it falls out of the inputs. It is named here because as of
+ * 2026-08-21 it is no longer the same for every bodega, and an implicit
+ * constant that now varies has to become explicit.
+ *
+ * Wilmer's own words for it (2026-08-21): *"el sugerido para estos CDs no es de
+ * 30 dias, sino de 15 dias"* — his vocabulary, kept.
+ */
+export const COBERTURA_DEFAULT_DIAS = 30;
+
+/**
+ * forecast = mean(6-mo, 3-mo, seasonal) × 1.1  (General)  |  mean(6-mo, 3-mo)  (locations)
+ * …then scaled to the bodega's coverage horizon.
+ *
+ * The scale is linear because the base IS a month of demand: half the horizon,
+ * half the quantity. With `coberturaDias` absent the factor is exactly 1, which
+ * is what keeps the xlsx parity page and its 99.85% match intact.
+ */
 export function forecast(r: ProductRow): number {
-  return r.win === 10 ? ((r.p6 + r.p3 + r.h) / 3) * 1.1 : (r.p6 + r.p3) / 2;
+  const base = r.win === 10 ? ((r.p6 + r.p3 + r.h) / 3) * 1.1 : (r.p6 + r.p3) / 2;
+  const dias = r.coberturaDias ?? COBERTURA_DEFAULT_DIAS;
+  return base * (dias / COBERTURA_DEFAULT_DIAS);
 }
 
-/** Sugerido = max(0, forecast − max(0, existencias + tránsito − proyección)) + adicional */
+/**
+ * Sugerido = max(0, forecast − max(0, existencias + tránsito − proyección)) + adicional
+ *
+ * ⚠️ The coverage horizon belongs INSIDE `forecast`, never as a scale on the
+ * result: `k·(forecast − V)` would also shrink the credit given for stock
+ * already on hand, which is a different — and wrong — calculation.
+ *
+ * `T` (the projection window `win`) is deliberately NOT scaled: it is the
+ * consumption expected during the resupply cycle, a separate quantity from how
+ * much cover to hold. Wilmer confirmed the fixed window is intentional
+ * (2026-07-23).
+ */
 export function sugerido(r: ProductRow, trans: number): number {
   const T = (r.p3 / 20) * r.win;
   const U = r.exist + trans - T;

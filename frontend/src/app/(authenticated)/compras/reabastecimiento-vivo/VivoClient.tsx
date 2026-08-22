@@ -100,7 +100,10 @@ const COL_TIP = {
   sug:
     'Sugerido = max(0, forecast − max(0, exist. neta + tránsito − proyección)) + adicional. '
     + 'Forecast: promedio(6m, 3m, estacional) × 1.1 en General; promedio(6m, 3m) por bodega. '
-    + 'Proyección: (promedio 3m ÷ 20) × ventana (10 General / 5 por bodega).',
+    + 'Proyección: (promedio 3m ÷ 20) × ventana (10 General / 5 por bodega). '
+    + '⚠️ El forecast se escala a los DÍAS QUE CUBRE esta bodega — 30 por defecto, '
+    + '15 en Zacapa y Petén desde el 2026-08-21 a pedido de Wilmer, porque se resurten '
+    + 'desde San José y no del proveedor. La ventana de proyección y el DOH NO cambian.',
 } as const;
 
 interface ApiRow {
@@ -125,6 +128,8 @@ interface ApiRow {
 }
 interface ApiMeta {
   count: number; asOf: string | null; month: string;
+  /** Days of demand the Sugerido covers for this bodega (Wilmer 08-21: ZAC/PET = 15). */
+  coberturaDias: number;
   lastSync: {
     id: string; status: string; started_at: string; finished_at: string | null;
     counts?: { data_horizon?: string | null };
@@ -422,6 +427,18 @@ export function VivoClient() {
                 <b>{alza.noEvaluable}</b> de {alza.total} productos todavía <b>no se pueden evaluar</b> por
                 tendencia — les falta la serie mensual, que se llena en la próxima sincronización.
                 Eso <b>no</b> quiere decir que no estén subiendo.
+              </span>
+            </div>
+          ) : null}
+
+          {payload?.meta ? (
+            <div className="mx-3 mb-3 inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-1.5 text-xs text-gray-700">
+              <span className="font-semibold">Sugerido a {payload.meta.coberturaDias} días</span>
+              <span className="text-gray-400">·</span>
+              <span className="text-gray-500">
+                {payload.meta.coberturaDias === 30
+                  ? 'horizonte por defecto'
+                  : `${bodega} se resurte desde San José, no del proveedor`}
               </span>
             </div>
           ) : null}

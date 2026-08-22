@@ -84,9 +84,15 @@ export async function POST(request: Request) {
       return { productId, cod: ref.cod, desc: ref.desc, prov: ref.prov, porBodega };
     }).filter((l): l is NonNullable<typeof l> => l !== null);
 
+    const cobertura: Record<string, number> = {};
+    for (const { bodega, built } of perBodega) cobertura[bodega] = built.coberturaDias;
+
     return NextResponse.json({
       lines,
       bodegas: CARVAJAL_BODEGAS,
+      // Each bodega's coverage horizon, so the weekly proposal is derived from
+      // what its Sugerido actually covers instead of a fixed divisor.
+      cobertura,
       desconocidos,
       asOf: perBodega.map((p) => p.built.maxAsOf).filter(Boolean).sort().pop() ?? null,
     });

@@ -10,6 +10,7 @@
  */
 import type { SupabaseClient } from '@supabase/supabase-js';
 import {
+  COBERTURA_DEFAULT_DIAS,
   type ProductRow,
   sugerido,
   doh,
@@ -103,10 +104,10 @@ export interface LiveRow {
 export async function buildRows(
   service: SupabaseClient,
   bodega: string,
-): Promise<{ rows: LiveRow[]; maxAsOf: string; monthStart: string }> {
+): Promise<{ rows: LiveRow[]; maxAsOf: string; monthStart: string; coberturaDias: number }> {
     const monthStart = `${new Date().toISOString().slice(0, 7)}-01`;
 
-    const [inputs, products, links, suppliers, transitoOv, pendingOv, comercial] =
+    const [inputs, products, links, suppliers, transitoOv, pendingOv, comercial, cobertura] =
       await Promise.all([
         fetchAll<InputRow>((a, b) =>
           service.from('reabastecimiento_inputs').select('*').eq('bodega', bodega).range(a, b)),
@@ -127,7 +128,15 @@ export async function buildRows(
             .select('product_id, bodega, quantity, motivo, created_at')
             .eq('month', monthStart)
             .order('created_at', { ascending: false }).range(a, b)),
+        // Coverage horizon for THIS bodega — append-only, newest row wins.
+        // No row is a real answer: it means the engine default (30 días).
+        service.from('bodega_cobertura').select('dias')
+          .eq('bodega', bodega).order('created_at', { ascending: false })
+          .limit(1).maybeSingle(),
       ]);
+
+    const coberturaDias = (cobertura?.data as { dias: number } | null)?.dias
+      ?? COBERTURA_DEFAULT_DIAS;
 
     const productById = new Map(products.map((p) => [p.id, p]));
     const supplierById = new Map(suppliers.map((s) => [s.id, s.name]));
@@ -194,6 +203,7 @@ export async function buildRows(
         h: hEffective,
         adic,
         win: r.win === 10 ? 10 : 5,
+        coberturaDias,
       };
       return {
         productId: r.product_id,
@@ -236,7 +246,7 @@ export async function buildRows(
       };
     });
 
-  return { rows, maxAsOf, monthStart };
+  return { rows, maxAsOf, monthStart, coberturaDias };
 }
 
 export function round1(n: number): number {

@@ -49,7 +49,7 @@ export async function GET(request: Request) {
     }
 
     // Rows come from the SHARED builder the xlsx export also uses — see rows.ts.
-    const [{ rows, maxAsOf, monthStart }, tiendaRows, lastSync] = await Promise.all([
+    const [{ rows, maxAsOf, monthStart, coberturaDias }, tiendaRows, lastSync] = await Promise.all([
       buildRows(service, bodega),
       fetchAll<TiendaRow>((a, b) =>
         service.from('invoiced_tiendas').select('product_id, tienda, f6, f3').range(a, b)),
@@ -91,6 +91,9 @@ export async function GET(request: Request) {
         asOf: maxAsOf || null,
         lastSync: lastSync?.data ?? null,
         month: monthStart,
+        // Days of demand the Sugerido covers for this bodega (Wilmer 2026-08-21:
+        // Zacapa y Petén a 15). Reported so the page can say it out loud.
+        coberturaDias,
       },
     });
   } catch (e) {

@@ -52,6 +52,8 @@ interface ApiLine {
   porBodega: Record<string, { sug: number; doh: number; exist: number; trans: number } | null>;
 }
 
+type Cobertura = Record<string, number>;
+
 interface SavedLinea {
   product_id: number; cod: string; desc: string; orden: number;
   cantidades: Record<string, number | null>;
@@ -63,8 +65,8 @@ interface Draft extends ExportLine {
   sug: Record<string, number | null>;
 }
 
-/** Weeks in a month, for the "Sugerido covers a month, this sheet covers a week" split. */
-const WEEKS_PER_MONTH = 4;
+/** Days the sheet covers: it is a weekly ask. */
+const DIAS_SEMANA = 7;
 
 /** Draft key: the month the sheet is for, as the first of that month. */
 function mesKey(d = new Date()): string {
@@ -91,9 +93,17 @@ async function sha256Hex(bytes: Uint8Array): Promise<string | null> {
   }
 }
 
-function proposal(sug: number | null | undefined): number | null {
+/**
+ * Weekly proposal from a Sugerido that covers `coberturaDias` days.
+ *
+ * Derived from the bodega's OWN horizon rather than a fixed divisor: since
+ * 2026-08-21 Zacapa and Petén cover 15 days, not 30 (Wilmer), so a flat ÷4
+ * would propose roughly half of what a week there actually needs.
+ */
+function proposal(sug: number | null | undefined, coberturaDias: number): number | null {
   if (typeof sug !== 'number' || !Number.isFinite(sug) || sug <= 0) return null;
-  return Math.round(sug / WEEKS_PER_MONTH);
+  if (!Number.isFinite(coberturaDias) || coberturaDias <= 0) return null;
+  return Math.round(sug * (DIAS_SEMANA / coberturaDias));
 }
 
 export function ExportCarvajal({ productIds, bodega }: { productIds: number[]; bodega: string }) {
@@ -104,6 +114,7 @@ export function ExportCarvajal({ productIds, bodega }: { productIds: number[]; b
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   /** A saved draft found on open, offered but not yet applied. */
   const [pending, setPending] = useState<{ lineas: SavedLinea[]; autor: string; updated_at: string } | null>(null);
+  const [cobertura, setCobertura] = useState<Cobertura>({});
   const [emitState, setEmitState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [lastEmision, setLastEmision] = useState<{ archivo: string; autor: string; created_at: string; total_lineas: number } | null>(null);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -128,12 +139,14 @@ export function ExportCarvajal({ productIds, bodega }: { productIds: number[]; b
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json?.error ?? 'No se pudo preparar la exportación');
+      const cob: Cobertura = json.cobertura ?? {};
+      setCobertura(cob);
       const drafted: Draft[] = (json.lines as ApiLine[]).map((l) => {
         const cantidades: Record<string, number | null> = {};
         const sug: Record<string, number | null> = {};
         for (const b of CARVAJAL_BODEGAS) {
           sug[b] = l.porBodega[b]?.sug ?? null;
-          cantidades[b] = proposal(l.porBodega[b]?.sug);
+          cantidades[b] = proposal(l.porBodega[b]?.sug, cob[b] ?? 30);
         }
         return { productId: l.productId, cod: l.cod, desc: l.desc, cantidades, sug };
       });
@@ -367,9 +380,11 @@ export function ExportCarvajal({ productIds, bodega }: { productIds: number[]; b
             ) : null}
 
             <div className="border-b border-amber-200 bg-amber-50 px-5 py-2 text-xs text-amber-900">
-              Las cantidades vienen <b>propuestas como Sugerido ÷ {WEEKS_PER_MONTH}</b> (el Sugerido cubre un mes
-              y esta hoja cubre una semana) — <b>es un supuesto nuestro, no una regla tuya</b>. Corregí lo que
-              haga falta; pasá el mouse sobre una celda para ver el Sugerido del que salió.
+              Las cantidades vienen <b>propuestas para una semana</b>, sacadas del Sugerido de cada bodega
+              según los días que ese Sugerido cubre
+              ({CARVAJAL_BODEGAS.map((b) => `${BODEGA_HEADER[b]} ${cobertura[b] ?? 30}d`).join(' · ')})
+              — <b>es un supuesto nuestro, no una regla tuya</b>. Corregí lo que haga falta; pasá el mouse
+              sobre una celda para ver el Sugerido del que salió.
             </div>
 
             <div className="min-h-0 flex-1 overflow-auto px-5 py-3">
@@ -402,13 +417,13 @@ export function ExportCarvajal({ productIds, bodega }: { productIds: number[]; b
                           <td className="border-b border-gray-100 px-2 py-1.5 text-left">{l.cod}</td>
                           <td className="max-w-[260px] truncate border-b border-gray-100 px-2 py-1.5 text-left">{l.desc}</td>
                           {(['San Jose VN'] as CarvajalBodega[]).map((b) => (
-                            <QtyCell key={b} line={l} b={b} onChange={setQty} />
+                            <QtyCell key={b} line={l} b={b} dias={cobertura[b] ?? 30} onChange={setQty} />
                           ))}
                           <td className="border-b border-gray-100 px-2 py-1.5 text-right text-gray-500">
                             {vacia ? '—' : i + 1}
                           </td>
                           {(['Petén', 'Zacapa'] as CarvajalBodega[]).map((b) => (
-                            <QtyCell key={b} line={l} b={b} onChange={setQty} />
+                            <QtyCell key={b} line={l} b={b} dias={cobertura[b] ?? 30} onChange={setQty} />
                           ))}
                           <td className="border-b border-gray-100 px-2 py-1.5 text-right font-semibold">
                             {total === null ? '' : fmt(total)}
@@ -479,8 +494,8 @@ export function ExportCarvajal({ productIds, bodega }: { productIds: number[]; b
   );
 }
 
-function QtyCell({ line, b, onChange }: {
-  line: Draft; b: CarvajalBodega;
+function QtyCell({ line, b, dias, onChange }: {
+  line: Draft; b: CarvajalBodega; dias: number;
   onChange: (productId: number, b: CarvajalBodega, raw: string) => void;
 }) {
   const v = line.cantidades[b];
@@ -493,7 +508,7 @@ function QtyCell({ line, b, onChange }: {
         placeholder="—"
         aria-label={`${BODEGA_HEADER[b]} ${line.cod}`}
         title={typeof sug === 'number'
-          ? `Sugerido mensual ${BODEGA_HEADER[b]}: ${fmt(sug)} · propuesta ÷${WEEKS_PER_MONTH} = ${fmt(Math.round(sug / WEEKS_PER_MONTH))}`
+          ? `Sugerido ${BODEGA_HEADER[b]}: ${fmt(sug)} para ${dias} días · propuesta a 7 días = ${fmt(proposal(sug, dias) ?? 0)}`
           : `Sin Sugerido para ${BODEGA_HEADER[b]}`}
         className="w-20 rounded border border-gray-200 px-1.5 py-1 text-right text-[13px] focus:border-teal-500 focus:outline-none"
       />
