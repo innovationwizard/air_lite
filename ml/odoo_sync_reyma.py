@@ -603,11 +603,11 @@ def sync_facturas(execute, scope, code_to_opid, issues, dry_run, sync_id):
             })
             base = scope.get(cod, {}).get('precio_factura')
             if base and mv['move_type'] == 'in_invoice':
-                rel = abs(precio - float(base)) / float(base)
-                if rel > 0.01:  # >1% relativo; el diferencial +0.41 ya vive en el precio base
+                rel = (precio - float(base)) / float(base)  # con signo: + sobrecobro, − subcobro
+                if abs(rel) > 0.01:  # >1% relativo; el diferencial +0.41 ya vive en el precio base
                     desviaciones[(mv['name'], cod)] = (precio, float(base), rel)
     # alert design: top-5 nombradas + resumen (311 alertas individuales = fatiga, no señal)
-    top = sorted(desviaciones.items(), key=lambda kv: -kv[1][2])[:5]
+    top = sorted(desviaciones.items(), key=lambda kv: -abs(kv[1][2]))[:5]
     for (fac, cod), (precio, base, rel) in top:
         issues.add('warning', 'facturas',
                    f'{fac}: {cod} facturado a {precio:.4f} vs precio vigente {base:.2f} ({rel:+.1%}) — '
