@@ -113,19 +113,47 @@ export function mergeFacturado(
  * (Odoo facturado then produces reyma_transito rows for the same PO).
  * Returns per-código qty + earliest ETA + contributing destinos for display.
  */
+/**
+ * Tránsito implícito por facturas PDF, por código.
+ *
+ * `eta` es la fecha EFECTIVA (manual si existe, calculada si no) — la que
+ * responde «¿cuándo entra?». `etaManual` y `etaCalculada` la desarman en sus
+ * dos procedencias para poder mostrarlas lado a lado.
+ */
+export interface PdfTransito {
+  cantidad: number;
+  eta: string | null;
+  /** Lo que dijo Alexis. `null` = no lo dijo — y eso se muestra vacío, no se rellena. */
+  etaManual: string | null;
+  /** Lo que calcula la fórmula (fecha impresa + N días hábiles por bodega). */
+  etaCalculada: string | null;
+  destinos: string[];
+}
+
 export function computePdfTransito(
   poName: string,
   mes: string, // 'YYYY-MM'
   poLineas: Array<{ po_name: string; codigo: string; recibidas: number }>,
   odooTransito: Array<{ po_name: string; codigo: string; cantidad_pendiente: number }>,
-  pdfFacturas: FacturaPdfLinea[],
-): Map<string, { cantidad: number; eta: string | null; destinos: string[] }> {
-  const pdfFact = new Map<string, { qty: number; etas: string[]; destinos: Set<string> }>();
+  pdfFacturas: Array<FacturaPdfLinea & { etaManual?: string | null; etaCalculada?: string | null }>,
+): Map<string, PdfTransito> {
+  const pdfFact = new Map<string, {
+    qty: number; etas: string[]; manuales: string[]; calculadas: string[]; destinos: Set<string>;
+  }>();
   for (const f of pdfFacturas) {
     if (f.destino === 'entrega-directa' || f.fecha.slice(0, 7) !== mes) continue;
-    const e = pdfFact.get(f.codigo) ?? { qty: 0, etas: [], destinos: new Set<string>() };
+    const e = pdfFact.get(f.codigo)
+      ?? { qty: 0, etas: [], manuales: [], calculadas: [], destinos: new Set<string>() };
     e.qty += f.cantidad;
     if (f.eta) e.etas.push(f.eta);
+    // Las dos procedencias se agregan POR SEPARADO (decisión 2026-08-25). Una
+    // sola columna esconde de dónde salió la fecha: una ETA calculada se ve
+    // idéntica a una que dijo Alexis, y hoy 20 de 26 facturas están mostrando
+    // fórmula sin que se note. Cada columna responde «lo más pronto que entra
+    // este código, según esa fuente»; un hueco en la de Alexis es una pregunta
+    // visible, no un silencio.
+    if (f.etaManual) e.manuales.push(f.etaManual);
+    if (f.etaCalculada) e.calculadas.push(f.etaCalculada);
     if (f.destino) e.destinos.add(f.destino);
     pdfFact.set(f.codigo, e);
   }
@@ -139,13 +167,15 @@ export function computePdfTransito(
     if (t.po_name !== poName) continue;
     odooOg.set(t.codigo, (odooOg.get(t.codigo) ?? 0) + t.cantidad_pendiente);
   }
-  const out = new Map<string, { cantidad: number; eta: string | null; destinos: string[] }>();
+  const out = new Map<string, PdfTransito>();
   for (const [codigo, e] of pdfFact) {
     const extra = e.qty - (recibidas.get(codigo) ?? 0) - (odooOg.get(codigo) ?? 0);
     if (extra > 0.0001) {
       out.set(codigo, {
         cantidad: extra,
         eta: e.etas.length ? [...e.etas].sort()[0] : null,
+        etaManual: e.manuales.length ? [...e.manuales].sort()[0] : null,
+        etaCalculada: e.calculadas.length ? [...e.calculadas].sort()[0] : null,
         destinos: [...e.destinos].sort(),
       });
     }

@@ -1,6 +1,6 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
-import { ROLLOUT_FOCUS, getDefaultPage, type Role } from '@/lib/auth/roles';
+import { focusRoutes, getDefaultPage, isWithinFocus, type Role } from '@/lib/auth/roles';
 
 // Page routes reachable without a valid auth session. Everything else
 // requires an authenticated Supabase user cookie; callers without one get
@@ -95,14 +95,14 @@ export async function middleware(request: NextRequest) {
     }
 
     // TEMPORARY rollout focus (Jorge, 2026-08-11): focused roles are CONFINED
-    // to their live page — any other page (incl. '/', '/backtest', silo
-    // landings) redirects there, so nothing distracts from validation.
-    // /update-password stays reachable (temp-password change). API routes are
-    // untouched (the live page needs them). Delete the ROLLOUT_FOCUS entries
-    // in roles.ts to lift the confinement.
-    const focus = role ? ROLLOUT_FOCUS[role] : undefined;
-    if (focus && !pathname.startsWith(focus) && !pathname.startsWith('/update-password')) {
-      return NextResponse.redirect(new URL(focus, request.url));
+    // to their live pages — any other page (incl. '/', '/backtest', silo
+    // landings) redirects to the FIRST of them, so nothing distracts from
+    // validation. /update-password stays reachable (temp-password change). API
+    // routes are untouched (the live page needs them). Delete the
+    // ROLLOUT_FOCUS entries in roles.ts to lift the confinement.
+    const focus = focusRoutes(role);
+    if (focus && !isWithinFocus(pathname, focus) && !pathname.startsWith('/update-password')) {
+      return NextResponse.redirect(new URL(focus[0], request.url));
     }
   }
 

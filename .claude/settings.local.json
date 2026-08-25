@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(AWS_PROFILE=airefill-prod aws ecs run-task --cluster airefill-api-cluster --task-definition airefill-seed:1 --launch-type FARGATE --network-configuration '{:*)"
+    ]
+  }
+}

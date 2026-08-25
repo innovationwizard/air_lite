@@ -1895,10 +1895,19 @@ function TabDatos({
   return (
     <>
       <div className="bg-white rounded-lg border border-slate-200 p-4 mb-4">
-        <h3 className="text-sm font-semibold text-slate-700 mb-2">
+        <h3 className="text-sm font-semibold text-slate-700 mb-1">
           Tránsito en detalle — facturado no recibido ({payload.transitoDetalle.length} líneas,{' '}
           {directas.length} de entrega directa)
         </h3>
+        <div className="mb-2 text-[11px] text-slate-500">
+          <strong>ETA Alexis</strong> es la fecha anotada a mano; <strong>ETA App</strong> es la
+          calculada (fecha impresa de la factura + los días hábiles de esa bodega). Se muestran las
+          dos porque una calculada se ve igual que una real: un espacio vacío en la de Alexis es una
+          fecha que nadie confirmó, no una fecha que falte.{' '}
+          <a href="/inventarios/facturas" className="font-medium text-emerald-700 hover:underline">
+            Cargar una factura →
+          </a>
+        </div>
         <div className="overflow-x-auto">
           <table className="text-xs border-collapse min-w-full">
             <thead className="bg-slate-50">
@@ -1907,7 +1916,8 @@ function TabDatos({
                 <th className={TH}>Código</th>
                 <th className={THR}>Cajas</th>
                 <th className={TH}>Destino</th>
-                <th className={TH}>ETA (anotado)</th>
+                <th className={TH}>ETA Alexis</th>
+                <th className={TH}>ETA App</th>
                 <th className={TH}>Nota</th>
                 <th className={TH}>Tipo</th>
               </tr>
@@ -1923,6 +1933,11 @@ function TabDatos({
                   <td className={`${TD} font-mono`}>{t.codigo}</td>
                   <td className={TDR}>{qty(t.cantidad)}</td>
                   <td className={TD}>{t.destino ?? '—'}</td>
+                  {/* Dos columnas, no una (decisión 2026-08-25). Un ETA
+                      calculado se ve idéntico a uno real, así que con una sola
+                      columna no hay manera de saber cuál se está mirando — y
+                      hoy 20 de 26 facturas están mostrando fórmula. Una celda
+                      vacía en «ETA Alexis» es una pregunta que se ve. */}
                   <td className={TD}>
                     <span className="inline-flex items-center gap-1">
                       <input
@@ -1949,6 +1964,20 @@ function TabDatos({
                       </button>
                     </span>
                   </td>
+                  <td
+                    className={`${TD} ${
+                      t.etaCalculada && t.eta && t.etaCalculada !== t.eta
+                        ? 'text-amber-700'
+                        : 'text-slate-400'
+                    }`}
+                    title={
+                      t.etaCalculada
+                        ? 'Fecha impresa de la factura + los días hábiles configurados para esa bodega'
+                        : 'Esta fila no sale de una factura PDF: no hay fecha impresa de la que calcular'
+                    }
+                  >
+                    {t.etaCalculada ?? '—'}
+                  </td>
                   <td className={TD}>
                     <input
                       type="text"
@@ -1974,7 +2003,7 @@ function TabDatos({
               })}
               {payload.transitoDetalle.length === 0 && (
                 <tr>
-                  <td className={TD} colSpan={7}>
+                  <td className={TD} colSpan={8}>
                     Sin tránsito facturado pendiente de recibir.
                   </td>
                 </tr>

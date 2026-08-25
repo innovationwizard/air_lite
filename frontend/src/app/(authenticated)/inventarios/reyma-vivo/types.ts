@@ -33,8 +33,14 @@ export interface TransitoDetalle {
   destino: string | null;
   esEntregaDirecta: boolean;
   esFechaPasada: boolean;
-  /** Anotación manual (L3): ETA real conocida por factura/correo + nota. */
+  /**
+   * ETA de Alexis — la que él anotó a mano (L3), por factura o por correo.
+   * `null` significa que NO la dijo, y se muestra vacía a propósito: rellenarla
+   * con la calculada esconde que 20 de 26 facturas están mostrando fórmula.
+   */
   eta: string | null;
+  /** ETA App — la fórmula: fecha impresa + N días hábiles según la bodega. */
+  etaCalculada: string | null;
   nota: string | null;
   notaAutor: string | null;
 }

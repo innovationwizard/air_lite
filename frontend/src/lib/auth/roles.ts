@@ -67,16 +67,41 @@ export const CAN_VIEW_POC_ONLY: Role[] = ['testuser'];
 
 /**
  * TEMPORARY delivery-phase focus (Jorge, 2026-08-11): while Wilmer (compras)
- * and Alexis (inventario) onboard, they are CONFINED to their live Odoo page —
- * the sidebar shows only that item, login lands there, and the middleware
- * redirects every other page (except /update-password) back to it, so nothing
- * distracts from validation. API routes / PAGE_PERMISSIONS are unchanged.
- * Delete entries here to lift the confinement everywhere at once.
+ * and Alexis (inventario) onboard, they are CONFINED to their live Odoo pages —
+ * the sidebar shows only those items, login lands on the FIRST one, and the
+ * middleware redirects every other page (except /update-password) back to it,
+ * so nothing distracts from validation. API routes / PAGE_PERMISSIONS are
+ * unchanged. Delete entries here to lift the confinement everywhere at once.
+ *
+ * A LIST, not a single route (2026-08-25): the confinement is per-role, but a
+ * role's job can span more than one page. Alexis needs `reyma-vivo` (his live
+ * model) AND `facturas` (loading his own invoices, A12) — with a single route
+ * the second page was unreachable for exactly the person it was built for,
+ * while remaining perfectly visible to superuser. **The first entry is the
+ * landing page**; every entry is reachable.
  */
-export const ROLLOUT_FOCUS: Partial<Record<Role, string>> = {
-  compras: '/compras/reabastecimiento-vivo',
-  inventario: '/inventarios/reyma-vivo',
+export const ROLLOUT_FOCUS: Partial<Record<Role, string[]>> = {
+  compras: ['/compras/reabastecimiento-vivo'],
+  inventario: ['/inventarios/reyma-vivo', '/inventarios/facturas'],
 };
+
+/** Routes a role is confined to, or `undefined` when it is not confined. */
+export function focusRoutes(
+  role: Role | string | null | undefined,
+  focus: Partial<Record<Role, string[]>> = ROLLOUT_FOCUS,
+): string[] | undefined {
+  const routes = role ? focus[role as Role] : undefined;
+  return routes && routes.length > 0 ? routes : undefined;
+}
+
+/**
+ * Is `pathname` inside the confinement? Prefix match, so a page's own
+ * sub-routes travel with it. Callers must have established that the role IS
+ * confined — an unconfined role reaches everything.
+ */
+export function isWithinFocus(pathname: string, routes: string[]): boolean {
+  return routes.some((r) => pathname === r || pathname.startsWith(`${r}/`));
+}
 
 /**
  * Check if a role is authorized for an action.
@@ -101,6 +126,7 @@ export const PAGE_PERMISSIONS: Record<string, Role[]> = {
   '/compras/reabastecimiento-vivo': CAN_VIEW_COMPRAS,
   '/inventarios/reyma': CAN_VIEW_INVENTARIOS,
   '/inventarios/reyma-vivo': CAN_VIEW_INVENTARIOS,
+  '/inventarios/facturas': CAN_VIEW_INVENTARIOS,
   '/operaciones': CAN_VIEW_OPERACIONES,
   '/gerencia': CAN_VIEW_GERENCIA,
   '/superuser': CAN_VIEW_SYSTEM,
@@ -117,10 +143,10 @@ export const PAGE_PERMISSIONS: Record<string, Role[]> = {
  */
 export function getDefaultPage(
   role: Role | string,
-  focus: Partial<Record<Role, string>> = ROLLOUT_FOCUS,
+  focus: Partial<Record<Role, string[]>> = ROLLOUT_FOCUS,
 ): string {
-  const focused = focus[role as Role];
-  if (focused) return focused;
+  const focused = focusRoutes(role, focus);
+  if (focused) return focused[0];
   switch (role) {
     case ROLES.SUPERUSER:
       return '/superuser';

@@ -2,10 +2,17 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-# System dependencies for CmdStan compilation
+# System dependencies:
+#   build-essential — CmdStan compilation (Prophet)
+#   poppler-utils   — `pdftotext`, used by reyma_factura_extract to read the
+#                     REYMA CFDI invoices Alexis uploads (A12). The parser is
+#                     deterministic because these PDFs are machine-generated
+#                     (N1: DevExpress), so no OCR stack is needed.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
-    && rm -rf /var/lib/apt/lists/*
+    poppler-utils \
+    && rm -rf /var/lib/apt/lists/* \
+    && pdftotext -v
 
 # Install Python packages
 COPY requirements.txt .
@@ -26,4 +33,7 @@ COPY . .
 
 EXPOSE 5000
 
-CMD ["gunicorn", "--bind", "0.0.0.0:5000", "--timeout", "3600", "--workers", "1", "api:app"]
+# Two workers, not one (2026-08-25): `/forecast/revenue-daily` is synchronous and
+# `--timeout 3600` lets it hold a worker for a long time. With a single worker,
+# Alexis' invoice upload would queue behind whatever else the service is doing.
+CMD ["gunicorn", "--bind", "0.0.0.0:5000", "--timeout", "3600", "--workers", "2", "api:app"]

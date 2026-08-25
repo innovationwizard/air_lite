@@ -3,28 +3,14 @@ Carga a `reyma_facturas_pdf` las líneas extraídas por
 `extract_reyma_facturas_pdf.py` (paso 3 del procedimiento puente,
 docs/docs-alexis/MANIFEST.md §1d).
 
-Reglas que hace cumplir el script (no son opcionales):
+⚠️ Las REGLAS no viven acá: viven en `ml/reyma_factura_carga.py`, porque la
+página de carga de Alexis (A12) las usa a través del servicio ML y no puede
+haber dos implementaciones que se separen el día que REYMA cambie algo. Este
+archivo es la CLI: argumentos, lectura del CSV, los dos catálogos de la BD, la
+impresión y el upsert. Su interfaz y su salida no cambiaron.
 
-  * `destino` NO se infiere del CFDI. Se declara por archivo en el mapa
-    `--destinos`; el script verifica que coincida con el destino in-band de
-    las Observaciones (`TRAILER 53 PIES BODEGA ZACAPA` / `... BODEGA SAN JOSE`
-    / `... CLIENTE DIRECTO`, hallazgo N10) cuando el documento lo trae, y se
-    niega a cargar si se contradicen.
-  * `eta` NO se inventa. Sólo entra si viene declarada (nombre de carpeta con
-    ETA); si no, queda NULL — precedente G-226.
-  * Unidades: X4G ≡ caja/bulto y XPK ≡ Fardo van 1:1 contra la UoM de compra de
-    Odoo. `KGM` (bolsa poliseda, que REYMA factura POR PESO) se convierte con la
-    tablita de Alexis que vive en la BD (`reyma_conversion_bulto`):
-        cantidad = BLTS de la descripción × rollos_por_bulto
-    NO se deriva del peso: Alexis, verbatim, «no podemos poner como que un peso
-    estándar porque… por centavos no va a cuadrar la factura en cuanto a
-    montos». Si falta la tablita para un código, o el documento no trae los
-    BLTS, la línea se RETIENE — nunca se estima.
-  * Siempre se guarda lo verbatim del papel además de lo convertido:
-    `cantidad_cfdi` + `unidad` + `bultos`.
-  * `codigo` sale de `reyma_products.clave`. Una clave sin mapa detiene la
-    carga: no se descarta la línea ni se le inventa código.
-  * Idempotente: upsert sobre UNIQUE (folio_fiscal, codigo).
+Este script sigue siendo el camino de BACKFILL y la red de seguridad: carga a
+granel desde una carpeta, sin pasar por el navegador.
 
 Uso:
     python scripts/load_reyma_facturas_pdf.py lineas.csv \
@@ -38,27 +24,19 @@ import argparse
 import csv
 import json
 import os
-import re
 import sys
 import urllib.request
 from collections import defaultdict
+from pathlib import Path
 
-# Unidades del CFDI con equivalencia 1:1 probada contra la UoM de compra de
-# Odoo (verificado línea a línea contra PO-PZ11-0489, PO-PZ-0132 y las 95
-# líneas ya cargadas): X4G = caja/bulto, XPK = Fardo.
-UNIDADES_1A1 = {'X4G', 'XPK'}
-# Unidades que requieren conversión con `reyma_conversion_bulto`.
-UNIDADES_CONVERTIBLES = {'KGM'}
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'ml'))
 
-DESTINOS_VALIDOS = {'bodega-san-jose', 'bodega-zacapa', 'bodega-peten', 'entrega-directa'}
-
-# Destino declarado en Observaciones (hallazgo N10) → valor de la columna.
-OBSERV_A_DESTINO = {
-    'BODEGA ZACAPA': 'bodega-zacapa',
-    'BODEGA SAN JOSE': 'bodega-san-jose',
-    'BODEGA PETEN': 'bodega-peten',
-    'CLIENTE DIRECTO': 'entrega-directa',
-}
+from reyma_factura_carga import (  # noqa: E402
+    DESTINOS_VALIDOS,
+    DatoInvalido,
+    Mapas,
+    evaluar,
+)
 
 
 def rest(path: str, method: str = 'GET', body=None, prefer: str | None = None):
@@ -76,11 +54,21 @@ def rest(path: str, method: str = 'GET', body=None, prefer: str | None = None):
         return json.loads(raw) if raw else []
 
 
-def guia_de(archivo: str) -> str:
-    m = re.match(r'(G-\d+-\d{4})', archivo)
-    if not m:
-        raise SystemExit(f'No se pudo leer el correlativo de furgón de: {archivo}')
-    return m.group(1)
+def cargar_mapas() -> Mapas:
+    """Los dos catálogos que las reglas necesitan. Único I/O de lectura."""
+    por_clave = defaultdict(set)
+    for p in rest('reyma_products?select=clave,codigo'):
+        if p['clave']:
+            por_clave[p['clave']].add(p['codigo'])
+
+    # Tablita de Alexis: rollos por bulto. Append-only, la última fila por
+    # código manda (viene ordenada por created_at DESC).
+    rollos = {}
+    for c in rest('reyma_conversion_bulto?select=codigo,rollos_por_bulto'
+                  '&order=created_at.desc'):
+        rollos.setdefault(c['codigo'], float(c['rollos_por_bulto']))
+
+    return Mapas(por_clave=dict(por_clave), rollos_por_bulto=rollos)
 
 
 def main() -> int:
@@ -103,83 +91,12 @@ def main() -> int:
 
     lineas = list(csv.DictReader(open(args.csv, encoding='utf-8')))
 
-    # Mapa clave REYMA → código Suplicentro. Una clave ambigua o ausente
-    # detiene la carga.
-    prods = rest('reyma_products?select=clave,codigo')
-    por_clave = defaultdict(set)
-    for p in prods:
-        if p['clave']:
-            por_clave[p['clave']].add(p['codigo'])
+    try:
+        resultado = evaluar(lineas, destinos, etas, args.autor, cargar_mapas())
+    except DatoInvalido as e:
+        raise SystemExit(str(e)) from e
 
-    # Tablita de Alexis: rollos por bulto. Append-only, la última fila por
-    # código manda (viene ordenada por created_at DESC).
-    rollos_por_bulto = {}
-    for c in rest('reyma_conversion_bulto?select=codigo,rollos_por_bulto'
-                  '&order=created_at.desc'):
-        rollos_por_bulto.setdefault(c['codigo'], float(c['rollos_por_bulto']))
-
-    filas, retenidas, errores = [], [], []
-    for ln in lineas:
-        guia = guia_de(ln['archivo'])
-        prefijo = guia.rsplit('-', 1)[0]  # 'G-227-2026' → 'G-227'
-        destino = destinos.get(prefijo)
-        if not destino:
-            errores.append(f'{guia}: sin destino declarado en --destinos')
-            continue
-        # El documento manda cuando lo dice (N10): contradicción = alto.
-        observ = ln.get('observ_destino') or ''
-        if observ and OBSERV_A_DESTINO.get(observ) not in (None, destino):
-            errores.append(f'{guia}: destino declarado "{destino}" contradice '
-                           f'Observaciones "{observ}" → {OBSERV_A_DESTINO[observ]}')
-            continue
-        if ln['unidad'] not in UNIDADES_1A1 | UNIDADES_CONVERTIBLES:
-            retenidas.append((ln, 'unidad sin equivalencia ni tabla de conversión'))
-            continue
-        codigos = por_clave.get(ln['identificador'])
-        if not codigos:
-            errores.append(f"{guia} {ln['identificador']}: sin mapa en reyma_products.clave")
-            continue
-        if len(codigos) > 1:
-            errores.append(f"{guia} {ln['identificador']}: clave ambigua → {sorted(codigos)}")
-            continue
-        codigo = next(iter(codigos))
-        cantidad_cfdi = float(ln['cantidad'])
-        bultos = float(ln['bultos']) if ln.get('bultos') not in (None, '') else None
-
-        # Conversión a la unidad de compra de Odoo. Sólo por BULTOS, nunca por
-        # peso (regla de Alexis). Si falta un insumo, se retiene la línea.
-        if ln['unidad'] in UNIDADES_CONVERTIBLES:
-            factor = rollos_por_bulto.get(codigo)
-            if bultos is None:
-                retenidas.append((ln, f"unidad {ln['unidad']} y la descripción no declara BLTS"))
-                continue
-            if factor is None:
-                retenidas.append((ln, f'{codigo} sin fila en reyma_conversion_bulto '
-                                      '(pedirle la tablita a Alexis para este código)'))
-                continue
-            cantidad = bultos * factor
-            nota_conv = f' [{ln["unidad"]} → {bultos:,.0f} BLTS × {factor:g} rollos/bulto = {cantidad:,.0f}]'
-        else:
-            cantidad = cantidad_cfdi
-            nota_conv = ''
-
-        d, mth, y = ln['fecha'].split('/')
-        filas.append({
-            'folio_fiscal': ln['folio_fiscal'],
-            'factura': ln['factura'],
-            'guia': guia,
-            'destino': destino,
-            'fecha': f'{y}-{mth}-{d}',
-            'codigo': codigo,
-            'clave': ln['identificador'],
-            'cantidad': cantidad,
-            'cantidad_cfdi': cantidad_cfdi,
-            'unidad': ln['unidad'],
-            'bultos': bultos,
-            'precio_unit': float(ln['precio_unitario']),
-            'eta': etas.get(prefijo) or None,
-            'autor': (args.autor + nota_conv)[:500],
-        })
+    filas, retenidas, errores = resultado.filas, resultado.retenidas, resultado.errores
 
     por_factura = defaultdict(list)
     for f in filas:
@@ -195,9 +112,9 @@ def main() -> int:
 
     if retenidas:
         print(f'\n⏸  {len(retenidas)} líneas RETENIDAS:')
-        for r, motivo in retenidas:
-            print(f"      {guia_de(r['archivo'])} {r['identificador']:<14} "
-                  f"{float(r['cantidad']):>10,.2f} {r['unidad']}  — {motivo}")
+        for r in retenidas:
+            print(f"      {r['guia']} {r['identificador']:<14} "
+                  f"{r['cantidad']:>10,.2f} {r['unidad']}  — {r['motivo']}")
 
     if errores:
         print(f'\n❌ {len(errores)} ERRORES — no se carga nada:')

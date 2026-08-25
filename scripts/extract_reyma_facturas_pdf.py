@@ -1,21 +1,17 @@
 """
 Extractor de las facturas CFDI de REYMA (PLASTICOS ADHERIBLES DEL BAJIO) a
-filas de `reyma_facturas_pdf`.
+filas de `reyma_facturas_pdf` — interfaz de línea de comandos.
 
 Procedimiento puente de carga, docs/docs-alexis/MANIFEST.md §1d: mientras no
 exista la ingesta por correo (L4), los PDFs que Alexis/David dejan en WhatsApp
 o en la carpeta del drop se cargan a mano. Este script es el paso 3 de ese
 procedimiento — extraer y VALIDAR contra el total impreso.
 
-Reglas (§ETL del proyecto):
-  * Nada se lee por posición: cada campo se busca por su etiqueta o por su
-    forma, nunca por índice de línea o de columna.
-  * Nada se descarta. Cada línea de detalle sale al CSV con su texto verbatim.
-  * No falla en silencio: si la suma de importes no cuadra con el `Total:`
-    impreso, o si una línea no cuadra cantidad×precio, se emite un flag y el
-    proceso termina distinto de cero.
-  * Lo que el documento no dice, no se inventa: `eta` y `destino` no se
-    adivinan aquí — vienen del nombre de carpeta/archivo y se pasan aparte.
+⚠️ El PARSEO no vive acá: vive en `ml/reyma_factura_extract.py`, porque la
+página de carga de Alexis (A12) lo usa a través del servicio ML y no puede
+haber dos implementaciones que se separen el día que REYMA cambie la plantilla.
+Este archivo es la CLI: argumentos, impresión y CSV. Su comportamiento y su
+salida no cambiaron.
 
 Uso:
     python scripts/extract_reyma_facturas_pdf.py <pdf>... --out lineas.csv
@@ -23,127 +19,12 @@ Uso:
 
 import argparse
 import csv
-import hashlib
-import re
-import subprocess
 import sys
 from pathlib import Path
 
-# Una línea de detalle: cantidad, unidad, clave SAT (8 dígitos), identificador
-# REYMA, descripción, precio unitario, importe. Se ancla en los dos importes
-# con '$' del final y en la clave SAT — no en columnas.
-DETALLE = re.compile(
-    r'^\s*(?P<cantidad>[\d,]+\.\d{2})\s+'
-    r'(?P<unidad>[A-Z0-9]{2,4})\s+'
-    r'(?P<clave_sat>\d{8})\s+'
-    r'(?P<identificador>\S+)\s+'
-    r'(?P<descripcion>.+?)\s+'
-    r'\$(?P<precio>[\d,]+\.\d{2})\s+'
-    r'\$(?P<importe>[\d,]+\.\d{2})\s*$'
-)
-# Continuación de la descripción: sangrada, sin importes, antes del pie 'DAP'.
-CONTINUACION = re.compile(r'^\s{40,}(?P<texto>\S.*?)\s*$')
-FIN_DETALLE = re.compile(r'^\s*DAP\b')
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'ml'))
 
-# Conteo de BULTOS al final de la descripción. REYMA factura la bolsa poliseda
-# POR PESO (unidad KGM) y el número de bultos viaja SÓLO acá — Alexis, verbatim
-# (2026-08-20): «él lo pone en la descripción, no está como que en la cantidad».
-# Es el insumo de la conversión a la unidad de compra de Odoo (MILLAR/ML):
-# bultos × rollos_por_bulto. Se captura siempre que aparezca, sea cual sea la
-# unidad — content-based, no atado a KGM.
-BULTOS = re.compile(r'\b(?P<bultos>\d+(?:\.\d+)?)\s+BLTS\b')
-
-
-def num(s: str) -> float:
-    return float(s.replace(',', ''))
-
-
-def campo(texto: str, etiqueta: str, patron: str) -> str | None:
-    """Busca `patron` en la misma línea que `etiqueta`. Content-based."""
-    for linea in texto.splitlines():
-        if etiqueta in linea:
-            m = re.search(patron, linea)
-            if m:
-                return m.group(1)
-    return None
-
-
-def extraer(pdf: Path) -> dict:
-    texto = subprocess.run(
-        ['pdftotext', '-layout', str(pdf), '-'],
-        capture_output=True, text=True, check=True,
-    ).stdout
-
-    cab = {
-        'archivo': pdf.name,
-        'sha256': hashlib.sha256(pdf.read_bytes()).hexdigest(),
-        'factura': campo(texto, 'FACTURA:', r'(F\d{6,})'),
-        'pv': campo(texto, 'PLASTICOS ADHERIBLES DEL BAJIO\n', r'(PV\d+)') or
-              (re.search(r'\b(PV\d{7})\b', texto).group(1)
-               if re.search(r'\b(PV\d{7})\b', texto) else None),
-        'folio_fiscal': campo(texto, 'Folio Fiscal:', r'([0-9A-F]{8}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{12})'),
-        'fecha': campo(texto, 'Fecha:', r'(\d{2}/\d{2}/\d{4})'),
-        'hora': campo(texto, 'Fecha:', r'\d{2}/\d{2}/\d{4}\s+(\d{2}:\d{2}:\d{2})'),
-        't_cambio': campo(texto, 'T. Cambio:', r'T\. Cambio:\s+([\d.]+)'),
-        'total': campo(texto, 'Total:', r'Total:\s+\$([\d,]+\.\d{2})'),
-        # Metadata in-band (MANIFEST §3): la OC de Odoo viaja en la línea OP.
-        'op': campo(texto, 'OP. ', r'OP\.\s+(.+?)\s+CONF\.'),
-        'oc': campo(texto, 'OP. ', r'#(PO-[A-Z0-9-]+)'),
-        'conf': campo(texto, 'CONF. S/', r'CONF\.\s+(S/[\d-]+)'),
-        # Observaciones: desde el segundo drop nombran el destino físico
-        # (BODEGA ZACAPA / BODEGA SAN JOSE / CLIENTE DIRECTO) — hallazgo N10.
-        'observ_destino': campo(texto, 'TRAILER 53 PIES', r'TRAILER 53 PIES\s+(BODEGA [A-ZÁÉÍÓÚÑ ]+?|CLIENTE DIRECTO)\s+ESTA MERCANCIA'),
-        'paginas': str(texto.count('\f') or 1),
-    }
-
-    lineas, flags = [], []
-    for cruda in texto.splitlines():
-        if FIN_DETALLE.match(cruda):
-            break
-        m = DETALLE.match(cruda)
-        if m:
-            g = m.groupdict()
-            lineas.append({
-                'linea': len(lineas) + 1,
-                'cantidad': num(g['cantidad']),
-                'unidad': g['unidad'],
-                'clave_sat': g['clave_sat'],
-                'identificador': g['identificador'],
-                'descripcion': g['descripcion'].strip(),
-                'precio_unitario': num(g['precio']),
-                'importe': num(g['importe']),
-                'bultos': '',  # se completa si la descripción lo trae (ver BULTOS)
-                'linea_verbatim': cruda.rstrip(),
-            })
-            continue
-        c = CONTINUACION.match(cruda)
-        if c and lineas:
-            lineas[-1]['descripcion'] += ' ' + c.group('texto')
-            lineas[-1]['linea_verbatim'] += '\n' + cruda.rstrip()
-            b = BULTOS.search(lineas[-1]['descripcion'])
-            if b:
-                lineas[-1]['bultos'] = num(b.group('bultos'))
-
-    # Validación 1 — cantidad × precio = importe, línea a línea.
-    for ln in lineas:
-        esperado = round(ln['cantidad'] * ln['precio_unitario'], 2)
-        if abs(esperado - ln['importe']) > 0.01:
-            flags.append(f"{cab['factura']} L{ln['linea']} {ln['identificador']}: "
-                         f"{ln['cantidad']}×{ln['precio_unitario']}={esperado} ≠ importe {ln['importe']}")
-    # Validación 2 — suma de importes = Total impreso.
-    suma = round(sum(ln['importe'] for ln in lineas), 2)
-    total = num(cab['total']) if cab['total'] else None
-    if total is None or abs(suma - total) > 0.01:
-        flags.append(f"{cab['factura']}: suma de importes {suma} ≠ Total impreso {total}")
-    # Validación 3 — campos de cabecera obligatorios presentes.
-    for k in ('factura', 'folio_fiscal', 'fecha', 't_cambio', 'total'):
-        if not cab[k]:
-            flags.append(f"{pdf.name}: falta el campo de cabecera '{k}'")
-
-    cab['lineas'] = lineas
-    cab['suma_importes'] = suma
-    cab['flags'] = flags
-    return cab
+from reyma_factura_extract import extraer  # noqa: E402
 
 
 def main() -> int:

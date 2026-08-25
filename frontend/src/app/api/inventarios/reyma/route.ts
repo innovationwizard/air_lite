@@ -3,7 +3,7 @@ import { requireAuth } from '@/lib/auth/server';
 import { CAN_VIEW_INVENTARIOS } from '@/lib/auth/roles';
 import { createServiceRoleClient } from '@/lib/supabase/server';
 import type { ModeloRow, VentasRow } from '@/app/(authenticated)/inventarios/reyma/engine';
-import { computePdfTransito } from '@/app/(authenticated)/inventarios/reyma-vivo/saldos';
+import { computePdfTransito, type PdfTransito } from '@/app/(authenticated)/inventarios/reyma-vivo/saldos';
 import type {
   EnlaceFactura,
   EtaConfigPayload,
@@ -18,7 +18,7 @@ import type {
   TransitoDetalle,
   VivoRow,
 } from '@/app/(authenticated)/inventarios/reyma-vivo/types';
-import { DIAS_HABILES_DEFAULT, resolverEta } from '@/app/(authenticated)/inventarios/reyma-vivo/eta';
+import { DIAS_HABILES_DEFAULT, etaCalculada, resolverEta } from '@/app/(authenticated)/inventarios/reyma-vivo/eta';
 
 export const dynamic = 'force-dynamic';
 
@@ -348,17 +348,21 @@ export async function GET() {
           ogForTransito.mes.slice(0, 7),
           poLineasRaw,
           transito.map((t) => ({ po_name: t.po_name, codigo: t.codigo, cantidad_pendiente: t.cantidad_pendiente })),
-          // ETA efectiva (manual > calculada) para que el tránsito muestre la
-          // fecha buena aunque nadie la haya tecleado — Lote 1.
+          // Tres fechas, a propósito: `eta` es la EFECTIVA (manual > calculada,
+          // Lote 1) para que el tránsito muestre la fecha buena aunque nadie la
+          // haya tecleado; `etaManual` y `etaCalculada` la desarman para poder
+          // mostrarlas lado a lado (decisión 2026-08-25).
           facturasPdfRaw.map((f) => ({
             folioFiscal: f.folio_fiscal, factura: f.factura, guia: f.guia, destino: f.destino,
             fecha: f.fecha,
             eta: resolverEta({ fecha: f.fecha, destino: f.destino, eta: f.eta }, etaConfig).fecha,
+            etaManual: f.eta,
+            etaCalculada: etaCalculada({ fecha: f.fecha, destino: f.destino }, etaConfig),
             codigo: f.codigo, clave: f.clave,
             cantidad: f.cantidad, precioUnit: f.precio_unit,
           })),
         )
-      : new Map<string, { cantidad: number; eta: string | null; destinos: string[] }>();
+      : new Map<string, PdfTransito>();
 
     const rows: VivoRow[] = products.map((p) => {
       const st = stockIdx.get(p.codigo) ?? {};
@@ -407,6 +411,10 @@ export async function GET() {
         esEntregaDirecta: t.es_entrega_directa,
         esFechaPasada: t.es_fecha_pasada,
         eta: nota?.eta ?? null,
+        // Las filas de tránsito de Odoo NO salen de una factura PDF, así que no
+        // hay fecha impresa de la que calcular: la columna «ETA App» queda
+        // vacía en vez de inventar una.
+        etaCalculada: null,
         nota: nota?.nota ?? null,
         notaAutor: nota?.autor ?? null,
       };
@@ -422,7 +430,8 @@ export async function GET() {
         destino: t.destinos.join(', ') || null,
         esEntregaDirecta: false,
         esFechaPasada: false,
-        eta: t.eta,
+        eta: t.etaManual,
+        etaCalculada: t.etaCalculada,
         nota: 'Facturado en PDF del proveedor, aún no registrado en Odoo',
         notaAutor: null,
       });

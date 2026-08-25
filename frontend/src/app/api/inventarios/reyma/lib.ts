@@ -43,6 +43,24 @@ export async function withWriteAuth(
   return { user: auth, body, service: createServiceRoleClient() };
 }
 
+/**
+ * Auth wrapper for the multipart upload path (A12). Same gate as
+ * `withWriteAuth` — `requireAuth(CAN_VIEW_INVENTARIOS)` — but it does NOT
+ * parse a JSON body: the caller reads `request.formData()` itself, because a
+ * PDF must not be pulled through `JSON.parse`.
+ */
+export async function withUploadAuth(
+): Promise<Response | { user: AuthUser; service: SupabaseClient }> {
+  const auth = await requireAuth(CAN_VIEW_INVENTARIOS);
+  if (auth instanceof Response) return auth;
+  return { user: auth, service: createServiceRoleClient() };
+}
+
+/** Read gate for the Reyma endpoints — same roles, no body, no service client. */
+export async function withReadAuth(): Promise<Response | AuthUser> {
+  return requireAuth(CAN_VIEW_INVENTARIOS);
+}
+
 export async function insertRow(
   service: SupabaseClient,
   table: string,

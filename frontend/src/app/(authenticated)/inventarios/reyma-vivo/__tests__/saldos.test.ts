@@ -111,7 +111,41 @@ describe('computeSaldos', () => {
       [],
       [pdf('F171850', '77201045', 15),
        { ...pdf('F172108', '77201045', 30, '2026-08-12'), destino: 'bodega-peten', eta: '2026-08-17' }]);
-    expect(t.get('77201045')).toEqual({ cantidad: 30, eta: '2026-08-17', destinos: ['bodega-peten', 'bodega-san-jose'] });
+    expect(t.get('77201045')).toEqual({
+      cantidad: 30, eta: '2026-08-17',
+      // Sin `etaManual`/`etaCalculada` en la entrada, las dos columnas quedan
+      // vacías: la fecha efectiva existe pero su procedencia no se inventa.
+      etaManual: null, etaCalculada: null,
+      destinos: ['bodega-peten', 'bodega-san-jose'],
+    });
+  });
+
+  it('computePdfTransito: separa las dos procedencias del ETA (2026-08-25)', () => {
+    // Dos facturas del mismo código: una con ETA que dijo Alexis, otra sin él.
+    // Cada columna responde «lo más pronto según ESA fuente», y el hueco en la
+    // de Alexis se ve — que es todo el punto de partirla en dos.
+    const t = computePdfTransito('PO-P-3003', '2026-08', [], [],
+      [{ ...pdf('F172784', '77201055', 100, '2026-08-21'), eta: '2026-08-25',
+         etaManual: '2026-08-25', etaCalculada: '2026-08-27' },
+       { ...pdf('F172551', '77201055', 50, '2026-08-18'), eta: '2026-08-24',
+         etaManual: null, etaCalculada: '2026-08-24' }]);
+    expect(t.get('77201055')).toEqual({
+      cantidad: 150,
+      eta: '2026-08-24',            // efectiva: la más pronta de las dos
+      etaManual: '2026-08-25',      // la única que Alexis dijo
+      etaCalculada: '2026-08-24',   // la más pronta de la fórmula
+      destinos: ['bodega-san-jose'],
+    });
+  });
+
+  it('computePdfTransito: un código sin NINGÚN ETA manual deja esa columna vacía', () => {
+    // El estado real de 20 de 26 facturas hoy: la app muestra fórmula y la
+    // columna de Alexis queda en blanco. No se rellena con la calculada.
+    const t = computePdfTransito('PO-P-3003', '2026-08', [], [],
+      [{ ...pdf('F172857', '77201046', 666, '2026-08-23'), eta: '2026-08-27',
+         etaManual: null, etaCalculada: '2026-08-27' }]);
+    expect(t.get('77201046')!.etaManual).toBeNull();
+    expect(t.get('77201046')!.etaCalculada).toBe('2026-08-27');
   });
 
   it('computePdfTransito: no double-count once Odoo carries the same PO tránsito; directas never count', () => {

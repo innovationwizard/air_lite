@@ -16,6 +16,7 @@ import {
   Truck,
   // ClipboardList,   // unused while Órdenes Abiertas section is hidden (2026-05-27)
   FileCheck,
+  FileUp,
   Gauge,
   // Container,       // unused while Órdenes Abiertas section is hidden (2026-05-27)
   // AlertOctagon,    // unused while Órdenes Abiertas section is hidden (2026-05-27)
@@ -35,7 +36,7 @@ import {
   CAN_VIEW_OPERACIONES,
   CAN_VIEW_GERENCIA,
   ROLE_LABELS,
-  ROLLOUT_FOCUS,
+  focusRoutes,
   Role,
 } from '@/lib/auth/roles';
 
@@ -147,6 +148,12 @@ const allNavGroups: NavGroup[] = [
         href: '/inventarios/reyma-vivo',
         icon: Activity,
         subtitle: 'Datos Odoo en vivo + proyección editable',
+      },
+      {
+        name: 'Cargar Facturas',
+        href: '/inventarios/facturas',
+        icon: FileUp,
+        subtitle: 'Facturas de REYMA + ETA del furgón',
       },
     ],
   },
@@ -349,8 +356,8 @@ export function Sidebar() {
   const userRole = profile?.role;
   const isGerenciaDemo = userRole === 'gerencia';
 
-  // Delivery-phase focus: roles in ROLLOUT_FOCUS see only their live page.
-  const focusHref = userRole ? ROLLOUT_FOCUS[userRole as Role] : undefined;
+  // Delivery-phase focus: roles in ROLLOUT_FOCUS see only their live pages.
+  const focus = focusRoutes(userRole);
 
   const visibleGroups = allNavGroups
     .filter((group) => {
@@ -358,8 +365,8 @@ export function Sidebar() {
       if (isGerenciaDemo && !GERENCIA_DEMO_SECTIONS.has(group.section)) return false;
       return true;
     })
-    .map((group) => (focusHref
-      ? { ...group, items: group.items.filter((item) => item.href === focusHref) }
+    .map((group) => (focus
+      ? { ...group, items: group.items.filter((item) => focus.includes(item.href)) }
       : group))
     .filter((group) => group.items.length > 0);
 

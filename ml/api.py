@@ -16,6 +16,11 @@ from backtest_engine import run_backtest_cycle
 from purchase_scheduler import run_purchase_schedule_cycle
 from forecast_revenue import forecast_product as forecast_product_revenue
 from forecast_purchases_derived import forecast_purchases_derived
+from reyma_factura_extract import PdfIlegible, extraer_de_bytes
+from reyma_factura_carga import (
+    DESTINOS_VALIDOS, DatoInvalido, Mapas, destino_in_band, evaluar,
+    guia_de, lineas_de_factura, prefijo_de,
+)
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
 logger = logging.getLogger(__name__)
@@ -396,6 +401,150 @@ def forecast_purchases_derived_endpoint():
         'prediction_end': prediction_end.isoformat(),
     }
     return jsonify(result)
+
+
+# Tamaño máximo del PDF aceptado. Las facturas de REYMA pesan ~1.5 MB; 15 MB
+# deja margen de sobra para una de muchas páginas sin abrir la puerta a que un
+# archivo cualquiera consuma el worker.
+REYMA_PDF_MAX_BYTES = 15 * 1024 * 1024
+
+
+def _mapas_reyma():
+    """Los dos catálogos que las reglas de carga necesitan leer. Solo lectura."""
+    sb = get_supabase()
+
+    por_clave = {}
+    for p in sb.table('reyma_products').select('clave, codigo').execute().data or []:
+        if p.get('clave'):
+            por_clave.setdefault(p['clave'], set()).add(p['codigo'])
+
+    # Tablita de Alexis: append-only, la última fila por código manda.
+    rollos = {}
+    filas = (sb.table('reyma_conversion_bulto')
+               .select('codigo, rollos_por_bulto')
+               .order('created_at', desc=True).execute().data or [])
+    for c in filas:
+        rollos.setdefault(c['codigo'], float(c['rollos_por_bulto']))
+
+    return Mapas(por_clave=por_clave, rollos_por_bulto=rollos)
+
+
+@app.route('/reyma/factura/preview', methods=['POST'])
+def reyma_factura_preview():
+    """
+    Lee UNA factura CFDI de REYMA y evalúa las reglas de carga, SIN escribir.
+
+    Es el paso 1 de la carga en la app (A12): la página de Alexis manda el PDF,
+    esto devuelve lo que el documento dice y qué pasaría al cargarlo; Next.js
+    persiste el veredicto y hace el write cuando Alexis confirma destino y ETA.
+
+    El write NO ocurre acá a propósito: quien tiene la sesión — y por tanto el
+    `autor` del dato — es Next.js. Este servicio sólo lee.
+
+    Entrada: multipart con el campo `pdf` (o `application/pdf` crudo en el body).
+    Opcional: `destino` (form field) para evaluar contra un destino concreto;
+    sin él se evalúa contra el destino in-band si la factura lo declara, y si no
+    lo declara la evaluación de líneas se hace igual con un destino provisional
+    que la página reemplaza al confirmar.
+    """
+    archivo = request.files.get('pdf')
+    if archivo is not None:
+        nombre = archivo.filename or 'sin-nombre.pdf'
+        datos = archivo.read()
+    else:
+        nombre = request.headers.get('X-Nombre-Archivo', 'sin-nombre.pdf')
+        datos = request.get_data() or b''
+
+    if not datos:
+        return jsonify({'error': 'No se recibió ningún archivo'}), 400
+    if len(datos) > REYMA_PDF_MAX_BYTES:
+        return jsonify({
+            'error': f'El archivo pesa {len(datos) / 1024 / 1024:.1f} MB; el máximo es '
+                     f'{REYMA_PDF_MAX_BYTES // 1024 // 1024} MB',
+        }), 413
+    if not datos.startswith(b'%PDF'):
+        return jsonify({'error': 'El archivo no es un PDF'}), 415
+
+    try:
+        cab = extraer_de_bytes(nombre, datos)
+    except PdfIlegible as e:
+        logger.warning('reyma preview: PDF ilegible (%s): %s', nombre, e)
+        return jsonify({'error': f'No se pudo leer el PDF: {e}'}), 422
+
+    # Sin cabecera no hay factura que cargar — se responde 200 con el veredicto
+    # (no es un fallo del servicio; es un documento que no sirve) para que la
+    # página lo muestre en ámbar en vez de un error genérico.
+    if not cab.get('factura') or not cab.get('folio_fiscal'):
+        return jsonify({
+            'ok': False,
+            'archivo': nombre,
+            'sha256': cab.get('sha256'),
+            'cuadra': False,
+            'flags': cab.get('flags', []),
+            'errores': ['El documento no parece una factura de REYMA: no trae '
+                        'FACTURA: Fnnnnnn ni Folio Fiscal.'],
+            'cabecera': None, 'lineas': [], 'filas': [], 'retenidas': [],
+        }), 200
+
+    try:
+        guia = guia_de(nombre)
+        prefijo = prefijo_de(guia)
+    except DatoInvalido:
+        # El correlativo de furgón vive en el nombre del archivo. Alexis manda
+        # los PDFs con el nombre que le da REYMA (G-236-2026 …), pero si el
+        # nombre se perdió no se inventa: se dice y la página lo pide.
+        guia, prefijo = None, None
+
+    declarado = (request.form.get('destino') or '').strip() or None
+    if declarado and declarado not in DESTINOS_VALIDOS:
+        return jsonify({'error': f'destino inválido: {declarado}'}), 400
+
+    in_band = destino_in_band(cab.get('observ_destino'))
+
+    resultado = None
+    if prefijo:
+        # Para la evaluación de LÍNEAS el destino sólo importa por la
+        # verificación contra Observaciones; se evalúa con el declarado, o con
+        # el in-band, o con el primero válido como provisional — la página
+        # reemplaza el valor real al confirmar.
+        provisional = declarado or in_band or DESTINOS_VALIDOS[0]
+        try:
+            resultado = evaluar(
+                lineas_de_factura(cab), {prefijo: provisional}, {},
+                'preview (sin autor — el write lo hace la app)', _mapas_reyma(),
+            )
+        except DatoInvalido as e:
+            return jsonify({'error': str(e)}), 422
+
+    errores = list(resultado.errores) if resultado else [
+        'No se pudo leer el correlativo de furgón (G-nnn) del nombre del archivo.'
+    ]
+
+    return jsonify({
+        'ok': not errores and not cab['flags'],
+        'archivo': nombre,
+        'sha256': cab['sha256'],
+        'guia': guia,
+        'cabecera': {
+            'factura': cab['factura'], 'pv': cab['pv'],
+            'folio_fiscal': cab['folio_fiscal'],
+            'fecha': cab['fecha'], 'hora': cab['hora'],
+            't_cambio': cab['t_cambio'], 'total': cab['total'],
+            'suma_importes': cab['suma_importes'],
+            'paginas': cab['paginas'], 'op': cab['op'],
+            'oc_in_band': cab['oc'], 'conf': cab['conf'],
+            'observ_destino': cab['observ_destino'],
+            'destino_in_band': in_band,
+        },
+        # `cuadra` es la única señal de confianza que hace falta: el parseo es
+        # determinístico (N1), así que o la aritmética del documento cierra o no.
+        'cuadra': not cab['flags'],
+        'flags': cab['flags'],
+        'lineas': cab['lineas'],
+        'filas': resultado.filas if resultado else [],
+        'retenidas': resultado.retenidas if resultado else [],
+        'errores': errores,
+    })
 
 
 def _enumerate_forecast_months(training_end, prediction_end):
