@@ -521,7 +521,7 @@ function SeriePanel({ serie, cargadas }: { serie: Serie | null; cargadas: Factur
   if (!serie) return null;
   return (
     <section className="mt-5 rounded-xl border border-slate-200 bg-white p-4">
-      <h2 className="text-sm font-semibold text-slate-700">Furgones cargados</h2>
+      <h2 className="text-sm font-semibold text-slate-700">Facturas cargadas</h2>
       <p className="mt-1 text-[13px] text-slate-600">
         Serie <strong>{serie.desde} → {serie.hasta}</strong>
         {serie.huecos.length === 0
@@ -533,20 +533,22 @@ function SeriePanel({ serie, cargadas }: { serie: Serie | null; cargadas: Factur
           )}
       </p>
       <div className="mt-3 overflow-x-auto">
-        <table className="w-full min-w-[420px] text-[12px]">
+        <table className="w-full min-w-[520px] text-[12px]">
           <thead className="bg-slate-50 text-slate-600">
             <tr>
-              <th className="px-2 py-1 text-left font-semibold">Furgón</th>
+              <th className="px-2 py-1 text-left font-semibold">Pedido</th>
+              <th className="px-2 py-1 text-left font-semibold">Factura</th>
               <th className="px-2 py-1 text-left font-semibold">Destino</th>
               <th className="px-2 py-1 text-right font-semibold">Cajas</th>
               <th className="px-2 py-1 text-left font-semibold">ETA Alexis</th>
-              <th className="px-2 py-1 text-left font-semibold">Factura</th>
+              <th className="px-2 py-1 text-left font-semibold">Fecha de factura</th>
             </tr>
           </thead>
           <tbody>
             {cargadas.slice(0, 12).map((f) => (
               <tr key={f.guia} className="border-t border-slate-100">
                 <td className="px-2 py-1 font-medium">{f.guia.replace('-2026', '')}</td>
+                <td className="px-2 py-1 font-mono text-[11px]">{f.factura}</td>
                 <td className="px-2 py-1">{nombreDestino(f.destino)}</td>
                 <td className="px-2 py-1 text-right tabular-nums">{f.cajas.toLocaleString('es-GT')}</td>
                 <td className={`px-2 py-1 ${f.eta ? 'font-medium text-slate-800' : 'text-slate-400'}`}>

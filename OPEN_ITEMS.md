@@ -82,6 +82,13 @@ Surfaced by a go-live readiness audit. None of these were in an existing tracker
 - [ ] **F4 — Deployment docs contradict reality.** Frontend `Dockerfile` + [frontend/README.md](frontend/README.md) describe AWS App Runner/ECR; the app actually runs on **Vercel**, and `ci.yml` contains **no deploy step** — so the real release mechanism isn't in the repo. *Document the actual path.*
 - [ ] **F5 — Stale top-level docs.** [HANDOVER.md](HANDOVER.md), [SUPERREADME.md](SUPERREADME.md), [README.md](README.md) carry "STALE — DO NOT FOLLOW" banners and describe retired AWS architecture. Misleading for any new contributor. *Rewrite or archive.*
 - [ ] **F6 — Stray tracked file.** `frontend/temp_fix.txt` — a loose TS snippet committed at the frontend root, wired into nothing. *Delete.*
+- [ ] **F8 ⭐ — El shell no es responsive: la app es inusable en teléfono.** [AppShell.tsx](frontend/src/components/layout/AppShell.tsx) no tiene **ni un solo breakpoint**: `<Sidebar />` renderiza `<aside className="flex flex-col w-72">` — 288 px **fijos, siempre** — dentro de un `flex h-screen`, y `<main>` agrega `p-6`. En un teléfono de 390 px eso deja **~54 px de ancho útil** para el contenido. No hay hamburguesa, ni drawer, ni `hidden md:flex`.
+
+  **Por qué nadie lo había reportado:** todos los usuarios (Wilmer, Alexis, Mario, gerencia) han estado en escritorio hasta hoy.
+
+  **Por qué ahora importa:** `/inventarios/facturas` (A12, 2026-08-25) se diseñó **mobile-first a propósito** — la decisión D1 se tomó porque en el momento en que Alexis tiene la factura en la mano está en WhatsApp, en su teléfono. La página está bien; el marco que la contiene no. Se entregó igual el 2026-08-25 con la limitación conocida (decisión de Jorge: *"Ship as-is for today"*), o sea que **hoy Alexis tiene que cargar las facturas desde una computadora** — que es justo la fricción que la página venía a quitar, y el motivo por el que el ETA se pierde.
+
+  *Fix (~30 líneas, contenido):* `<aside>` → `hidden md:flex` + drawer deslizante bajo `md` · botón hamburguesa en el `<header>` con `md:hidden` · `<main>` → `p-4 md:p-6`. **Arriba de 768 px no cambia nada para nadie**; abajo de 768 px la app hoy ya está rota, así que el único rango de comportamiento que se altera es uno que no funciona. Verificar con el rol `inventario`, no con superuser.
 - [ ] **F7 — Silent `run_id: null`.** [ml/api.py](ml/api.py) `/backtest/run` starts a daemon thread and `join(timeout=5)`; if the run record isn't created within 5s it returns `run_id: null` with no error. *Return an explicit error/202.*
 
 ---
