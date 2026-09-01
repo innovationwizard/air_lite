@@ -12,6 +12,8 @@ import {
   PAGE_PERMISSIONS,
   ROLLOUT_FOCUS,
   CAN_VIEW_COMPRAS,
+  CAN_VIEW_POC,
+  CAN_EDIT_STATUS_PLAN,
   CAN_VIEW_GERENCIA,
   CAN_VIEW_INVENTARIOS,
   CAN_MANAGE_USERS,
@@ -95,7 +97,10 @@ describe('getDefaultPage', () => {
   it('routes known roles to their landing pages', () => {
     expect(getDefaultPage('superuser')).toBe('/superuser');
     expect(getDefaultPage('operaciones')).toBe('/operaciones');
-    expect(getDefaultPage('gerencia')).toBe('/gerencia/forecast');
+    // `gerencia` está confinada a /status desde 2026-09-01, así que su
+    // aterrizaje POST-confinamiento se consulta pasando un foco vacío.
+    expect(getDefaultPage('gerencia', {})).toBe('/gerencia/forecast');
+    expect(getDefaultPage('gerencia')).toBe('/status');
     expect(getDefaultPage('admin')).toBe('/backtest');
   });
 
@@ -149,6 +154,23 @@ describe('ROLLOUT_FOCUS — confinamiento de varias rutas', () => {
    * porque el primer elemento es la página de aterrizaje y un usuario confinado
    * tiene que seguir cayendo en la pantalla donde trabaja.
    */
+  /**
+   * `gerencia` se confinó a /status el 2026-09-01. Es el único rol cuyo foco
+   * ES /status: las demás superficies que alcanzaba son demostraciones, no la
+   * herramienta diaria, y lo que gerencia pide todos los días todavía no está
+   * construido. Sustituye al caso especial `isGerenciaDemo` del Sidebar, que
+   * ocultaba enlaces sin restringir rutas.
+   */
+  it('gerencia queda acotada a /status, que es también su aterrizaje', () => {
+    expect(focusRoutes('gerencia')).toEqual(['/status']);
+    expect(getDefaultPage('gerencia')).toBe('/status');
+    const rutas = focusRoutes('gerencia')!;
+    for (const fuera of ['/backtest', '/gerencia/gap-report', '/gerencia/validacion',
+                         '/gerencia/forecast', '/compras', '/oa/excepciones']) {
+      expect(isWithinFocus(fuera, rutas)).toBe(false);
+    }
+  });
+
   it('/status es alcanzable por los roles confinados, sin ser su aterrizaje', () => {
     for (const rol of ['compras', 'inventario']) {
       const rutas = focusRoutes(rol)!;
@@ -187,7 +209,7 @@ describe('ROLLOUT_FOCUS — confinamiento de varias rutas', () => {
   });
 
   it('los roles sin entrada NO están confinados', () => {
-    for (const rol of ['superuser', 'admin', 'gerencia', 'ventas', 'operaciones']) {
+    for (const rol of ['superuser', 'admin', 'ventas', 'operaciones']) {
       expect(focusRoutes(rol)).toBeUndefined();
     }
     expect(focusRoutes(null)).toBeUndefined();
@@ -221,5 +243,53 @@ describe('ROLLOUT_FOCUS — confinamiento de varias rutas', () => {
     expect(getDefaultPage('ventas')).toBe('/backtest');
     expect(getDefaultPage('nonsense')).toBe('/backtest');
     expect(getDefaultPage('ventas', {})).toBe('/backtest');
+  });
+});
+
+/**
+ * Auditoría de RBAC del 2026-09-01. Dos agujeros y una asimetría que conviene
+ * dejar fijada, porque el proyecto tiene DOS tablas de autorización que
+ * funcionan al revés una de la otra.
+ */
+describe('RBAC — cobertura de PAGE_PERMISSIONS', () => {
+  it('/poc está protegido: no lo abre cualquier sesión autenticada', () => {
+    // Antes no tenía entrada, así que el middleware admitía cualquier rol y lo
+    // único que dejaba fuera a los demás era que el enlace estuviera oculto.
+    expect(PAGE_PERMISSIONS['/poc']).toBeDefined();
+    expect(PAGE_PERMISSIONS['/poc']).toEqual(CAN_VIEW_POC);
+  });
+
+  it('cerrar el agujero de /poc no cambió el acceso que la interfaz ya daba', () => {
+    for (const rol of ['admin', 'gerencia', 'compras', 'ventas', 'inventario', 'financiero', 'testuser']) {
+      expect(isAuthorized(rol, CAN_VIEW_POC)).toBe(true);
+    }
+    // `operaciones` nunca vio esta página en ningún grupo del menú, y
+    // `project_manager` está acotado a /status.
+    expect(isAuthorized('operaciones', CAN_VIEW_POC)).toBe(false);
+    expect(isAuthorized('project_manager', CAN_VIEW_POC)).toBe(false);
+    expect(isAuthorized('superuser', CAN_VIEW_POC)).toBe(true);
+  });
+
+  it('project_manager sólo alcanza /status, y no escribe el juicio', () => {
+    expect(isAuthorized('project_manager', PAGE_PERMISSIONS['/status'])).toBe(true);
+    for (const ruta of ['/compras', '/inventarios/reyma-vivo', '/gerencia', '/admin', '/superuser', '/oa']) {
+      expect(isAuthorized('project_manager', PAGE_PERMISSIONS[ruta])).toBe(false);
+    }
+    // Escribe el PLAN; el estado lo juzga el TSV versionado, no la interfaz.
+    expect(isAuthorized('project_manager', CAN_EDIT_STATUS_PLAN)).toBe(true);
+    for (const rol of ['compras', 'inventario', 'gerencia', 'admin', 'operaciones']) {
+      expect(isAuthorized(rol, CAN_EDIT_STATUS_PLAN)).toBe(false);
+    }
+  });
+
+  it('toda página autenticada cae bajo alguna entrada, salvo las conocidas', () => {
+    // Fija la asimetría: sin entrada = abierto a cualquier sesión. Si aparece
+    // una página nueva sin permiso, esta prueba lo dice antes que un usuario.
+    const cubierta = (p: string) =>
+      Object.keys(PAGE_PERMISSIONS).some((k) => p === k || p.startsWith(`${k}/`));
+    for (const p of ['/status', '/poc/programacion', '/oa/excepciones', '/compras/forecast',
+                     '/inventarios/facturas', '/superuser', '/admin/usuarios', '/gerencia/gap-report']) {
+      expect(cubierta(p)).toBe(true);
+    }
   });
 });

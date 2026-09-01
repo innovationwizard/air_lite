@@ -85,6 +85,26 @@ export const CAN_VIEW_GERENCIA: Role[] = [
 export const CAN_VIEW_POC_ONLY: Role[] = ['testuser'];
 
 /**
+ * Roles that can open the Prueba de Concepto page.
+ *
+ * This list used to live as a private `const` inside `Sidebar.tsx`, which meant
+ * an authorization decision was defined in a UI component and enforced nowhere:
+ * `/poc/programacion` had no `PAGE_PERMISSIONS` entry, so the middleware let in
+ * ANY authenticated session — hiding the link was the only thing keeping other
+ * roles out. Audited 2026-09-01.
+ *
+ * The membership below reproduces EXACTLY the access the UI already granted
+ * (the union of the Compras section and the Prueba de Concepto section), so
+ * closing the hole neither widens nor narrows anyone's reach. `operaciones` is
+ * absent because no sidebar group ever showed it this page, despite a stale
+ * comment that said otherwise; `project_manager` is absent because it is scoped
+ * to /status alone.
+ */
+export const CAN_VIEW_POC: Role[] = [
+  'superuser', 'admin', 'gerencia', 'compras', 'ventas', 'inventario', 'financiero', 'testuser',
+];
+
+/**
  * TEMPORARY delivery-phase focus (Jorge, 2026-08-11): while Wilmer (compras)
  * and Alexis (inventario) onboard, they are CONFINED to their live Odoo pages —
  * the sidebar shows only those items, login lands on the FIRST one, and the
@@ -104,6 +124,26 @@ export const ROLLOUT_FOCUS: Partial<Record<Role, string[]>> = {
   // page, and confined users must still land on the page they work in.
   compras: ['/compras/reabastecimiento-vivo', '/status'],
   inventario: ['/inventarios/reyma-vivo', '/inventarios/facturas', '/status'],
+  /**
+   * `gerencia` (2026-09-01) — confined to `/status`, and that is not a
+   * demotion: it is the first page this role has ever had a recurring reason
+   * to open.
+   *
+   * Everything else it could reach — /backtest, /gerencia/validacion,
+   * /gerencia/gap-report, /gerencia/forecast — is a DEMONSTRATION surface.
+   * They prove the figures reconcile with Odoo, which is the test that
+   * unblocked the project in April; that is something you show once, not
+   * something anyone opens on a Tuesday. Leaving them in a real executive's
+   * navigation invites the reading that they are the daily tool, and they are
+   * not. What management actually asks for every day — the patio report and
+   * the view across all physical warehouses — is not built yet (see A6).
+   *
+   * This entry replaces the `isGerenciaDemo` special case that used to live in
+   * Sidebar.tsx: an authorization decision hidden in a UI component, which hid
+   * links without restricting routes. ROLLOUT_FOCUS does both, and the
+   * middleware honours it. Delete this line to give the surfaces back.
+   */
+  gerencia: ['/status'],
 };
 
 /** Routes a role is confined to, or `undefined` when it is not confined. */
@@ -155,7 +195,20 @@ export const PAGE_PERMISSIONS: Record<string, Role[]> = {
   '/configuracion': CAN_VIEW_ADMIN,
   // The gap analysis is readable by everyone, including the confined roles.
   '/status': CAN_VIEW_OPERATIONAL,
+  // Audited 2026-09-01: this had no entry, so the middleware admitted any
+  // authenticated session and only the hidden sidebar link kept roles out.
+  '/poc': CAN_VIEW_POC,
 };
+
+/**
+ * NOTE on `/configuracion`: that entry points at a page which does not exist
+ * (the directory is empty). It is kept ON PURPOSE, and the reason is the
+ * opposite of the one governing `route_permissions`. This map RESTRICTS — a
+ * page with no entry is open to every authenticated session — so an entry
+ * without a page grants nothing today and protects that path in advance if it
+ * is ever created. A GRANT pointing at a missing route is the dangerous
+ * direction, and those were revoked in 20260901000003_rbac_limpieza.sql.
+ */
 
 /**
  * Get the default landing page for a role.

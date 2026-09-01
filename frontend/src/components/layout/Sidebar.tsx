@@ -36,6 +36,7 @@ import {
   CAN_VIEW_INVENTARIOS,
   CAN_VIEW_OPERACIONES,
   CAN_VIEW_GERENCIA,
+  CAN_VIEW_POC,
   ROLE_LABELS,
   focusRoutes,
   Role,
@@ -44,8 +45,9 @@ import {
 /** Roles that can see the legacy Riesgos Empresariales grouping — excludes silo roles that now have dedicated sections */
 const CAN_VIEW_RISKS: Role[] = ['superuser', 'admin', 'gerencia', 'ventas', 'inventario', 'financiero'];
 
-/** Roles that can see the legacy Prueba de Concepto grouping — compras/operaciones see these items in their own silo sections */
-const CAN_VIEW_POC: Role[] = ['superuser', 'admin', 'gerencia', 'ventas', 'inventario', 'financiero', 'testuser'];
+/** Roles that can see the legacy Prueba de Concepto grouping — compras sees these items in its own silo section */
+// CAN_VIEW_POC lives in roles.ts and the middleware enforces it too — it was
+// an authorization list defined in a component and checked nowhere else.
 
 interface NavItem {
   name: string;
@@ -355,21 +357,16 @@ const allNavGroups: NavGroup[] = [
   },
 ];
 
-const GERENCIA_DEMO_SECTIONS = new Set<string | null>([null, 'Gerencia']);
-
 export function Sidebar() {
   const pathname = usePathname();
   const { profile } = useUserRole();
   const userRole = profile?.role;
-  const isGerenciaDemo = userRole === 'gerencia';
-
   // Delivery-phase focus: roles in ROLLOUT_FOCUS see only their live pages.
   const focus = focusRoutes(userRole);
 
   const visibleGroups = allNavGroups
     .filter((group) => {
       if (group.requiredRoles && !isAuthorized(userRole, group.requiredRoles)) return false;
-      if (isGerenciaDemo && !GERENCIA_DEMO_SECTIONS.has(group.section)) return false;
       return true;
     })
     .map((group) => (focus
