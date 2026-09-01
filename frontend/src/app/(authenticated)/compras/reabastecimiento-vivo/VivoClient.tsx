@@ -2,10 +2,14 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  AlertTriangle, Boxes, CloudOff, PackageCheck, Pencil, RefreshCw, Search, TrendingUp, X,
+  AlertTriangle, Boxes, ChevronDown, ChevronUp, ChevronsUpDown, CloudOff, PackageCheck,
+  Pencil, RefreshCw, Search, TrendingUp, X,
 } from 'lucide-react';
 import { MAX_MANUAL_QTY } from '@/lib/compras/qty';
 import { type Tendencia } from '@/lib/compras/tendencia';
+import {
+  type ClaveOrden, type ClaveUmbral, type Orden, siguienteOrden, vista,
+} from '@/lib/compras/tabla';
 import { ExportCarvajal } from './ExportCarvajal';
 import {
   type ProductRow, type Sev, sugerido, doh as dohOf, sev, fmt,
@@ -94,6 +98,11 @@ const COL_TIP = {
     + 'NO cambia el Sugerido — la decisión sigue siendo suya. '
     + 'El mes en curso no cuenta (está incompleto). '
     + '¿? = todavía no se puede evaluar (falta la serie mensual); no significa "sin tendencia".',
+  destino: 'DÓNDE SE QUEDA de verdad este tránsito. Declararlo lo saca de las otras '
+    + 'bodegas y se lo da entera a la que elijas — por eso el Sugerido de las demás sube. '
+    + '⚠️ PROVISIONAL: sólo admite UN destino por producto, así que un furgón que descarga '
+    + 'en varias bodegas NO se puede representar y el número queda mal. Es a propósito: '
+    + 'sirve para acordar cómo debe funcionar de verdad. Vacío = sin declarar.',
   gap: 'Facturado 3m − Ordenado 3m, en % de lo ordenado. '
     + 'Un delta grande no es un error: son perímetros distintos. '
     + 'Lo facturado en tiendas se muestra aparte, abajo, y NUNCA se suma a una bodega.',
@@ -112,6 +121,10 @@ interface ApiRow {
   exist: number; existencias: number; reserved: number; patio: number;
   pending: number | null;
   trans: number; transOverridden: boolean;
+  /** W15-A — destino final declarado a mano (null = sin declarar). */
+  destino: string | null;
+  /** W15-A — esa declaración está cambiando lo que se ve en esta bodega. */
+  destinoProvisional: boolean;
   adic: number; p6: number; p3: number; h: number; win: 10 | 5;
   /** G4 invoiced lens — display only, never fed to the engine. null = sync has not computed it. */
   f6: number | null; f3: number | null;
@@ -163,6 +176,10 @@ export function VivoClient() {
   const [onlySug, setOnlySug] = useState(false);
   const [onlyCrit, setOnlyCrit] = useState(false);
   const [onlyAlza, setOnlyAlza] = useState(false);
+  // W16/W17 — null = el orden por defecto con el que la página siempre abrió.
+  const [orden, setOrden] = useState<Orden | null>(null);
+  const [umbralClave, setUmbralClave] = useState<ClaveUmbral>('p3');
+  const [umbralMin, setUmbralMin] = useState<string>('');
 
   const load = useCallback(async (b: string, silent = false) => {
     if (!silent) setLoading(true);
@@ -237,33 +254,71 @@ export function VivoClient() {
     }
   }, [bodega, load]);
 
+  /**
+   * W15-A — declarar (o borrar) el destino final. Append-only.
+   *
+   * No hay recálculo optimista: mover el tránsito de una bodega a otra cambia
+   * filas de OTRAS vistas, y el cliente sólo tiene la suya. El refetch
+   * silencioso repinta con la verdad del servidor, que es la misma regla que
+   * ya gobierna el clear de tránsito.
+   */
+  const commitDestino = useCallback(async (row: ApiRow, destino: string | null) => {
+    setSaveError(null);
+    try {
+      const res = await fetch('/api/compras/reabastecimiento/destino', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ productId: row.productId, vistaBodega: bodega, destino }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error ?? `HTTP ${res.status}`);
+      }
+      load(bodega, true);
+    } catch (e) {
+      setSaveError(`No se guardó el destino de ${row.cod}: ${e instanceof Error ? e.message : e}`);
+      load(bodega, true);
+    }
+  }, [bodega, load]);
+
+  /** Bodegas físicas — General es la suma, no un lugar donde algo se quede. */
+  const destinos = useMemo(
+    () => (payload?.bodegas ?? []).filter((b) => b !== 'General'),
+    [payload],
+  );
+
   const provList = useMemo(
     () => [...new Set((payload?.rows ?? []).map((r) => r.prov).filter(Boolean))].sort(),
     [payload],
   );
 
+  /**
+   * Filtrar y DESPUÉS ordenar — su secuencia de trabajo, en `lib/compras/tabla`
+   * para que sea testeable sin renderizar la página. El orden por defecto
+   * (activos primero, urgencia por DOH) se conserva: dejó de ser el único y
+   * pasó a ser con el que abre.
+   */
   const list = useMemo(() => {
-    const query = q.trim().toLowerCase();
-    return (payload?.rows ?? [])
-      .filter((r) => {
-        if (prov && r.prov !== prov) return false;
-        if (query && !(r.cod.toLowerCase().includes(query) || r.desc.toLowerCase().includes(query)))
-          return false;
-        if (onlySug && r.sug <= 0) return false;
-        if (onlyCrit && r.doh >= 3) return false;
-        if (onlyAlza && !r.flags.tendenciaCreciente) return false;
-        return true;
-      })
-      // Active products first (any demand or stock), urgency (DOH asc) within;
-      // dead zero-velocity/zero-stock rows sink to the bottom instead of
-      // dominating the first screen.
-      .sort((a, b) => {
-        const aActive = a.p3 > 0 || a.exist > 0 || a.sug > 0 ? 1 : 0;
-        const bActive = b.p3 > 0 || b.exist > 0 || b.sug > 0 ? 1 : 0;
-        if (aActive !== bActive) return bActive - aActive;
-        return a.doh - b.doh;
-      });
-  }, [payload, q, prov, onlySug, onlyCrit, onlyAlza]);
+    const min = parseFloat(umbralMin);
+    return vista(
+      payload?.rows ?? [],
+      {
+        texto: q,
+        proveedor: prov,
+        soloConSugerido: onlySug,
+        soloCriticos: onlyCrit,
+        soloEnAlza: onlyAlza,
+        umbral: Number.isFinite(min) && umbralMin.trim() !== ''
+          ? { clave: umbralClave, min }
+          : undefined,
+      },
+      orden,
+    );
+  }, [payload, q, prov, onlySug, onlyCrit, onlyAlza, orden, umbralClave, umbralMin]);
+
+  const onSort = useCallback((k: ClaveOrden) => {
+    setOrden((actual) => siguienteOrden(actual, k));
+  }, []);
 
   // Counted over the WHOLE bodega, not the filtered list: the point of the
   // number is to say how much is rising before any filter narrows the view.
@@ -413,6 +468,40 @@ export function VivoClient() {
               <TrendingUp size={13} strokeWidth={3} />
               Solo en alza ({alza.creciente})
             </label>
+            {/* W17 — su regla literal: «todo lo que tenga más de 10 cajas sí lo
+                compro… filtro todo lo menor a 10 cajas, lo excluyo». El mínimo
+                se aplica sobre el valor que se ve en la columna. */}
+            <label className="text-xs text-gray-600 inline-flex items-center gap-1.5"
+                   title="Deja fuera las filas por debajo del mínimo. La unidad es la de la columna en pantalla.">
+              Mínimo
+              <select
+                value={umbralClave}
+                onChange={(e) => setUmbralClave(e.target.value as ClaveUmbral)}
+                aria-label="Columna del mínimo"
+                className="text-xs border border-gray-200 rounded-lg px-1.5 py-1.5"
+              >
+                <option value="p3">Ord. 3m</option>
+                <option value="p6">Ord. 6m</option>
+                <option value="sug">Sugerido</option>
+                <option value="exist">Exist. neta</option>
+              </select>
+              <input
+                type="number"
+                min={0}
+                value={umbralMin}
+                onChange={(e) => setUmbralMin(e.target.value)}
+                placeholder="—"
+                aria-label="Valor mínimo"
+                className="w-[68px] text-right tabular-nums px-1.5 py-1 border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-600"
+              />
+              {umbralMin.trim() !== '' && (
+                <button type="button" onClick={() => setUmbralMin('')}
+                        aria-label="Quitar el mínimo" title="Quitar el mínimo"
+                        className="text-gray-400 hover:text-red-600 transition">
+                  <X size={13} />
+                </button>
+              )}
+            </label>
             <div className="ml-auto">
               {/* Takes the list exactly as filtered and sorted on screen — that
                   order becomes the sheet's Prioridad column. */}
@@ -455,22 +544,30 @@ export function VivoClient() {
               <table className="w-full text-[13px]">
                 <thead className="sticky top-0 bg-white z-10">
                   <tr className="text-[11px] uppercase tracking-wide text-gray-500">
-                    <Th left tip={COL_TIP.cod}>Código</Th>
-                    <Th left tip={COL_TIP.desc}>Descripción / Proveedor</Th>
-                    <Th tip={COL_TIP.exist}>Exist. neta</Th>
-                    <Th tip={COL_TIP.patio}>Patio</Th>
-                    <Th tip={COL_TIP.doh}>DOH</Th>
-                    <Th tip={COL_TIP.trans}><span className="inline-flex items-center gap-1">Tránsito <Pencil size={11} /></span></Th>
-                    <Th tip={COL_TIP.pend}><span className="inline-flex items-center gap-1">Pend. reserva <Pencil size={11} /></span></Th>
-                    <Th tip={COL_TIP.adic}>Adic.</Th>
-                    <Th tip={COL_TIP.ord}>Ord. 6m</Th>
-                    <Th tip={COL_TIP.ord}>Ord. 3m</Th>
+                    <Th left tip={COL_TIP.cod} sortKey="cod" orden={orden} onSort={onSort}>Código</Th>
+                    <Th left tip={COL_TIP.desc} sortKey="prov" orden={orden} onSort={onSort}>Descripción / Proveedor</Th>
+                    <Th tip={COL_TIP.exist} sortKey="exist" orden={orden} onSort={onSort}>Exist. neta</Th>
+                    <Th tip={COL_TIP.patio} sortKey="patio" orden={orden} onSort={onSort}>Patio</Th>
+                    <Th tip={COL_TIP.doh} sortKey="doh" orden={orden} onSort={onSort}>DOH</Th>
+                    <Th tip={COL_TIP.trans} sortKey="trans" orden={orden} onSort={onSort}><span className="inline-flex items-center gap-1">Tránsito <Pencil size={11} /></span></Th>
+                    <Th tip={COL_TIP.destino}><span className="inline-flex items-center gap-1">Destino final <Pencil size={11} /></span></Th>
+                    <Th tip={COL_TIP.pend} sortKey="pending" orden={orden} onSort={onSort}><span className="inline-flex items-center gap-1">Pend. reserva <Pencil size={11} /></span></Th>
+                    <Th tip={COL_TIP.adic} sortKey="adic" orden={orden} onSort={onSort}>Adic.</Th>
+                    <Th tip={COL_TIP.ord} sortKey="p6" orden={orden} onSort={onSort}>Ord. 6m</Th>
+                    <Th tip={COL_TIP.ord} sortKey="p3" orden={orden} onSort={onSort}>Ord. 3m</Th>
                     <Th tip={COL_TIP.mes}>Mes en curso</Th>
                     <Th tip={COL_TIP.tend}>Tendencia</Th>
-                    <Th tip={COL_TIP.fact}>Fact. 6m</Th>
+                    {/* Q9 (Jorge, 2026-08-26) — facturación is off Wilmer's screen.
+                        His reason, given twice: "yo trabajo con lo ordenado, no con
+                        esto" — invoiced sales are censored by our own stockouts, so
+                        reading them as demand bakes the shortage into the next order.
+                        Δ goes with them: it is Facturado 3m − Ordenado 3m, meaningless
+                        once its sources are gone. Presentation only — f3/f6 still
+                        arrive from the API and never reached the engine. */}
+                    {/* <Th tip={COL_TIP.fact}>Fact. 6m</Th>
                     <Th tip={COL_TIP.fact}>Fact. 3m</Th>
-                    <Th tip={COL_TIP.gap}>Δ</Th>
-                    <Th tip={COL_TIP.sug}>Sugerido</Th>
+                    <Th tip={COL_TIP.gap}>Δ</Th> */}
+                    <Th tip={COL_TIP.sug} sortKey="sug" orden={orden} onSort={onSort}>Sugerido</Th>
                   </tr>
                 </thead>
                 <tbody className="tabular-nums">
@@ -507,6 +604,21 @@ export function VivoClient() {
                               ? () => commitEdit(r, 'transito', null) : undefined}
                             clearTip="Quitar captura manual — vuelve al tránsito sincronizado"
                           />
+                          {r.destinoProvisional && (
+                            <span
+                              title={`Tránsito provisional — declarado con destino ${r.destino}. `
+                                + 'Si el furgón descarga en varias bodegas, este número está mal.'}
+                              className="ml-1 text-[10px] font-bold text-indigo-600 cursor-help"
+                            >~</span>
+                          )}
+                        </td>
+                        <td className="px-3 py-2 border-b border-gray-100 text-right">
+                          <DestinoSelect
+                            value={r.destino}
+                            opciones={destinos}
+                            label={`Destino final ${r.cod}`}
+                            onChange={(d) => commitDestino(r, d)}
+                          />
                         </td>
                         <td className="px-3 py-2 border-b border-gray-100 text-right">
                           <QtyInput
@@ -529,7 +641,9 @@ export function VivoClient() {
                         <td className="px-3 py-2 border-b border-gray-100 text-center">
                           <TendenciaCell t={r.tendencia} />
                         </td>
-                        <td className="px-3 py-2 border-b border-gray-100 text-right text-indigo-700">
+                        {/* Q9 — see the header comment. Restore these three
+                            together with their <Th> or the columns misalign. */}
+                        {/* <td className="px-3 py-2 border-b border-gray-100 text-right text-indigo-700">
                           {r.f6 === null ? <span className="text-gray-300" title="Sin calcular todavía">¿?</span> : fmt(r.f6)}
                         </td>
                         <td className="px-3 py-2 border-b border-gray-100 text-right text-indigo-700">
@@ -537,7 +651,7 @@ export function VivoClient() {
                         </td>
                         <td className="px-3 py-2 border-b border-gray-100 text-right">
                           <GapCell ordered={r.p3} invoiced={r.f3} />
-                        </td>
+                        </td> */}
                         <td className={`px-3 py-2 border-b border-gray-100 text-right font-bold ${r.sug > 0 ? 'text-teal-700' : 'text-gray-400'}`}
                             title={r.flags.seasonalExcluded
                               ? `Sin término estacional — ${r.seasonalMotivo ?? ''} Forecast = promedio(6m, 3m) × 1.1.`
@@ -567,7 +681,14 @@ export function VivoClient() {
               ? <> · <span className="text-indigo-500">†</span> = sin término estacional por decisión explícita (ver el tooltip del Sugerido)</>
               : null}
           </div>
-          {payload?.tiendas ? <TiendasPanel tiendas={payload.tiendas} /> : null}
+          {/* Q24 (Jorge, 2026-08-27) — COMMENTED OUT, not deleted, on purpose.
+              Wilmer has never said anything about this panel, for or against;
+              nobody knows whether he reads it. So it goes dark and we watch:
+              if he does not notice its absence within a few days, it and
+              `TiendasPanel` below come out for good. If he asks where it
+              went, uncomment this line and nothing was lost.
+              The API still returns `payload.tiendas` — no endpoint changed. */}
+          {/* {payload?.tiendas ? <TiendasPanel tiendas={payload.tiendas} /> : null} */}
         </div>
 
         <div className="space-y-4">
@@ -611,7 +732,20 @@ export function VivoClient() {
               El patio se muestra aparte y no entra al cálculo, igual que en el Excel.
               Tránsito editable: tu valor manual reemplaza al sincronizado (p. ej. el mensual de Carvajal).
               El botón ✕ junto a una captura manual la quita (tránsito vuelve al sincronizado;
-              pendiente vuelve a ¿?). Captura máxima: {fmt(MAX_MANUAL_QTY)} unidades.
+              pendiente vuelve a ¿?), y vaciar la casilla hace lo mismo.
+              Captura máxima: {fmt(MAX_MANUAL_QTY)} unidades.
+              Los encabezados con flechas ordenan; «Mínimo» deja fuera lo que esté por debajo del valor.
+            </p>
+            {/* W15-A — la sonda se anuncia como sonda. Si él no sabe que le
+                estamos preguntando algo, no vamos a obtener la respuesta. */}
+            <p className="mt-2 text-[11px] text-indigo-900 bg-indigo-50 border border-indigo-200 rounded-lg px-3 py-2">
+              <b>«Destino final» es provisional y queremos tu opinión.</b> Hoy el tránsito llega sin
+              separar por bodega, así que se ve el mismo en las tres y eso te tapa el Sugerido.
+              Mientras lo arreglamos de raíz, esta columna te deja decir dónde se queda de verdad:
+              lo que declarés sale de las otras bodegas y su Sugerido sube. Las filas afectadas
+              quedan marcadas con <b className="text-indigo-600">~</b>.
+              {' '}<b>Ya sabemos que se queda corta</b> — un furgón que descarga en San José, Zacapa
+              y Petén no cabe en un solo destino. Contanos qué te falta y con eso diseñamos lo definitivo.
             </p>
           </div>
         </div>
@@ -695,6 +829,8 @@ function MesEnCurso({ mtd, dias, ritmo, p3 }: {
   );
 }
 
+/** DORMANT since 2026-08-26 (Q9) — kept so restoring the Δ column is one edit. */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- dormant, see above
 function GapCell({ ordered, invoiced }: { ordered: number; invoiced: number | null }) {
   if (invoiced === null) return <span className="text-gray-300">—</span>;
   if (!ordered) {
@@ -720,7 +856,13 @@ function GapCell({ ordered, invoiced }: { ordered: number; invoiced: number | nu
  * folding these invoices into a bodega would double-count. Decision
  * 2026-08-20: show the split and let Wilmer and Raquel settle it with the
  * numbers in front of them.
+ *
+ * DORMANT since 2026-08-27 (Q24) — the call site above is commented out while
+ * we find out whether Wilmer reads this at all. He has never mentioned it,
+ * either way. Kept intact so restoring it is one line; delete both if the
+ * silence holds.
  */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- dormant, see above
 function TiendasPanel({ tiendas }: { tiendas: Tiendas }) {
   if (!tiendas.porTienda.length) return null;
   return (
@@ -761,18 +903,75 @@ function TiendasPanel({ tiendas }: { tiendas: Tiendas }) {
   );
 }
 
-function Th({ children, left, tip }: { children: React.ReactNode; left?: boolean; tip?: string }) {
+/**
+ * W16 — un encabezado ordena si se le pasa `sortKey`.
+ *
+ * Los que no la reciben (Mes en curso, Tendencia) siguen siendo rótulos: no
+ * son una cifra simple sobre la que «mayor a menor» signifique algo.
+ */
+function Th({ children, left, tip, sortKey, orden, onSort }: {
+  children: React.ReactNode;
+  left?: boolean;
+  tip?: string;
+  sortKey?: ClaveOrden;
+  orden?: Orden | null;
+  onSort?: (k: ClaveOrden) => void;
+}) {
+  const activa = Boolean(sortKey && orden && orden.clave === sortKey);
+  const ordenable = Boolean(sortKey && onSort);
   return (
     <th
       title={tip}
-      className={`${left ? 'text-left' : 'text-right'} font-semibold px-3 py-2.5 border-b border-gray-200 whitespace-nowrap ${tip ? 'cursor-help' : ''}`}
+      aria-sort={activa ? (orden!.dir === 'asc' ? 'ascending' : 'descending') : undefined}
+      className={`${left ? 'text-left' : 'text-right'} font-semibold px-3 py-2.5 border-b border-gray-200 whitespace-nowrap ${
+        ordenable ? 'cursor-pointer select-none hover:text-gray-900' : tip ? 'cursor-help' : ''
+      } ${activa ? 'text-teal-700' : ''}`}
+      onClick={ordenable ? () => onSort!(sortKey!) : undefined}
     >
-      {children}
+      <span className={`inline-flex items-center gap-1 ${left ? '' : 'flex-row-reverse'}`}>
+        {children}
+        {ordenable && (
+          activa
+            ? (orden!.dir === 'asc' ? <ChevronUp size={12} strokeWidth={3} /> : <ChevronDown size={12} strokeWidth={3} />)
+            : <ChevronsUpDown size={11} className="text-gray-300" />
+        )}
+      </span>
     </th>
   );
 }
 
-function QtyInput({ value, edited, unknown, label, onCommit, onClear, clearTip }: {
+/**
+ * W15-A — «Destino final», la sonda deliberada.
+ *
+ * Sabe que está mal y lo dice: un furgón puede descargar en San José, Zacapa y
+ * Petén, y aquí sólo cabe un destino. Se construyó así a propósito (Jorge,
+ * Q26, 2026-08-27) para que el límite aparezca en la práctica y podamos
+ * diseñar lo correcto sobre algo observado y no sobre una suposición.
+ *
+ * Vacío = sin declarar, nunca un destino por omisión.
+ */
+function DestinoSelect({ value, opciones, label, onChange }: {
+  value: string | null;
+  opciones: string[];
+  label: string;
+  onChange: (destino: string | null) => void;
+}) {
+  return (
+    <select
+      value={value ?? ''}
+      aria-label={label}
+      onChange={(e) => onChange(e.target.value === '' ? null : e.target.value)}
+      className={`text-xs rounded-md border px-1.5 py-1 max-w-[120px] focus:outline-none focus:ring-2 focus:ring-teal-600 ${
+        value ? 'border-indigo-400 text-indigo-800 bg-indigo-50/50' : 'border-gray-200 text-gray-500'
+      }`}
+    >
+      <option value="">— sin declarar —</option>
+      {opciones.map((b) => <option key={b} value={b}>{b}</option>)}
+    </select>
+  );
+}
+
+export function QtyInput({ value, edited, unknown, label, onCommit, onClear, clearTip }: {
   value: number | null;
   edited: boolean;
   unknown?: boolean;
@@ -784,8 +983,32 @@ function QtyInput({ value, edited, unknown, label, onCommit, onClear, clearTip }
 }) {
   const [draft, setDraft] = useState<string>(value === null ? '' : String(Math.round(value)));
   useEffect(() => { setDraft(value === null ? '' : String(Math.round(value))); }, [value]);
+  /**
+   * W19 — emptying the box and tabbing out used to do NOTHING, silently.
+   *
+   * Wilmer, 2026-08-26, trying to remove a tránsito that was not his bodega's:
+   * *"el tránsito no lo puedo quitar"* → he blanked the field → Jorge: *"dale
+   * tabulación"* → *"Ah, no lo cambió."* → *"ahorita tengo que dar refresh"*.
+   * Jorge: *"eso sí es un error de la aplicación"*.
+   *
+   * The old `if (draft.trim() === '') return` was written for `pendiente`,
+   * where blank means "unknown" and must not be read as zero. It is correct
+   * about zero and wrong about the gesture: it left the box visually empty
+   * while the stored value was untouched, so the row LOOKED edited and the
+   * Sugerido did not move. A silent no-op is the one outcome an input must
+   * never have.
+   *
+   * Now blanking means what the ✕ next to it means — clear the manual capture
+   * — whenever there is one to clear. With nothing captured there is nothing
+   * to clear, so the draft simply snaps back to the real value instead of
+   * lying about it. Either way the box always shows what is stored.
+   */
   const commit = () => {
-    if (draft.trim() === '') return; // unknown stays unknown until a number is entered
+    if (draft.trim() === '') {
+      if (onClear) onClear();
+      else setDraft(value === null ? '' : String(Math.round(value)));
+      return;
+    }
     const v = parseFloat(draft);
     if (Number.isFinite(v) && v >= 0 && v !== value) onCommit(v);
   };

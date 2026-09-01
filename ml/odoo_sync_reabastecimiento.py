@@ -283,6 +283,10 @@ def location_ids_for(by_name, wh_codes, kinds, issues):
 # Warehouses excluded from the 'General' aggregate (Wilmer 2026-08-06:
 # "Todas, menos 5DEP" — 5DEP is reempaque: no sales, occasional stock).
 GENERAL_EXCLUDED_WH = ('5DEP',)
+# El nombre de la vista de roll-up. Se usaba como literal 'General' en varios
+# puntos; W15-B lo necesita también en la atribución del tránsito, así que aquí
+# queda con nombre en vez de repetido.
+GENERAL_BODEGA = 'General'
 
 
 def general_exist_location_ids(by_name):
@@ -892,9 +896,116 @@ def sync_seasonal(execute, sku_to_opid, issues):
     return result
 
 
-def sync_transit(execute, issues):
-    """Global per-product transit: confirmed PO lines with pending qty
-    (product_qty - qty_received > 0) on orders expected TODAY OR LATER.
+def attribute_transit(lines, wh_by_order, bodega_codes):
+    """Reparte las líneas pendientes entre bodegas según el almacén que las
+    recibe. Puro — sin I/O, para poder probarlo (mismo criterio que
+    `aggregate_invoiced`).
+
+    Devuelve `(transit, fuera_de_alcance, counted)`:
+      * `transit`          {bodega: {odoo_product_id: qty}}
+      * `fuera_de_alcance` {warehouse_code: qty} — almacenes sin fila en
+                           bodega_map. Se REPORTAN, no se reparten.
+      * `counted`          líneas con pendiente > 0 consideradas.
+
+    LA INVARIANTE QUE ESTE REPARTO INTRODUCE: una cantidad pendiente cae en
+    EXACTAMENTE UNA bodega de compra. Antes del 2026-08-27 caía en las tres, y
+    por eso sumarlas triplicaba. `General` es la única que ve el conjunto, y
+    con el mismo perímetro que ya usa su stock (todo menos GENERAL_EXCLUDED_WH).
+    """
+    transit = defaultdict(lambda: defaultdict(float))
+    fuera_de_alcance = defaultdict(float)
+    counted = 0
+    wh_to_bodega = {code: bodega for bodega, codes in bodega_codes.items() for code in codes}
+    for ln in lines:
+        if not ln.get('product_id'):
+            continue
+        pending = (ln.get('product_qty') or 0.0) - (ln.get('qty_received') or 0.0)
+        if pending <= 0:
+            continue
+        opid = ln['product_id'][0]
+        code = wh_by_order.get(ln['order_id'][0]) if ln.get('order_id') else None
+        bodega = wh_to_bodega.get(code)
+        if bodega:
+            transit[bodega][opid] += pending
+        else:
+            # Sin fila en bodega_map: subcontratación, Zona 11, tiendas o
+            # desconocido. Se le pone nombre al hueco en vez de adivinarlo.
+            fuera_de_alcance[code or '(sin picking_type)'] += pending
+        if code not in GENERAL_EXCLUDED_WH:
+            transit[GENERAL_BODEGA][opid] += pending
+        counted += 1
+    return transit, fuera_de_alcance, counted
+
+
+def warehouse_by_picking_type(execute):
+    """{picking_type_id: warehouse_code}. Resolves a PO to the warehouse that
+    RECEIVES it, which is the only destination Odoo actually holds.
+
+    MEASURED 2026-08-27 against production: 39 future-dated orders, 186 pending
+    lines, and `picking_type_id` resolved for 100% of them — 0 unresolvable.
+    The attribution below is therefore not best-effort; it is complete."""
+    types = odoo_read_all(execute, 'stock.picking.type', [], ['warehouse_id'])
+    warehouses = odoo_read_all(execute, 'stock.warehouse', [], ['code'])
+    code_by_wh = {w['id']: w.get('code') for w in warehouses}
+    return {t['id']: code_by_wh.get(t['warehouse_id'][0]) if t.get('warehouse_id') else None
+            for t in types}
+
+
+def sync_transit(execute, issues, bodega_codes):
+    """Per-BODEGA transit: confirmed PO lines with pending qty
+    (product_qty - qty_received > 0) on orders expected TODAY OR LATER,
+    attributed to the warehouse that receives them.
+
+    ⚠️ W15-B — WHAT THIS FIXES, and it was worse than reported.
+
+    Until 2026-08-27 this function returned `{product_id: qty}` with no bodega
+    dimension at all, and `assemble_inputs()` wrote that ONE number into EVERY
+    bodega row. The transit was not "mixed" as Wilmer described it — it was
+    REPLICATED. He reported the symptom exactly right (*"estos 50 en tránsito
+    no son de la bodega de Zacapa"* · *"ahorita todos están revueltos"*), and
+    since the engine credits `exist + trans` against the forecast, foreign
+    transit SUPPRESSED his Sugerido: *"no me da un sugerido porque está tomando
+    los 3 saques"*.
+
+    MEASURED IN PRODUCTION 2026-08-27, before the fix (56,847 units pending):
+        1CET  (San Jose VN)  39,861   70.1%
+        SUB   (Envaica)       9,305   16.4%   ← not a purchasing bodega
+        2Z11  (Zona 11)       6,361   11.2%   ← out of scope
+        SUBPA (Plást. Amer.)  1,300    2.3%   ← not a purchasing bodega
+        T7Z11 (tienda)           20    0.0%   ← out of scope
+        4ZAC  (Zacapa)            0
+        3PET  (Petén)             0
+
+    Two facts fall out of that table, and both matter more than the mechanism:
+
+      1. **Zacapa and Petén have NO inbound purchase orders at all.** Every
+         unit of tránsito those two views showed was somebody else's. That is
+         the whole of his complaint, quantified.
+      2. **~30% of the total is bound for warehouses outside the purchasing
+         scope** (subcontracting, Zona 11, a tienda). It belongs to NO
+         purchasing bodega, and it was inflating all three.
+
+    ATTRIBUTION RULE — final destination only (Jorge, Q26/Q2, 2026-08-27):
+    a pending quantity belongs to exactly ONE bodega, the warehouse that
+    receives it. The three bodegas partition the total instead of each holding
+    a copy of it, so summing them is now meaningful.
+
+    Warehouses with no `bodega_map` row are NOT distributed and NOT dropped:
+    they go to a reported bucket, because silently folding them into a bodega
+    is how the current defect started.
+
+    'General' keeps a roll-up, but of the same perimeter its stock already uses
+    (every warehouse except GENERAL_EXCLUDED_WH) — not the raw global total.
+
+    ⚠️ INTERNAL TRANSFERS ARE DELIBERATELY NOT INCLUDED. The chain San José →
+    Zacapa → Petén moves on internal `stock.picking`, and those were measured
+    the same day: of 300 open internal transfers, 236 are `X/Entrada →
+    X/Existencias` — the putaway leg INSIDE one warehouse, i.e. goods that have
+    already arrived (that is patio, and counting it here would double it).
+    The genuine outbound leg `1CET/Existencias → 1CET a 4ZAC` had exactly **2**
+    open transfers, and `4ZAC → 3PET` had none: the internal legs complete too
+    fast to be in flight at any instant. Including them would add ~0 and risk
+    double counting. Revisit only if that measurement changes.
 
     RULE CONFIRMED BY WILMER 2026-07-30 (OQ-F): "Tránsito no cuenta fechas
     pasadas." His discipline: when a supplier reschedules, he UPDATES the
@@ -910,34 +1021,56 @@ def sync_transit(execute, issues):
     today0 = datetime.now(timezone.utc).strftime('%Y-%m-%d 00:00:00')
     orders = odoo_read_all(execute, 'purchase.order',
                            [['state', 'in', ['purchase', 'done']]],
-                           ['name', 'date_planned'])
-    future_ids = [o['id'] for o in orders if (o.get('date_planned') or '') >= today0]
+                           ['name', 'date_planned', 'picking_type_id'])
+    future = [o for o in orders if (o.get('date_planned') or '') >= today0]
+    future_ids = [o['id'] for o in future]
     past_ids = [o['id'] for o in orders if (o.get('date_planned') or '') < today0]
+
+    # Order -> receiving warehouse code. Measured 100% resolvable 2026-08-27.
+    pt_wh = warehouse_by_picking_type(execute)
+    wh_by_order = {}
+    sin_picking_type = 0
+    for o in future:
+        pt = o['picking_type_id'][0] if o.get('picking_type_id') else None
+        code = pt_wh.get(pt) if pt else None
+        if code is None:
+            sin_picking_type += 1
+        wh_by_order[o['id']] = code
+
     lines = odoo_read_all(execute, 'purchase.order.line',
                           [['order_id', 'in', future_ids]],
-                          ['product_id', 'product_qty', 'qty_received', 'date_planned']) \
+                          ['order_id', 'product_id', 'product_qty', 'qty_received', 'date_planned']) \
         if future_ids else []
     past_lines = odoo_read_all(execute, 'purchase.order.line',
                                [['order_id', 'in', past_ids]],
                                ['product_id', 'product_qty', 'qty_received']) if past_ids else []
-    transit = {}
-    counted = 0
+
     past_excluded = sum(
         1 for ln in past_lines
         if ln.get('product_id') and ((ln.get('product_qty') or 0.0) - (ln.get('qty_received') or 0.0)) > 0)
-    for ln in lines:
-        if not ln.get('product_id'):
-            continue
-        pending = (ln.get('product_qty') or 0.0) - (ln.get('qty_received') or 0.0)
-        if pending <= 0:
-            continue
-        transit[ln['product_id'][0]] = transit.get(ln['product_id'][0], 0.0) + pending
-        counted += 1
+    transit, fuera_de_alcance, counted = attribute_transit(lines, wh_by_order, bodega_codes)
+
+    por_bodega = ', '.join(
+        f'{b}={sum(v.values()):,.0f}' for b, v in sorted(transit.items()) if b != GENERAL_BODEGA
+    ) or '(ninguna)'
     issues.add('info', 'transit',
                f'transit = pending on orders expected today-or-later, header date, '
                f'states purchase+done (rule fixed 2026-08-06 after Wilmer falsified transit=0): '
                f'{counted} lines counted; {past_excluded} pending lines on past-dated orders excluded '
-               f'(incl. the no-auto-cancel pile back to 2024-10 — cleanup with David)')
+               f'(incl. the no-auto-cancel pile back to 2024-10 — cleanup with David). '
+               f'W15-B: atribuido por bodega destino (picking_type -> almacén) — {por_bodega}')
+    if sin_picking_type:
+        issues.add('warning', 'transit',
+                   f'{sin_picking_type} órdenes futuras sin picking_type resoluble — '
+                   f'su pendiente NO se atribuyó a ninguna bodega')
+    if fuera_de_alcance:
+        detalle = ', '.join(f'{k}={v:,.0f}' for k, v in
+                            sorted(fuera_de_alcance.items(), key=lambda kv: -kv[1]))
+        total_fuera = sum(fuera_de_alcance.values())
+        issues.add('info', 'transit',
+                   f'tránsito hacia almacenes SIN fila en bodega_map: {total_fuera:,.0f} unidades '
+                   f'({detalle}). NO se reparte entre las bodegas de compra — antes del 2026-08-27 '
+                   f'este volumen inflaba las tres por igual (subcontratación, Zona 11, tiendas)')
 
     # Data-horizon staleness: newest purchase order date vs now.
     latest_po = execute('purchase.order', 'search_read', [],
@@ -962,12 +1095,18 @@ def sync_transit(execute, issues):
                    f'{len(draft_lines)} future-dated DRAFT PO lines found (cotización '
                    f'candidate, INCLUDE_DRAFT_TRANSIT={INCLUDE_DRAFT_TRANSIT})')
         if INCLUDE_DRAFT_TRANSIT:
-            for ln in draft_lines:
-                if ln.get('product_id'):
-                    transit[ln['product_id'][0]] = (transit.get(ln['product_id'][0], 0.0)
-                                                    + (ln.get('product_qty') or 0.0))
-    logger.info('transit: %d products with pending qty', len(transit))
-    return transit
+            # Draft lines carry no confirmed receiving warehouse, so under the
+            # final-destination rule they cannot be attributed. They would have
+            # to be resolved the same way (order -> picking_type) before this
+            # flag is ever turned on; until then, turning it on with the old
+            # global behaviour would silently reintroduce the replication bug.
+            issues.add('warning', 'transit',
+                       'INCLUDE_DRAFT_TRANSIT=True pero las líneas borrador no se '
+                       'pueden atribuir a una bodega destino — se OMITEN (W15-B). '
+                       'Resolverlas por picking_type antes de habilitar el flag.')
+    logger.info('transit: %s',
+                ', '.join(f'{b}={len(v)} productos' for b, v in sorted(transit.items())) or 'vacío')
+    return {b: dict(v) for b, v in transit.items()}
 
 
 WINDOW_BY_BODEGA = {'General': 10}  # measured: General=10, locations=5
@@ -1009,7 +1148,9 @@ def assemble_inputs(product_map, stock, velocity, transit, seasonal, invoiced, s
                 'existencias': round(st.get('exist', 0.0), 4),
                 'reserved': round(st.get('reserved', 0.0), 4),
                 'patio': round(st.get('patio', 0.0), 4),
-                'transito': round(transit.get(opid, 0.0), 4),
+                # W15-B — por (bodega, producto). Antes era el MISMO número
+                # global replicado en las tres bodegas.
+                'transito': round(transit.get(bodega, {}).get(opid, 0.0), 4),
                 'f6': round(fac.get('f6', 0.0), 4),
                 'f3': round(fac.get('f3', 0.0), 4),
                 'mtd': round(vel.get('mtd', 0.0), 4),
@@ -1083,7 +1224,7 @@ def main():
         stock = sync_stock(execute, by_name, bodega_codes, issues)
         velocity = sync_velocity(execute, bodega_codes, wh_ids_by_code, issues, uom_ctx)
         seasonal = sync_seasonal(execute, sku_to_opid, issues)
-        transit = sync_transit(execute, issues)
+        transit = sync_transit(execute, issues, bodega_codes)
         invoiced, tiendas = sync_invoiced(execute, bodega_codes, issues, uom_ctx)
 
         rows = assemble_inputs(product_map, stock, velocity, transit, seasonal,
@@ -1104,7 +1245,8 @@ def main():
         counts = {
             'odoo_products': n_odoo_products, 'products_inserted': n_inserted,
             'input_rows': len(rows), 'bodegas': sorted(stock.keys()),
-            'transit_products': len(transit), 'issues': len(issues.rows),
+            'transit_products': len({p for v in transit.values() for p in v}),
+            'transit_por_bodega': {b: len(v) for b, v in sorted(transit.items())}, 'issues': len(issues.rows),
             'invoiced_rows': sum(1 for r in rows if r['f6'] or r['f3']),
             'tienda_rows': len(tienda_rows),
             'data_horizon': horizon or None,

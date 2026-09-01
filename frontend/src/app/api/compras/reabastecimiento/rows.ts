@@ -16,7 +16,10 @@ import {
   doh,
 } from '@/app/(authenticated)/compras/reabastecimiento/engine';
 import { evaluarTendencia, type Tendencia } from '@/lib/compras/tendencia';
-import { fetchAll } from './lib';
+import {
+  type DestinoDeclarado, destinoAfectaFila, transitoSegunDestino, ultimaPorProducto,
+} from '@/lib/compras/destino';
+import { GENERAL_BODEGA, fetchAll } from './lib';
 
 /**
  * SEASONAL EXCEPTIONS — per-SKU, by explicit decision, NOT a rule.
@@ -76,6 +79,8 @@ interface SupplierLink { product_id: number; supplier_id: number }
 interface SupplierRef { id: number; name: string }
 /** qty === null = a CLEAR entry: the manual capture was removed (20260813000001). */
 interface OverrideRow { product_id: number; qty: number | null; created_at: string }
+/** W15-A — `destino` null = declaración borrada. */
+interface DestinoRow { product_id: number; destino: string | null; created_at: string }
 interface ComercialRow {
   product_id: number; bodega: string | null; quantity: number;
   motivo: string; created_at: string;
@@ -88,6 +93,10 @@ export interface LiveRow {
   exist: number; existencias: number; reserved: number; patio: number;
   pending: number | null;
   trans: number; transOverridden: boolean;
+  /** W15-A — destino final declarado a mano (null = sin declarar). */
+  destino: string | null;
+  /** W15-A — la declaración está cambiando lo que se ve en ESTA bodega. */
+  destinoProvisional: boolean;
   adic: number; p6: number; p3: number; h: number;
   f6: number | null; f3: number | null;
   mtd: number | null; mtdDias: number | null; mtdRitmo: number | null;
@@ -107,7 +116,8 @@ export async function buildRows(
 ): Promise<{ rows: LiveRow[]; maxAsOf: string; monthStart: string; coberturaDias: number }> {
     const monthStart = `${new Date().toISOString().slice(0, 7)}-01`;
 
-    const [inputs, products, links, suppliers, transitoOv, pendingOv, comercial, cobertura] =
+    const [inputs, products, links, suppliers, transitoOv, pendingOv, comercial, cobertura,
+           destinoDecl] =
       await Promise.all([
         fetchAll<InputRow>((a, b) =>
           service.from('reabastecimiento_inputs').select('*').eq('bodega', bodega).range(a, b)),
@@ -133,6 +143,12 @@ export async function buildRows(
         service.from('bodega_cobertura').select('dias')
           .eq('bodega', bodega).order('created_at', { ascending: false })
           .limit(1).maybeSingle(),
+        // W15-A — la declaración es GLOBAL AL PRODUCTO, no por bodega: viendo
+        // San José hay que saber que el producto fue declarado a Zacapa, o el
+        // tránsito no se puede mover de una vista a otra.
+        fetchAll<DestinoRow>((a, b) =>
+          service.from('transito_destino').select('product_id, destino, created_at')
+            .order('created_at', { ascending: false }).range(a, b)),
       ]);
 
     const coberturaDias = (cobertura?.data as { dias: number } | null)?.dias
@@ -158,6 +174,7 @@ export async function buildRows(
     };
     const transitoByProduct = latest(transitoOv);
     const pendingByProduct = latest(pendingOv);
+    const destinoByProduct = ultimaPorProducto(destinoDecl);
     // Comercial: bodega-specific entry beats the all-bodegas (null) entry.
     const comercialByProduct = new Map<number, { qty: number; motivo: string }>();
     for (const c of comercial) {
@@ -173,10 +190,24 @@ export async function buildRows(
       const ref = productById.get(r.product_id);
       const pending = pendingByProduct.get(r.product_id) ?? null;
       const existNet = r.existencias - r.reserved - (pending ?? 0);
-      // undefined (no entry) and null (cleared) both fall back to the synced
-      // transit; only a real number overrides it.
+      /**
+       * Tránsito — tres capas, de la más específica a la más general:
+       *
+       *   1. `transito_overrides` — la CANTIDAD que él teclea, ya por
+       *      (producto × bodega). Manda sobre todo: es la herramienta más
+       *      expresiva y no se puede pisar con la menos expresiva.
+       *   2. W15-A — el DESTINO declarado a mano mueve el tránsito
+       *      sincronizado a una sola bodega (y lo saca de las otras).
+       *   3. el tránsito sincronizado tal como llega — que hoy es global y
+       *      está replicado en las tres bodegas (W15-B lo corrige de raíz).
+       *
+       * undefined (sin entrada) y null (borrado) caen igual a la capa de
+       * abajo; sólo un número real hace override.
+       */
+      const destino: DestinoDeclarado = destinoByProduct.get(r.product_id) ?? null;
+      const transSync = transitoSegunDestino(bodega, destino, r.transito, GENERAL_BODEGA);
       const transOverride = transitoByProduct.get(r.product_id) ?? null;
-      const trans = transOverride ?? r.transito;
+      const trans = transOverride ?? transSync;
       const adic = comercialByProduct.get(r.product_id)?.qty ?? 0;
       if (r.as_of > maxAsOf) maxAsOf = r.as_of;
 
@@ -217,6 +248,12 @@ export async function buildRows(
         pending,
         trans: round1(trans),
         transOverridden: transOverride !== null,
+        // W15-A — `destino` es lo declarado (null = sin declarar).
+        // `destinoProvisional` marca las filas donde esa declaración está
+        // cambiando lo que se ve, para poder rotularlas en pantalla: un número
+        // equivocado que nadie ve es un bug; uno rotulado es un instrumento.
+        destino,
+        destinoProvisional: destinoAfectaFila(bodega, destino, GENERAL_BODEGA),
         adic: round1(adic),
         p6: round1(r.p6),
         p3: round1(r.p3),
