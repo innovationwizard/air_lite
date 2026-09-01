@@ -57,6 +57,10 @@ const BODEGA_TIP: Record<string, string> = {
 };
 
 const COL_TIP = {
+  sugBodega:
+    'Lo que el encargado del centro de distribución pidió ADEMÁS, para esta bodega. '
+    + 'Se SUMA al Sugerido: no lo reemplaza, porque es un pedido adicional y no una '
+    + 'corrección de la proyección. Vaciar la casilla quita la captura.',
   cod: 'Código del producto (SKU) — identidad estable desde SAE, igual que en Odoo.',
   desc: 'Descripción y proveedor del catálogo de Odoo.',
   exist:
@@ -126,7 +130,8 @@ interface ApiRow {
   destino: string | null;
   /** W15-A — esa declaración está cambiando lo que se ve en esta bodega. */
   destinoProvisional: boolean;
-  adic: number; p6: number; p3: number; h: number; win: 10 | 5;
+  adic: number; adicComercial: number; sugBodega: number | null;
+  p6: number; p3: number; h: number; win: 10 | 5;
   /** G4 invoiced lens — display only, never fed to the engine. null = sync has not computed it. */
   f6: number | null; f3: number | null;
   /** Venta del mes en curso (parcial), días transcurridos y ritmo a 30 días. Display only. */
@@ -270,6 +275,34 @@ export function VivoClient() {
    * silencioso repinta con la verdad del servidor, que es la misma regla que
    * ya gobierna el clear de tránsito.
    */
+  /**
+   * A4.17 — el pedido adicional que mandó el encargado del CD.
+   *
+   * Sin recálculo optimista: el aditivo entra al Sugerido por el motor del
+   * SERVIDOR, y recalcularlo acá sería la segunda implementación de la fórmula
+   * que este módulo existe para evitar. El refetch silencioso repinta con la
+   * verdad del servidor, igual que el clear de tránsito y que el destino.
+   */
+  const commitSugBodega = useCallback(async (row: ApiRow, qty: number | null) => {
+    setSaveError(null);
+    try {
+      const res = await fetch('/api/compras/reabastecimiento/sugerido-bodega', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ productId: row.productId, bodega, qty }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error ?? `HTTP ${res.status}`);
+      }
+      load(bodega, true);
+    } catch (e) {
+      setSaveError(
+        `No se guardó el sugerido de bodega (${row.cod}): ${e instanceof Error ? e.message : e}`);
+      load(bodega, true);
+    }
+  }, [bodega, load]);
+
   const commitDestino = useCallback(async (row: ApiRow, destino: string | null) => {
     setSaveError(null);
     try {
@@ -465,6 +498,16 @@ export function VivoClient() {
       <td className="px-3 py-2 border-b border-gray-100 text-right">
         <GapCell ordered={r.p3} invoiced={r.f3} />
       </td> */}
+      <td className="px-3 py-2 border-b border-gray-100 text-right">
+        <QtyInput
+          value={r.sugBodega}
+          edited={r.sugBodega !== null}
+          label={`Sugerido de bodega — ${r.cod}`}
+          onCommit={(v) => commitSugBodega(r, v)}
+          onClear={r.sugBodega !== null ? () => commitSugBodega(r, null) : undefined}
+          clearTip="Quitar el pedido del centro de distribución"
+        />
+      </td>
       <td className={`px-3 py-2 border-b border-gray-100 text-right font-bold ${r.sug > 0 ? 'text-teal-700' : 'text-gray-400'}`}
           title={r.flags.seasonalExcluded
             ? `Sin término estacional — ${r.seasonalMotivo ?? ''} Forecast = promedio(6m, 3m) × 1.1.`
@@ -479,7 +522,7 @@ export function VivoClient() {
       </td>
     </tr>
   );
-  }, [commitEdit, commitDestino, destinos]);
+  }, [commitEdit, commitDestino, commitSugBodega, destinos]);
 
   return (
     <div className="p-6 max-w-[1240px] mx-auto">
@@ -698,6 +741,7 @@ export function VivoClient() {
                     {/* <Th tip={COL_TIP.fact}>Fact. 6m</Th>
                     <Th tip={COL_TIP.fact}>Fact. 3m</Th>
                     <Th tip={COL_TIP.gap}>Δ</Th> */}
+                    <Th tip={COL_TIP.sugBodega}>Pide bodega</Th>
                     <Th tip={COL_TIP.sug} sortKey="sug" orden={orden} onSort={onSort}>Sugerido</Th>
                   </tr>
                 </thead>

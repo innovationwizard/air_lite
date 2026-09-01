@@ -100,7 +100,8 @@ export interface LiveRow {
   destino: string | null;
   /** W15-A — la declaración está cambiando lo que se ve en ESTA bodega. */
   destinoProvisional: boolean;
-  adic: number; p6: number; p3: number; h: number;
+  adic: number; adicComercial: number; sugBodega: number | null;
+  p6: number; p3: number; h: number;
   f6: number | null; f3: number | null;
   mtd: number | null; mtdDias: number | null; mtdRitmo: number | null;
   win: number; doh: number; sug: number;
@@ -126,7 +127,7 @@ export async function buildRows(
 ): Promise<{ rows: LiveRow[]; maxAsOf: string; monthStart: string; coberturaDias: number }> {
     const monthStart = `${new Date().toISOString().slice(0, 7)}-01`;
 
-    const [inputs, products, links, suppliers, transitoOv, pendingOv, comercial, cobertura,
+    const [inputs, products, links, suppliers, transitoOv, pendingOv, comercial, sugBodegaOv, cobertura,
            destinoDecl] =
       await Promise.all([
         fetchAll<InputRow>((a, b) =>
@@ -148,6 +149,11 @@ export async function buildRows(
             .select('product_id, bodega, quantity, motivo, created_at')
             .eq('month', monthStart)
             .order('created_at', { ascending: false }).range(a, b)),
+        // A4.17 — el pedido adicional del encargado del CD, por bodega.
+        // Append-only; `qty` NULL es un borrado, igual que en tránsito.
+        fetchAll<OverrideRow>((a, b) =>
+          service.from('sugerido_bodega').select('product_id, qty, created_at')
+            .eq('bodega', bodega).order('created_at', { ascending: false }).range(a, b)),
         // Coverage horizon for THIS bodega — append-only, newest row wins.
         // No row is a real answer: it means the engine default (30 días).
         service.from('bodega_cobertura').select('dias')
@@ -183,6 +189,9 @@ export async function buildRows(
       return m;
     };
     const transitoByProduct = latest(transitoOv);
+    // A4.17 — el pedido adicional del encargado del CD. Misma mecánica
+    // append-only y gana-la-última que tránsito y pendiente.
+    const sugBodegaByProduct = latest(sugBodegaOv);
     const pendingByProduct = latest(pendingOv);
     const destinoByProduct = ultimaPorProducto(destinoDecl);
     // Comercial: bodega-specific entry beats the all-bodegas (null) entry.
@@ -218,7 +227,13 @@ export async function buildRows(
       const transSync = transitoSegunDestino(bodega, destino, r.transito, GENERAL_BODEGA);
       const transOverride = transitoByProduct.get(r.product_id) ?? null;
       const trans = transOverride ?? transSync;
-      const adic = comercialByProduct.get(r.product_id)?.qty ?? 0;
+      const adicComercial = comercialByProduct.get(r.product_id)?.qty ?? 0;
+      // A4.17 — el sugerido que pidió la bodega SE SUMA al término aditivo del
+      // motor. Se suma acá y no dentro del motor a propósito: `engine.ts` está
+      // verificado al 99.85% de paridad contra el libro y no se toca. Con cero
+      // capturas, `adic` vale exactamente lo que valía antes.
+      const sugBodega = sugBodegaByProduct.get(r.product_id) ?? 0;
+      const adic = adicComercial + sugBodega;
       if (r.as_of > maxAsOf) maxAsOf = r.as_of;
 
       const cod = ref?.sku ?? `#${r.product_id}`;
@@ -277,6 +292,10 @@ export async function buildRows(
         destino,
         destinoProvisional: destinoAfectaFila(bodega, destino, GENERAL_BODEGA),
         adic: round1(adic),
+        // Las dos fuentes viajan separadas a la pantalla: un aditivo que no
+        // dice de dónde salió es un número que nadie puede defender.
+        adicComercial: round1(adicComercial),
+        sugBodega: sugBodegaByProduct.get(r.product_id) ?? null,
         p6: round1(r.p6),
         p3: round1(r.p3),
         // G4: the invoiced lens travels beside the ordered one and never
