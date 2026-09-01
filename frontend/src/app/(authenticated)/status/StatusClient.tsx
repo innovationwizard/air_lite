@@ -300,7 +300,7 @@ export function StatusClient({ puedeEditarPlan }: { puedeEditarPlan: boolean }) 
           <p className="text-sm text-gray-500 mt-1">
             AI Refill · análisis de brechas sobre 185 peticiones registradas en 28 reuniones,
             del 16 de junio al 26 de agosto de 2026
-            {datos.corte && ` · juicio al ${new Date(datos.corte).toLocaleDateString('es-GT')}`}
+            {datos.corte && ` · Actualizado al ${new Date(datos.corte).toLocaleDateString('es-GT')}`}
           </p>
         </div>
 
@@ -862,7 +862,7 @@ function Franqueza() {
           </p>
           <p>
             <strong>El estado de cada fila es una propuesta.</strong> Las píldoras con borde
-            punteado son el juicio del análisis, no un acuerdo. Si alguna está mal, esa objeción
+            punteado son la lectura del análisis, no un acuerdo. Si alguna está mal, esa objeción
             es justamente lo que este documento viene a provocar.
           </p>
         </div>
