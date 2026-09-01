@@ -896,7 +896,8 @@ def sync_seasonal(execute, sku_to_opid, issues):
     return result
 
 
-def attribute_transit(lines, wh_by_order, bodega_codes):
+def attribute_transit(lines, wh_by_order, bodega_codes,
+                      fecha_por_orden=None, nombre_por_orden=None):
     """Reparte las líneas pendientes entre bodegas según el almacén que las
     recibe. Puro — sin I/O, para poder probarlo (mismo criterio que
     `aggregate_invoiced`).
@@ -914,8 +915,15 @@ def attribute_transit(lines, wh_by_order, bodega_codes):
     """
     transit = defaultdict(lambda: defaultdict(float))
     fuera_de_alcance = defaultdict(float)
+    # A6.15 — el mismo recorrido produce el DESGLOSE por fecha. Se arma acá y no
+    # en una segunda pasada porque es exactamente la misma decisión de
+    # atribución: si se calculara aparte, el día que cambie la regla de bodega
+    # el detalle y el total dirían cosas distintas y nadie sabría cuál creer.
+    detalle = []
     counted = 0
     wh_to_bodega = {code: bodega for bodega, codes in bodega_codes.items() for code in codes}
+    fecha_por_orden = fecha_por_orden or {}
+    nombre_por_orden = nombre_por_orden or {}
     for ln in lines:
         if not ln.get('product_id'):
             continue
@@ -927,6 +935,19 @@ def attribute_transit(lines, wh_by_order, bodega_codes):
         bodega = wh_to_bodega.get(code)
         if bodega:
             transit[bodega][opid] += pending
+            # La fecha de la LÍNEA es la «Fecha Esperada» con la que se arma la
+            # rampa; sólo si falta se cae a la del encabezado. La INCLUSIÓN
+            # sigue decidida por el encabezado (arriba), así que el detalle
+            # explica el total sin poder alterarlo.
+            detalle.append({
+                'bodega': bodega,
+                'opid': opid,
+                'fecha': (ln.get('date_planned') or fecha_por_orden.get(
+                    ln['order_id'][0] if ln.get('order_id') else None) or None),
+                'qty': pending,
+                'orden': nombre_por_orden.get(
+                    ln['order_id'][0] if ln.get('order_id') else None),
+            })
         else:
             # Sin fila en bodega_map: subcontratación, Zona 11, tiendas o
             # desconocido. Se le pone nombre al hueco en vez de adivinarlo.
@@ -934,7 +955,7 @@ def attribute_transit(lines, wh_by_order, bodega_codes):
         if code not in GENERAL_EXCLUDED_WH:
             transit[GENERAL_BODEGA][opid] += pending
         counted += 1
-    return transit, fuera_de_alcance, counted
+    return transit, fuera_de_alcance, counted, detalle
 
 
 def warehouse_by_picking_type(execute):
@@ -1048,7 +1069,12 @@ def sync_transit(execute, issues, bodega_codes):
     past_excluded = sum(
         1 for ln in past_lines
         if ln.get('product_id') and ((ln.get('product_qty') or 0.0) - (ln.get('qty_received') or 0.0)) > 0)
-    transit, fuera_de_alcance, counted = attribute_transit(lines, wh_by_order, bodega_codes)
+    # A6.15 — el detalle necesita la fecha y el correlativo de la orden, que ya
+    # se leyeron arriba: se pasan en lugar de volver a consultarlos.
+    fecha_por_orden = {o['id']: (o.get('date_planned') or None) for o in future}
+    nombre_por_orden = {o['id']: o.get('name') for o in future}
+    transit, fuera_de_alcance, counted, transito_detalle = attribute_transit(
+        lines, wh_by_order, bodega_codes, fecha_por_orden, nombre_por_orden)
 
     por_bodega = ', '.join(
         f'{b}={sum(v.values()):,.0f}' for b, v in sorted(transit.items()) if b != GENERAL_BODEGA
@@ -1106,7 +1132,7 @@ def sync_transit(execute, issues, bodega_codes):
                        'Resolverlas por picking_type antes de habilitar el flag.')
     logger.info('transit: %s',
                 ', '.join(f'{b}={len(v)} productos' for b, v in sorted(transit.items())) or 'vacío')
-    return {b: dict(v) for b, v in transit.items()}
+    return {b: dict(v) for b, v in transit.items()}, transito_detalle
 
 
 WINDOW_BY_BODEGA = {'General': 10}  # measured: General=10, locations=5
@@ -1224,12 +1250,30 @@ def main():
         stock = sync_stock(execute, by_name, bodega_codes, issues)
         velocity = sync_velocity(execute, bodega_codes, wh_ids_by_code, issues, uom_ctx)
         seasonal = sync_seasonal(execute, sku_to_opid, issues)
-        transit = sync_transit(execute, issues, bodega_codes)
+        transit, transito_detalle = sync_transit(execute, issues, bodega_codes)
         invoiced, tiendas = sync_invoiced(execute, bodega_codes, issues, uom_ctx)
 
         rows = assemble_inputs(product_map, stock, velocity, transit, seasonal,
                                invoiced, sync_id, issues)
         tienda_rows = assemble_tiendas(product_map, tiendas, sync_id, issues)
+
+        # A6.15 — desglose por fecha del tránsito. `product_map` traduce el id
+        # de Odoo al nuestro; una línea cuyo producto no está en el catálogo se
+        # descarta acá igual que en el resto del sync, porque no tendría fila
+        # donde mostrarse.
+        detalle_rows = []
+        for d in transito_detalle:
+            pid = product_map.get(d['opid'])
+            if not pid:
+                continue
+            detalle_rows.append({
+                'product_id': pid,
+                'bodega': d['bodega'],
+                'fecha': (d['fecha'] or '')[:10] or None,
+                'qty': round(d['qty'], 4),
+                'orden': d['orden'],
+                'sync_id': sync_id,
+            })
 
         # DATA HORIZON — the newest business activity in Odoo (NOT the sync
         # time). Surfaced so the UI never claims freshness the data lacks
@@ -1262,6 +1306,17 @@ def main():
                           on_conflict='product_id,bodega')
         sb_insert_batched('invoiced_tiendas', tienda_rows,
                           on_conflict='product_id,tienda')
+
+        # A6.15 — la tabla de detalle se REEMPLAZA entera: es un espejo de
+        # Odoo, no una captura de nadie. Borrar primero y escribir después es
+        # correcto acá y sería destructivo en `transito_overrides` o
+        # `sugerido_bodega`, que son append-only porque ahí el historial ES el
+        # dato. Si el borrado funciona y la escritura falla, la próxima corrida
+        # (dentro de una hora) lo repone; mientras tanto la columna Tránsito
+        # sigue mostrando su total, que no depende de esta tabla.
+        sb_request('DELETE', 'transito_detalle?id=not.is.null')
+        sb_insert_batched('transito_detalle', detalle_rows)
+        logger.info('transito_detalle: %d lineas', len(detalle_rows))
         # Purge rows this run did NOT touch: products that vanished from Odoo
         # (or lost all data) would otherwise serve a stale snapshot forever —
         # measured 2026-08-06: the mis-matched bolsa 11011048 kept showing the

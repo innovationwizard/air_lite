@@ -82,6 +82,10 @@ interface SupplierLink { product_id: number; supplier_id: number }
 interface SupplierRef { id: number; name: string }
 /** qty === null = a CLEAR entry: the manual capture was removed (20260813000001). */
 interface OverrideRow { product_id: number; qty: number | null; created_at: string }
+/** A6.15 — una entrada futura de tránsito: cuánto y cuándo. */
+interface DetalleRow {
+  product_id: number; fecha: string | null; qty: number; orden: string | null;
+}
 /** W15-A — `destino` null = declaración borrada. */
 interface DestinoRow { product_id: number; destino: string | null; created_at: string }
 interface ComercialRow {
@@ -101,6 +105,7 @@ export interface LiveRow {
   /** W15-A — la declaración está cambiando lo que se ve en ESTA bodega. */
   destinoProvisional: boolean;
   adic: number; adicComercial: number; sugBodega: number | null;
+  transitoDetalle: { fecha: string | null; qty: number; orden: string | null }[];
   p6: number; p3: number; h: number;
   f6: number | null; f3: number | null;
   mtd: number | null; mtdDias: number | null; mtdRitmo: number | null;
@@ -127,7 +132,7 @@ export async function buildRows(
 ): Promise<{ rows: LiveRow[]; maxAsOf: string; monthStart: string; coberturaDias: number }> {
     const monthStart = `${new Date().toISOString().slice(0, 7)}-01`;
 
-    const [inputs, products, links, suppliers, transitoOv, pendingOv, comercial, sugBodegaOv, cobertura,
+    const [inputs, products, links, suppliers, transitoOv, pendingOv, comercial, sugBodegaOv, detalleTr, cobertura,
            destinoDecl] =
       await Promise.all([
         fetchAll<InputRow>((a, b) =>
@@ -154,6 +159,11 @@ export async function buildRows(
         fetchAll<OverrideRow>((a, b) =>
           service.from('sugerido_bodega').select('product_id, qty, created_at')
             .eq('bodega', bodega).order('created_at', { ascending: false }).range(a, b)),
+        // A6.15 — el desglose por fecha del tránsito de ESTA bodega. Tabla
+        // derivada: la reemplaza entera cada sincronización.
+        fetchAll<DetalleRow>((a, b) =>
+          service.from('transito_detalle').select('product_id, fecha, qty, orden')
+            .eq('bodega', bodega).order('fecha', { ascending: true }).range(a, b)),
         // Coverage horizon for THIS bodega — append-only, newest row wins.
         // No row is a real answer: it means the engine default (30 días).
         service.from('bodega_cobertura').select('dias')
@@ -192,6 +202,17 @@ export async function buildRows(
     // A4.17 — el pedido adicional del encargado del CD. Misma mecánica
     // append-only y gana-la-última que tránsito y pendiente.
     const sugBodegaByProduct = latest(sugBodegaOv);
+    // A6.15 — agrupado por producto, ya ordenado por fecha desde la consulta.
+    // Las entradas SIN fecha van al final: no se pueden usar para decidir
+    // cuándo, y ponerlas primero fingiría una inminencia que no existe.
+    const detallePorProducto = new Map<number, DetalleRow[]>();
+    for (const d of detalleTr) {
+      const l = detallePorProducto.get(d.product_id);
+      if (l) l.push(d); else detallePorProducto.set(d.product_id, [d]);
+    }
+    for (const l of detallePorProducto.values()) {
+      l.sort((a, b) => (a.fecha ?? '9999').localeCompare(b.fecha ?? '9999'));
+    }
     const pendingByProduct = latest(pendingOv);
     const destinoByProduct = ultimaPorProducto(destinoDecl);
     // Comercial: bodega-specific entry beats the all-bodegas (null) entry.
@@ -296,6 +317,8 @@ export async function buildRows(
         // dice de dónde salió es un número que nadie puede defender.
         adicComercial: round1(adicComercial),
         sugBodega: sugBodegaByProduct.get(r.product_id) ?? null,
+        transitoDetalle: (detallePorProducto.get(r.product_id) ?? [])
+          .map((d) => ({ fecha: d.fecha, qty: round1(d.qty), orden: d.orden })),
         p6: round1(r.p6),
         p3: round1(r.p3),
         // G4: the invoiced lens travels beside the ordered one and never

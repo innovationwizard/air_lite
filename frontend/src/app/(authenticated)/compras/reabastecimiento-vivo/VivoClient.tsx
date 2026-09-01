@@ -131,6 +131,7 @@ interface ApiRow {
   /** W15-A — esa declaración está cambiando lo que se ve en esta bodega. */
   destinoProvisional: boolean;
   adic: number; adicComercial: number; sugBodega: number | null;
+  transitoDetalle: { fecha: string | null; qty: number; orden: string | null }[];
   p6: number; p3: number; h: number; win: 10 | 5;
   /** G4 invoiced lens — display only, never fed to the engine. null = sync has not computed it. */
   f6: number | null; f3: number | null;
@@ -456,6 +457,7 @@ export function VivoClient() {
             className="ml-1 text-[10px] font-bold text-indigo-600 cursor-help"
           >~</span>
         )}
+        <ProximaEntrada detalle={r.transitoDetalle} manual={r.transOverridden} />
       </td>
       <td className="px-3 py-2 border-b border-gray-100 text-right">
         <DestinoSelect
@@ -1229,5 +1231,46 @@ function CopiarTabla({ filas, bodega }: { filas: ApiRow[]; bodega: string }) {
       </button>
       {copiado && <span className="text-xs text-gray-500">{copiado}</span>}
     </div>
+  );
+}
+
+/**
+ * A6.15 — «1,200 en tránsito: 500 entran el 24».
+ *
+ * Debajo del total, la PRÓXIMA entrada; el resto al pasar el mouse. Saber que
+ * vienen 1,200 no ayuda a decidir si hay que comprar — lo que decide es si
+ * entran esta semana o el mes que viene.
+ *
+ * ⚠️ NO SE MUESTRA cuando hay captura manual de tránsito. El desglose describe
+ * lo que el sincronizador leyó de Odoo, y una captura manual REEMPLAZA ese
+ * número: enseñar un desglose que ya no suma el total que está arriba es peor
+ * que no mostrar nada, porque invita a confiar en fechas que no corresponden a
+ * la cantidad visible.
+ */
+function ProximaEntrada(
+  { detalle, manual }: {
+    detalle: { fecha: string | null; qty: number; orden: string | null }[];
+    manual: boolean;
+  },
+) {
+  if (manual || detalle.length === 0) return null;
+
+  const fmtFecha = (f: string | null) => (f
+    ? new Date(`${f}T00:00:00`).toLocaleDateString('es-GT', { day: 'numeric', month: 'short' })
+    : 'sin fecha');
+
+  const [primera, ...resto] = detalle;
+  const detalleCompleto = detalle
+    .map((d) => `${fmt(d.qty)} — ${fmtFecha(d.fecha)}${d.orden ? ` (${d.orden})` : ''}`)
+    .join('\n');
+
+  return (
+    <span
+      className="block text-[11px] text-gray-500 cursor-help leading-tight"
+      title={`Entradas previstas:\n${detalleCompleto}`}
+    >
+      {fmt(primera.qty)} el {fmtFecha(primera.fecha)}
+      {resto.length > 0 && <span className="text-gray-400"> +{resto.length}</span>}
+    </span>
   );
 }
