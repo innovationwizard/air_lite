@@ -69,12 +69,32 @@ const allNavGroups: NavGroup[] = [
   {
     section: null,
     items: [
+      /*
+        «Demostración de Valor» (/backtest) OCULTA del menú para todos los
+        roles — 2026-09-01, a pedido de Jorge.
+
+        Es una superficie de DEMOSTRACIÓN: prueba que las cifras reconcilian
+        contra Odoo, que fue el examen que destrabó el proyecto en abril. Eso se
+        enseña una vez; no es algo que alguien abra un martes. Dejarla en la
+        navegación diaria invita a leerla como herramienta de trabajo, y en la
+        primera pantalla compite con la única que sí tiene motivo recurrente.
+
+        ⚠️ OCULTAR NO ES RESTRINGIR. La ruta sigue alcanzable escribiendo la URL:
+        `PAGE_PERMISSIONS['/backtest']` la deja en CAN_VIEW_OPERATIONAL y el
+        middleware la sigue autorizando. Es deliberado —la demo tiene que poder
+        mostrarse cuando haga falta— pero conviene no confundir las dos cosas:
+        este mismo patrón (enlace oculto, ruta abierta) fue el agujero que la
+        auditoría de RBAC encontró hoy en /poc.
+
+        Para devolverla al menú: descomentar. Para cerrarla de verdad, hay que
+        tocar PAGE_PERMISSIONS, que es otra decisión.
       {
         name: 'Demostración de Valor',
         href: '/backtest',
         icon: BarChart3,
         subtitle: null,
       },
+      */
       {
         name: 'Estado del Proyecto',
         href: '/status',
