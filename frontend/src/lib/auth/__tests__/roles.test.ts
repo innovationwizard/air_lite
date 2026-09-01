@@ -162,7 +162,7 @@ describe('ROLLOUT_FOCUS — confinamiento de varias rutas', () => {
    * ocultaba enlaces sin restringir rutas.
    */
   it('gerencia queda acotada a /status, que es también su aterrizaje', () => {
-    expect(focusRoutes('gerencia')).toEqual(['/status']);
+    expect(focusRoutes('gerencia')).toEqual(['/status', '/comercial/forecast']);
     expect(getDefaultPage('gerencia')).toBe('/status');
     const rutas = focusRoutes('gerencia')!;
     for (const fuera of ['/backtest', '/gerencia/gap-report', '/gerencia/validacion',
@@ -205,7 +205,8 @@ describe('ROLLOUT_FOCUS — confinamiento de varias rutas', () => {
   });
 
   it('compras sigue confinado a su página de trabajo, más el estado', () => {
-    expect(focusRoutes('compras')).toEqual(['/compras/reabastecimiento-vivo', '/status']);
+    expect(focusRoutes('compras'))
+      .toEqual(['/compras/reabastecimiento-vivo', '/status', '/comercial/forecast']);
   });
 
   it('los roles sin entrada NO están confinados', () => {
@@ -222,8 +223,11 @@ describe('ROLLOUT_FOCUS — confinamiento de varias rutas', () => {
     // el gate — o peor, queda sin gate.
     for (const [rol, rutas] of Object.entries(ROLLOUT_FOCUS)) {
       for (const ruta of rutas ?? []) {
-        expect(PAGE_PERMISSIONS[ruta]).toBeDefined();
-        expect(isAuthorized(rol, PAGE_PERMISSIONS[ruta])).toBe(true);
+        const regla = Object.entries(PAGE_PERMISSIONS)
+          .filter(([r]) => ruta === r || ruta.startsWith(`${r}/`))
+          .sort((a, b) => b[0].length - a[0].length)[0];
+        expect(regla).toBeDefined();
+        expect(isAuthorized(rol, regla[1])).toBe(true);
       }
     }
   });
@@ -240,9 +244,9 @@ describe('ROLLOUT_FOCUS — confinamiento de varias rutas', () => {
   });
 
   it('falls back to /backtest for roles without a specific landing page', () => {
-    expect(getDefaultPage('ventas')).toBe('/backtest');
+    expect(getDefaultPage('ventas')).toBe('/comercial/forecast');
     expect(getDefaultPage('nonsense')).toBe('/backtest');
-    expect(getDefaultPage('ventas', {})).toBe('/backtest');
+    expect(getDefaultPage('ventas', {})).toBe('/comercial/forecast');
   });
 });
 
@@ -291,5 +295,48 @@ describe('RBAC — cobertura de PAGE_PERMISSIONS', () => {
                      '/inventarios/facturas', '/superuser', '/admin/usuarios', '/gerencia/gap-report']) {
       expect(cubierta(p)).toBe(true);
     }
+  });
+});
+
+/**
+ * PAGE_PERMISSIONS se DECLARABA y no se aplicaba en ninguna parte (auditoría
+ * 2026-09-01): las páginas son componentes de cliente sin guarda de servidor,
+ * así que lo único que separaba a un rol no confinado de /admin/usuarios o
+ * /superuser era que sus llamadas a la API respondieran 403. Estas pruebas
+ * fijan la coincidencia POR PREFIJO MÁS ESPECÍFICO que ahora usa el middleware.
+ */
+describe('PAGE_PERMISSIONS — coincidencia por prefijo más específico', () => {
+  const reglaPara = (ruta: string) =>
+    Object.entries(PAGE_PERMISSIONS)
+      .filter(([r]) => ruta === r || ruta.startsWith(`${r}/`))
+      .sort((a, b) => b[0].length - a[0].length)[0];
+
+  it('una sub-ruta hereda el permiso de su padre', () => {
+    expect(reglaPara('/comercial/forecast')[0]).toBe('/comercial');
+    expect(reglaPara('/oa/plan-maestro')[0]).toBe('/oa');
+    expect(reglaPara('/poc/programacion')[0]).toBe('/poc');
+  });
+
+  it('gana la regla más específica, no la primera que coincide', () => {
+    // '/inventarios/facturas' es más específico que cualquier prefijo corto.
+    expect(reglaPara('/inventarios/facturas')[0]).toBe('/inventarios/facturas');
+  });
+
+  it('las páginas sensibles quedan fuera del alcance de los roles operativos', () => {
+    for (const rol of ['ventas', 'financiero', 'testuser', 'operaciones', 'project_manager']) {
+      expect(isAuthorized(rol, reglaPara('/admin/usuarios')[1])).toBe(false);
+      expect(isAuthorized(rol, reglaPara('/superuser')[1])).toBe(false);
+    }
+    expect(isAuthorized('superuser', reglaPara('/superuser')[1])).toBe(true);
+    expect(isAuthorized('admin', reglaPara('/admin/usuarios')[1])).toBe(true);
+  });
+
+  it('ventas alcanza el forecast comercial y nada del silo de compras', () => {
+    expect(isAuthorized('ventas', reglaPara('/comercial/forecast')[1])).toBe(true);
+    expect(isAuthorized('ventas', reglaPara('/compras/reabastecimiento-vivo')[1])).toBe(false);
+  });
+
+  it('una página sin regla sigue abierta a cualquier sesión — comportamiento previo', () => {
+    expect(reglaPara('/una-pagina-nueva-sin-permiso')).toBeUndefined();
   });
 });

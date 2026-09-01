@@ -1,6 +1,8 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
-import { focusRoutes, getDefaultPage, isWithinFocus, type Role } from '@/lib/auth/roles';
+import {
+  focusRoutes, getDefaultPage, isWithinFocus, isAuthorized, PAGE_PERMISSIONS, type Role,
+} from '@/lib/auth/roles';
 
 // Page routes reachable without a valid auth session. Everything else
 // requires an authenticated Supabase user cookie; callers without one get
@@ -103,6 +105,28 @@ export async function middleware(request: NextRequest) {
     const focus = focusRoutes(role);
     if (focus && !isWithinFocus(pathname, focus) && !pathname.startsWith('/update-password')) {
       return NextResponse.redirect(new URL(focus[0], request.url));
+    }
+
+    // Per-page permission check against PAGE_PERMISSIONS.
+    //
+    // Added 2026-09-01 after an audit found this map was declared in roles.ts,
+    // asserted in tests, and enforced NOWHERE. Page components are mostly
+    // client components with no server guard, so the only thing standing
+    // between an unconfined role and /admin/usuarios or /superuser was that
+    // their API calls would 403 — the door opened, the safe stayed locked.
+    // That is a single layer of defence resting on every API being perfectly
+    // configured, which is exactly the assumption defence-in-depth exists to
+    // remove.
+    //
+    // MOST SPECIFIC PREFIX WINS, so '/inventarios/facturas' beats a broader
+    // '/inventarios' rule. A page with no matching entry stays reachable by any
+    // authenticated session — unchanged behaviour, and why this closes a hole
+    // without narrowing anything that already worked.
+    const regla = Object.entries(PAGE_PERMISSIONS)
+      .filter(([ruta]) => pathname === ruta || pathname.startsWith(`${ruta}/`))
+      .sort((a, b) => b[0].length - a[0].length)[0];
+    if (regla && !isAuthorized(role, regla[1])) {
+      return NextResponse.redirect(new URL(role ? getDefaultPage(role) : '/login', request.url));
     }
   }
 

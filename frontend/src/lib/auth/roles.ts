@@ -57,6 +57,21 @@ export const CAN_VIEW_OPERATIONAL: Role[] = [
  */
 export const CAN_EDIT_STATUS_PLAN: Role[] = ['superuser', 'project_manager'];
 
+/** Quién LEE el forecast comercial consolidado. */
+export const CAN_VIEW_FORECAST_COMERCIAL: Role[] = [
+  'superuser', 'admin', 'gerencia', 'compras', 'ventas', 'operaciones',
+];
+
+/**
+ * Quién CAPTURA forecast comercial.
+ *
+ * `ventas` sólo puede escribir su propio canal, y eso NO se decide acá: el
+ * handler lo contrasta contra `user_profiles.area`. Un rol dice qué clase de
+ * cosa puede hacer alguien; cuál de sus filas puede tocar es un dato de la
+ * fila, no del rol.
+ */
+export const CAN_CAPTURE_FORECAST: Role[] = ['superuser', 'admin', 'ventas'];
+
 /** Roles that can access OA (Open Orders) module */
 export const CAN_VIEW_OA: Role[] = [
   'superuser', 'admin', 'gerencia', 'compras', 'inventario', 'financiero', 'operaciones',
@@ -122,7 +137,7 @@ export const CAN_VIEW_POC: Role[] = [
 export const ROLLOUT_FOCUS: Partial<Record<Role, string[]>> = {
   // `/status` is APPENDED, never prepended: the first entry is the landing
   // page, and confined users must still land on the page they work in.
-  compras: ['/compras/reabastecimiento-vivo', '/status'],
+  compras: ['/compras/reabastecimiento-vivo', '/status', '/comercial/forecast'],
   inventario: ['/inventarios/reyma-vivo', '/inventarios/facturas', '/status'],
   /**
    * `gerencia` (2026-09-01) — confined to `/status`, and that is not a
@@ -143,7 +158,9 @@ export const ROLLOUT_FOCUS: Partial<Record<Role, string[]>> = {
    * links without restricting routes. ROLLOUT_FOCUS does both, and the
    * middleware honours it. Delete this line to give the surfaces back.
    */
-  gerencia: ['/status'],
+  // `/comercial/forecast` sí entra: no es una demostración, es la vista donde
+  // se decide el ajuste de compra del mes.
+  gerencia: ['/status', '/comercial/forecast'],
 };
 
 /** Routes a role is confined to, or `undefined` when it is not confined. */
@@ -198,6 +215,7 @@ export const PAGE_PERMISSIONS: Record<string, Role[]> = {
   // Audited 2026-09-01: this had no entry, so the middleware admitted any
   // authenticated session and only the hidden sidebar link kept roles out.
   '/poc': CAN_VIEW_POC,
+  '/comercial': CAN_VIEW_FORECAST_COMERCIAL,
 };
 
 /**
@@ -236,6 +254,8 @@ export function getDefaultPage(
       return '/gerencia/forecast';
     case ROLES.PROJECT_MANAGER:
       return '/status';
+    case ROLES.VENTAS:
+      return '/comercial/forecast';
     case ROLES.ADMIN:
       return '/backtest';
     default:

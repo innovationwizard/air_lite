@@ -6,6 +6,8 @@ export interface AuthUser {
   email: string;
   role: Role;
   displayName: string | null;
+  /** Canal comercial del jefe de área (rol `ventas`); null para el resto. */
+  area: string | null;
 }
 
 /**
@@ -22,7 +24,7 @@ export async function getAuthUser(): Promise<AuthUser | null> {
   const serviceClient = createServiceRoleClient();
   const { data: profile } = await serviceClient
     .from('user_profiles')
-    .select('role, display_name')
+    .select('role, display_name, area')
     .eq('id', user.id)
     .single();
 
@@ -33,6 +35,7 @@ export async function getAuthUser(): Promise<AuthUser | null> {
     email: user.email ?? '',
     role: profile.role as Role,
     displayName: profile.display_name,
+    area: profile.area ?? null,
   };
 }
 

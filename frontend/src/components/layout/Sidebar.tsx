@@ -5,6 +5,7 @@ import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import {
   BarChart3,
+  TrendingUp,
   ClipboardCheck,
   AlertTriangle,
   Boxes,
@@ -37,6 +38,7 @@ import {
   CAN_VIEW_OPERACIONES,
   CAN_VIEW_GERENCIA,
   CAN_VIEW_POC,
+  CAN_VIEW_FORECAST_COMERCIAL,
   ROLE_LABELS,
   focusRoutes,
   Role,
@@ -102,6 +104,18 @@ const allNavGroups: NavGroup[] = [
         href: '/gerencia/forecast',
         icon: BarChart3,
         subtitle: 'Feb + Mar 2026 — 23 SKUs',
+      },
+    ],
+  },
+  {
+    section: 'Comercial',
+    requiredRoles: CAN_VIEW_FORECAST_COMERCIAL,
+    items: [
+      {
+        name: 'Forecast Comercial',
+        href: '/comercial/forecast',
+        icon: TrendingUp,
+        subtitle: 'Carga por canal y consolidado',
       },
     ],
   },
