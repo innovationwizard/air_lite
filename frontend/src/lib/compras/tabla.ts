@@ -277,3 +277,66 @@ export function tablaATsv<T>(filas: readonly T[], columnas: readonly ColumnaCopi
   const cuerpo = filas.map((f) => columnas.map((c) => celda(c.valor(f))).join('\t'));
   return [cabecera, ...cuerpo].join('\n');
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * AGRUPAR POR CATEGORÍA — A6.11
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * Pedido cuatro veces entre el 05-ago y el 26-ago, junto con el orden por
+ * columna y los filtros (esos dos ya se entregaron). *«hay muchos filtros que
+ * no tenés»* (David) · *«no la puedo ordenar»* (Wilmer).
+ *
+ * PARA QUÉ SIRVE, que no es cosmético: el comprador negocia y despacha POR
+ * CATEGORÍA —vasos, bandejas, bolsas— porque así se arman los furgones y así
+ * se habla con el proveedor. Ver el total sugerido de una categoría de un
+ * vistazo es la diferencia entre decidir sobre una tabla y decidir sobre una
+ * suma que se hizo aparte.
+ *
+ * EL ORDEN DENTRO DE CADA GRUPO NO SE TOCA. Las filas llegan ya ordenadas y
+ * filtradas; agrupar sólo las reparte en cajones conservando su orden relativo.
+ * Si agrupar reordenara, el orden que el usuario eligió en el encabezado
+ * dejaría de significar algo en cuanto activara el agrupado.
+ *
+ * LOS GRUPOS SE ORDENAN POR SU SUBTOTAL DE SUGERIDO, descendente: la categoría
+ * donde hay más que comprar va primero. Es la misma lógica que el orden por
+ * defecto de la tabla, que pone la urgencia en la primera pantalla.
+ */
+
+export interface GrupoCategoria<T> {
+  categoria: string;
+  filas: T[];
+  /** Suma del Sugerido del grupo — lo que se negocia con el proveedor. */
+  subtotalSug: number;
+  /** Cuántas filas del grupo están en rojo, para no tener que abrirlo. */
+  criticas: number;
+}
+
+/**
+ * Reparte filas ya ordenadas en grupos por categoría.
+ *
+ * `sug` y `critica` se leen por función para no atar este módulo a la forma
+ * exacta de la fila de la API — el mismo motivo por el que `ordenar` y
+ * `filtrar` trabajan sobre `FilaOrdenable` y no sobre el tipo de la página.
+ */
+export function agruparPorCategoria<T>(
+  filas: readonly T[],
+  categoria: (f: T) => string,
+  sug: (f: T) => number,
+  critica: (f: T) => boolean,
+): GrupoCategoria<T>[] {
+  const porCat = new Map<string, T[]>();
+  for (const f of filas) {
+    const k = (categoria(f) || '').trim() || 'Sin categoría';
+    const lista = porCat.get(k);
+    if (lista) lista.push(f);
+    else porCat.set(k, [f]);
+  }
+  return [...porCat.entries()]
+    .map(([cat, fs]) => ({
+      categoria: cat,
+      filas: fs,
+      subtotalSug: fs.reduce((a, f) => a + (sug(f) || 0), 0),
+      criticas: fs.filter(critica).length,
+    }))
+    .sort((a, b) => b.subtotalSug - a.subtotalSug || a.categoria.localeCompare(b.categoria));
+}

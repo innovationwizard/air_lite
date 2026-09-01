@@ -77,7 +77,7 @@ interface InputRow {
   patio: number; transito: number;
   win: number; as_of: string;
 }
-interface ProductRef { id: number; sku: string | null; name: string }
+interface ProductRef { id: number; sku: string | null; name: string; category: string | null }
 interface SupplierLink { product_id: number; supplier_id: number }
 interface SupplierRef { id: number; name: string }
 /** qty === null = a CLEAR entry: the manual capture was removed (20260813000001). */
@@ -92,7 +92,7 @@ interface ComercialRow {
 
 export interface LiveRow {
   productId: number;
-  cod: string; desc: string; prov: string;
+  cod: string; desc: string; prov: string; cat: string;
   exist: number; existencias: number; reserved: number; patio: number;
   pending: number | null;
   trans: number; transOverridden: boolean;
@@ -132,7 +132,7 @@ export async function buildRows(
         fetchAll<InputRow>((a, b) =>
           service.from('reabastecimiento_inputs').select('*').eq('bodega', bodega).range(a, b)),
         fetchAll<ProductRef>((a, b) =>
-          service.from('products').select('id, sku, name').range(a, b)),
+          service.from('products').select('id, sku, name, category').range(a, b)),
         fetchAll<SupplierLink>((a, b) =>
           service.from('product_suppliers').select('product_id, supplier_id').range(a, b)),
         fetchAll<SupplierRef>((a, b) =>
@@ -255,6 +255,14 @@ export async function buildRows(
         cod: engineRow.cod,
         desc: engineRow.desc,
         prov: engineRow.prov,
+        // A6.11 — agrupar por categoría. Sale de `products.category`, medido al
+        // 100% de cobertura el 2026-09-01 (0 de 1,670 activos sin categoría,
+        // 32 distintas). NO viaja dentro de la fila del motor: el motor calcula
+        // números y la categoría es de presentación; meterla ahí obligaría a
+        // tocar el tipo que la página de paridad del xlsx también usa.
+        // Sin categoría cae en «Sin categoría» en vez de desaparecer — un
+        // producto que no se puede agrupar igual hay que comprarlo.
+        cat: (productById.get(r.product_id)?.category ?? '').trim() || 'Sin categoría',
         exist: round1(existNet),
         existencias: round1(r.existencias),
         reserved: round1(r.reserved),

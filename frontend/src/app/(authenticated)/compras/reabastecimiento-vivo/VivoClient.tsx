@@ -1,13 +1,13 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import {
   AlertTriangle, Boxes, ChevronDown, ChevronUp, ChevronsUpDown, CloudOff, PackageCheck,
   Pencil, RefreshCw, Search, TrendingUp, X,
 } from 'lucide-react';
 import { MAX_MANUAL_QTY } from '@/lib/compras/qty';
 import { type Tendencia, type Alerta, SIN_REFERENCIA_ANIO_ANTERIOR } from '@/lib/compras/tendencia';
-import { tablaATsv } from '@/lib/compras/tabla';
+import { tablaATsv, agruparPorCategoria } from '@/lib/compras/tabla';
 import {
   type ClaveOrden, type ClaveUmbral, type Orden, siguienteOrden, vista,
 } from '@/lib/compras/tabla';
@@ -118,7 +118,7 @@ const COL_TIP = {
 
 interface ApiRow {
   productId: number;
-  cod: string; desc: string; prov: string;
+  cod: string; desc: string; prov: string; cat: string;
   exist: number; existencias: number; reserved: number; patio: number;
   pending: number | null;
   trans: number; transOverridden: boolean;
@@ -184,6 +184,10 @@ export function VivoClient() {
   const [orden, setOrden] = useState<Orden | null>(null);
   const [umbralClave, setUmbralClave] = useState<ClaveUmbral>('p3');
   const [umbralMin, setUmbralMin] = useState<string>('');
+  // A6.11 — agrupar por categoría. Apagado por defecto: la tabla plana es la
+  // vista con la que él trabaja hoy, y el agrupado es una lente, no un cambio
+  // de modo.
+  const [agrupado, setAgrupado] = useState(false);
 
   const load = useCallback(async (b: string, silent = false) => {
     if (!silent) setLoading(true);
@@ -324,6 +328,14 @@ export function VivoClient() {
     setOrden((actual) => siguienteOrden(actual, k));
   }, []);
 
+  // Los grupos salen de la MISMA lista visible: agrupar es una lente sobre lo
+  // que ya está ordenado y filtrado, nunca una segunda selección de filas.
+  const grupos = useMemo(
+    () => agruparPorCategoria(list, (r) => r.cat, (r) => r.sug,
+                              (r) => sev(r.doh) === 'crit'),
+    [list],
+  );
+
   // Counted over the WHOLE bodega, not the filtered list: the point of the
   // number is to say how much is rising before any filter narrows the view.
   const alza = useMemo(() => {
@@ -360,6 +372,114 @@ export function VivoClient() {
 
   const sync = payload?.meta.lastSync ?? null;
   const noData = !loading && !error && (payload?.rows.length ?? 0) === 0;
+
+  /**
+   * La fila, extraída para que la vista plana y la agrupada rendericen
+   * EXACTAMENTE lo mismo. Duplicar este bloque sería garantizar que las dos
+   * vistas se separen: la próxima columna se agregaría en una sola y nadie
+   * lo notaría hasta que un número no coincida entre modos.
+   */
+  const renderFila = useCallback((r: ApiRow) => {
+  const band = sev(r.doh);
+  // El resaltado de fila lo dispara la alerta COMBINADA
+  // (sube Y se despegó de su base), no las dos alzas solas:
+  // medido el 2026-09-01, subir por sí solo marcaba una
+  // porción de la tabla demasiado grande para leerse.
+  const alzaRow = r.flags.revisar;
+  return (
+    <tr key={r.productId}
+        className={alzaRow
+          ? 'bg-amber-50/70 hover:bg-amber-100/70 shadow-[inset_4px_0_0_0_rgb(245,158,11)]'
+          : 'hover:bg-teal-50/50'}>
+      <td className="px-3 py-2 border-b border-gray-100 text-left">{r.cod}</td>
+      <td className="px-3 py-2 border-b border-gray-100 text-left">
+        <div className="truncate max-w-[240px] text-gray-800">{r.desc}</div>
+        <div className="text-gray-400 text-xs">{r.prov}</div>
+      </td>
+      <td className="px-3 py-2 border-b border-gray-100 text-right"
+          title={`existencias ${fmt(r.existencias)} − reservado ${fmt(r.reserved)} − pendiente ${r.pending ?? '¿?'}`}>
+        {fmt(r.exist)}
+      </td>
+      <td className="px-3 py-2 border-b border-gray-100 text-right text-gray-500">{fmt(r.patio)}</td>
+      <td className="px-3 py-2 border-b border-gray-100 text-right">
+        <span className={`inline-block min-w-[44px] text-center px-2 py-0.5 rounded-full font-semibold text-xs ${SEV_PILL[band]}`}>
+          {r.doh.toFixed(1)}
+        </span>
+      </td>
+      <td className="px-3 py-2 border-b border-gray-100 text-right">
+        <QtyInput
+          value={r.trans}
+          edited={r.transOverridden}
+          label={`Tránsito ${r.cod}`}
+          onCommit={(v) => commitEdit(r, 'transito', v)}
+          onClear={r.transOverridden
+            ? () => commitEdit(r, 'transito', null) : undefined}
+          clearTip="Quitar captura manual — vuelve al tránsito sincronizado"
+        />
+        {r.destinoProvisional && (
+          <span
+            title={`Tránsito provisional — declarado con destino ${r.destino}. `
+              + 'Si el furgón descarga en varias bodegas, este número está mal.'}
+            className="ml-1 text-[10px] font-bold text-indigo-600 cursor-help"
+          >~</span>
+        )}
+      </td>
+      <td className="px-3 py-2 border-b border-gray-100 text-right">
+        <DestinoSelect
+          value={r.destino}
+          opciones={destinos}
+          label={`Destino final ${r.cod}`}
+          onChange={(d) => commitDestino(r, d)}
+        />
+      </td>
+      <td className="px-3 py-2 border-b border-gray-100 text-right">
+        <QtyInput
+          value={r.pending}
+          edited={r.pending !== null}
+          unknown={r.flags.pendingUnknown}
+          label={`Pendiente de tomar reserva ${r.cod}`}
+          onCommit={(v) => commitEdit(r, 'pendiente', v)}
+          onClear={r.pending !== null
+            ? () => commitEdit(r, 'pendiente', null) : undefined}
+          clearTip="Quitar captura manual — vuelve a ¿? (sin dato)"
+        />
+      </td>
+      <td className="px-3 py-2 border-b border-gray-100 text-right text-gray-500">{fmt(r.adic)}</td>
+      <td className="px-3 py-2 border-b border-gray-100 text-right text-gray-700">{fmt(r.p6)}</td>
+      <td className="px-3 py-2 border-b border-gray-100 text-right text-gray-700">{fmt(r.p3)}</td>
+      <td className="px-3 py-2 border-b border-gray-100 text-right">
+        <MesEnCurso mtd={r.mtd} dias={r.mtdDias} ritmo={r.mtdRitmo} p3={r.p3} />
+      </td>
+      <td className="px-3 py-2 border-b border-gray-100 text-center">
+        <TendenciaCell t={r.tendencia} alerta={r.alerta}
+                       sinRef={r.flags.sinReferenciaAnioAnterior} />
+      </td>
+      {/* Q9 — see the header comment. Restore these three
+          together with their <Th> or the columns misalign. */}
+      {/* <td className="px-3 py-2 border-b border-gray-100 text-right text-indigo-700">
+        {r.f6 === null ? <span className="text-gray-300" title="Sin calcular todavía">¿?</span> : fmt(r.f6)}
+      </td>
+      <td className="px-3 py-2 border-b border-gray-100 text-right text-indigo-700">
+        {r.f3 === null ? <span className="text-gray-300" title="Sin calcular todavía">¿?</span> : fmt(r.f3)}
+      </td>
+      <td className="px-3 py-2 border-b border-gray-100 text-right">
+        <GapCell ordered={r.p3} invoiced={r.f3} />
+      </td> */}
+      <td className={`px-3 py-2 border-b border-gray-100 text-right font-bold ${r.sug > 0 ? 'text-teal-700' : 'text-gray-400'}`}
+          title={r.flags.seasonalExcluded
+            ? `Sin término estacional — ${r.seasonalMotivo ?? ''} Forecast = promedio(6m, 3m) × 1.1.`
+            : r.flags.seasonalLowConfidence ? 'Estacional sin datos — confianza baja' : undefined}>
+        {fmt(r.sug)}
+        {alzaRow ? (
+          <TrendingUp size={13} strokeWidth={3}
+                      className="inline-block ml-1 -mt-0.5 text-amber-600" />
+        ) : null}
+        {r.flags.seasonalLowConfidence ? <span className="text-amber-500">*</span> : null}
+        {r.flags.seasonalExcluded ? <span className="text-indigo-500">†</span> : null}
+      </td>
+    </tr>
+  );
+  }, [commitEdit, commitDestino, destinos]);
 
   return (
     <div className="p-6 max-w-[1240px] mx-auto">
@@ -509,6 +629,12 @@ export function VivoClient() {
             <div className="ml-auto">
               {/* Takes the list exactly as filtered and sorted on screen — that
                   order becomes the sheet's Prioridad column. */}
+              <label className="inline-flex items-center gap-1.5 text-sm text-gray-700
+                                cursor-pointer select-none">
+                <input type="checkbox" checked={agrupado}
+                       onChange={(e) => setAgrupado(e.target.checked)} />
+                Agrupar por categoría
+              </label>
               <CopiarTabla filas={list} bodega={bodega} />
               <ExportCarvajal productIds={list.map((r) => r.productId)} bodega={bodega} />
             </div>
@@ -576,107 +702,24 @@ export function VivoClient() {
                   </tr>
                 </thead>
                 <tbody className="tabular-nums">
-                  {list.slice(0, 400).map((r) => {
-                    const band = sev(r.doh);
-                    // El resaltado de fila lo dispara la alerta COMBINADA
-                    // (sube Y se despegó de su base), no las dos alzas solas:
-                    // medido el 2026-09-01, subir por sí solo marcaba una
-                    // porción de la tabla demasiado grande para leerse.
-                    const alzaRow = r.flags.revisar;
-                    return (
-                      <tr key={r.productId}
-                          className={alzaRow
-                            ? 'bg-amber-50/70 hover:bg-amber-100/70 shadow-[inset_4px_0_0_0_rgb(245,158,11)]'
-                            : 'hover:bg-teal-50/50'}>
-                        <td className="px-3 py-2 border-b border-gray-100 text-left">{r.cod}</td>
-                        <td className="px-3 py-2 border-b border-gray-100 text-left">
-                          <div className="truncate max-w-[240px] text-gray-800">{r.desc}</div>
-                          <div className="text-gray-400 text-xs">{r.prov}</div>
-                        </td>
-                        <td className="px-3 py-2 border-b border-gray-100 text-right"
-                            title={`existencias ${fmt(r.existencias)} − reservado ${fmt(r.reserved)} − pendiente ${r.pending ?? '¿?'}`}>
-                          {fmt(r.exist)}
-                        </td>
-                        <td className="px-3 py-2 border-b border-gray-100 text-right text-gray-500">{fmt(r.patio)}</td>
-                        <td className="px-3 py-2 border-b border-gray-100 text-right">
-                          <span className={`inline-block min-w-[44px] text-center px-2 py-0.5 rounded-full font-semibold text-xs ${SEV_PILL[band]}`}>
-                            {r.doh.toFixed(1)}
+                  {agrupado && grupos.map((g) => (
+                    <Fragment key={g.categoria}>
+                      <tr className="bg-gray-100/80">
+                        <td colSpan={99}
+                            className="px-3 py-1.5 text-left text-xs font-semibold
+                                       text-gray-700 border-y border-gray-200">
+                          {g.categoria}
+                          <span className="ml-2 font-normal text-gray-500">
+                            {g.filas.length} {g.filas.length === 1 ? 'código' : 'códigos'}
+                            {' · sugerido '}{fmt(g.subtotalSug)}
+                            {g.criticas > 0 && ` · ${g.criticas} en crítico`}
                           </span>
                         </td>
-                        <td className="px-3 py-2 border-b border-gray-100 text-right">
-                          <QtyInput
-                            value={r.trans}
-                            edited={r.transOverridden}
-                            label={`Tránsito ${r.cod}`}
-                            onCommit={(v) => commitEdit(r, 'transito', v)}
-                            onClear={r.transOverridden
-                              ? () => commitEdit(r, 'transito', null) : undefined}
-                            clearTip="Quitar captura manual — vuelve al tránsito sincronizado"
-                          />
-                          {r.destinoProvisional && (
-                            <span
-                              title={`Tránsito provisional — declarado con destino ${r.destino}. `
-                                + 'Si el furgón descarga en varias bodegas, este número está mal.'}
-                              className="ml-1 text-[10px] font-bold text-indigo-600 cursor-help"
-                            >~</span>
-                          )}
-                        </td>
-                        <td className="px-3 py-2 border-b border-gray-100 text-right">
-                          <DestinoSelect
-                            value={r.destino}
-                            opciones={destinos}
-                            label={`Destino final ${r.cod}`}
-                            onChange={(d) => commitDestino(r, d)}
-                          />
-                        </td>
-                        <td className="px-3 py-2 border-b border-gray-100 text-right">
-                          <QtyInput
-                            value={r.pending}
-                            edited={r.pending !== null}
-                            unknown={r.flags.pendingUnknown}
-                            label={`Pendiente de tomar reserva ${r.cod}`}
-                            onCommit={(v) => commitEdit(r, 'pendiente', v)}
-                            onClear={r.pending !== null
-                              ? () => commitEdit(r, 'pendiente', null) : undefined}
-                            clearTip="Quitar captura manual — vuelve a ¿? (sin dato)"
-                          />
-                        </td>
-                        <td className="px-3 py-2 border-b border-gray-100 text-right text-gray-500">{fmt(r.adic)}</td>
-                        <td className="px-3 py-2 border-b border-gray-100 text-right text-gray-700">{fmt(r.p6)}</td>
-                        <td className="px-3 py-2 border-b border-gray-100 text-right text-gray-700">{fmt(r.p3)}</td>
-                        <td className="px-3 py-2 border-b border-gray-100 text-right">
-                          <MesEnCurso mtd={r.mtd} dias={r.mtdDias} ritmo={r.mtdRitmo} p3={r.p3} />
-                        </td>
-                        <td className="px-3 py-2 border-b border-gray-100 text-center">
-                          <TendenciaCell t={r.tendencia} alerta={r.alerta}
-                                         sinRef={r.flags.sinReferenciaAnioAnterior} />
-                        </td>
-                        {/* Q9 — see the header comment. Restore these three
-                            together with their <Th> or the columns misalign. */}
-                        {/* <td className="px-3 py-2 border-b border-gray-100 text-right text-indigo-700">
-                          {r.f6 === null ? <span className="text-gray-300" title="Sin calcular todavía">¿?</span> : fmt(r.f6)}
-                        </td>
-                        <td className="px-3 py-2 border-b border-gray-100 text-right text-indigo-700">
-                          {r.f3 === null ? <span className="text-gray-300" title="Sin calcular todavía">¿?</span> : fmt(r.f3)}
-                        </td>
-                        <td className="px-3 py-2 border-b border-gray-100 text-right">
-                          <GapCell ordered={r.p3} invoiced={r.f3} />
-                        </td> */}
-                        <td className={`px-3 py-2 border-b border-gray-100 text-right font-bold ${r.sug > 0 ? 'text-teal-700' : 'text-gray-400'}`}
-                            title={r.flags.seasonalExcluded
-                              ? `Sin término estacional — ${r.seasonalMotivo ?? ''} Forecast = promedio(6m, 3m) × 1.1.`
-                              : r.flags.seasonalLowConfidence ? 'Estacional sin datos — confianza baja' : undefined}>
-                          {fmt(r.sug)}
-                          {alzaRow ? (
-                            <TrendingUp size={13} strokeWidth={3}
-                                        className="inline-block ml-1 -mt-0.5 text-amber-600" />
-                          ) : null}
-                          {r.flags.seasonalLowConfidence ? <span className="text-amber-500">*</span> : null}
-                          {r.flags.seasonalExcluded ? <span className="text-indigo-500">†</span> : null}
-                        </td>
                       </tr>
-                    );
-                  })}
+                      {g.filas.map((r) => renderFila(r))}
+                    </Fragment>
+                  ))}
+                  {!agrupado && list.slice(0, 400).map((r) => renderFila(r))}
                 </tbody>
               </table>
             </div>

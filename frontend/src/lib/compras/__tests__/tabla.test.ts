@@ -1,6 +1,6 @@
 import {
   compararPorDefecto, dirInicial, esTexto, filtrar, ordenar, siguienteOrden, vista,
-  tablaATsv,
+  tablaATsv, agruparPorCategoria,
   type FilaOrdenable,
 } from '../tabla';
 
@@ -175,5 +175,50 @@ describe('tablaATsv — copiar lo visible', () => {
 
   it('sin filas copia solo el encabezado', () => {
     expect(tablaATsv([], cols)).toBe('Código\tSugerido');
+  });
+});
+
+describe('agruparPorCategoria — A6.11', () => {
+  const f = (cod: string, cat: string, sug: number, crit = false) => ({ cod, cat, sug, crit });
+  const agrupar = (filas: ReturnType<typeof f>[]) =>
+    agruparPorCategoria(filas, (x) => x.cat, (x) => x.sug, (x) => x.crit);
+
+  it('reparte en cajones y suma el sugerido de cada uno', () => {
+    const g = agrupar([f('A', 'Vasos', 10), f('B', 'Bolsas', 5), f('C', 'Vasos', 7)]);
+    expect(g.map((x) => [x.categoria, x.subtotalSug])).toEqual([['Vasos', 17], ['Bolsas', 5]]);
+  });
+
+  it('CONSERVA el orden que traian las filas dentro de cada grupo', () => {
+    // Si agrupar reordenara, el orden elegido en el encabezado dejaria de
+    // significar algo en cuanto se activara el agrupado.
+    const g = agrupar([f('Z', 'Vasos', 1), f('A', 'Vasos', 2)]);
+    expect(g[0].filas.map((x) => x.cod)).toEqual(['Z', 'A']);
+  });
+
+  it('los grupos van por subtotal descendente: donde hay mas que comprar, primero', () => {
+    const g = agrupar([f('A', 'Chico', 1), f('B', 'Grande', 100)]);
+    expect(g[0].categoria).toBe('Grande');
+  });
+
+  it('cuenta las criticas del grupo para no tener que abrirlo', () => {
+    const g = agrupar([f('A', 'Vasos', 1, true), f('B', 'Vasos', 1, false), f('C', 'Vasos', 1, true)]);
+    expect(g[0].criticas).toBe(2);
+  });
+
+  it('sin categoria cae en «Sin categoria», no desaparece', () => {
+    // Un producto que no se puede agrupar sigue teniendo que comprarse.
+    const g = agrupar([f('A', '', 5), f('B', '   ', 3)]);
+    expect(g).toHaveLength(1);
+    expect(g[0].categoria).toBe('Sin categoría');
+    expect(g[0].filas).toHaveLength(2);
+  });
+
+  it('empate de subtotal se desempata alfabeticamente, para que el orden sea estable', () => {
+    const g = agrupar([f('A', 'Zeta', 5), f('B', 'Alfa', 5)]);
+    expect(g.map((x) => x.categoria)).toEqual(['Alfa', 'Zeta']);
+  });
+
+  it('sin filas, sin grupos', () => {
+    expect(agrupar([])).toEqual([]);
   });
 });
