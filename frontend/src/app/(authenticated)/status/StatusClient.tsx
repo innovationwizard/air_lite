@@ -724,6 +724,13 @@ export function StatusClient({ puedeEditarPlan }: { puedeEditarPlan: boolean }) 
                     {i.flag === 'CONTRA' && <span>La definición cambió en el tiempo</span>}
                     {i.flag?.startsWith('CREEP') && <span>Añadido después del acuerdo</span>}
                   </div>
+                  {i.es_addendum && (
+                    <p className="text-slate-600">
+                      <span className="text-slate-400">Hallazgo posterior:</span> esta petición no
+                      estaba en el documento del 26 de agosto. Se encontró después y se registró
+                      con su propia fuente, en vez de dejarla fuera del conteo.
+                    </p>
+                  )}
                   <p className="text-gray-400 pt-1">
                     Fuente: {i.src} · categoría {i.cat}
                     {EVIDENCIA_EXIGIDA[i.estado] && (

@@ -45,6 +45,21 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parent.parent
 CORPUS = REPO / 'docs' / 'gap-analysis-corpus-aug31'
 ITEMS_TSV = CORPUS / 'items.tsv'
+# ADDENDUM — hechos descubiertos DESPUES del cierre del corpus (26-ago).
+#
+# El corpus se prohibió a sí mismo agregar filas, y con razón: es un registro
+# fechado de lo que se dijo, y editarlo lo volvería un documento sin autoridad.
+# Pero eso lo deja congelado, y hoy el proyecto encontró TRES veces que el
+# corpus iba detrás del código o de la realidad. Una brecha descubierta después
+# no tenía dónde vivir, así que no aparecía en ningún porcentaje.
+#
+# El addendum resuelve las dos cosas: `items.tsv` queda intacto e inviolable, y
+# lo nuevo entra por un archivo aparte con la misma forma, sus propias fuentes y
+# la fecha en que se agregó. Los ids CONTINÚAN la numeración de su categoría
+# (A4.26 sigue a A4.25), así que no colisionan ni renumeran nada.
+#
+# Este archivo está pensado para crecer: cada petición nueva se agrega acá.
+ADDENDUM_TSV = CORPUS / 'items_addendum.tsv'
 JUICIO_TSV = CORPUS / 'juicio.tsv'
 
 # Filas del corpus que NO se cargan, con su motivo. Enumeradas a propósito:
@@ -202,6 +217,7 @@ def construir(items, juicio):
             # `ref` (la cita verbatim) NO viaja a la base: se queda en items.tsv,
             # para desarrollo. La auditabilidad la sostiene `src`.
             'notes': it['notes'] or None,
+            'es_addendum': bool(it.get('es_addendum')),
             'estado': j['estado'],
             'estado_sugerido': True,
             'evidencia': j['evidencia'] or None,
@@ -234,9 +250,14 @@ def main():
                     help='escribe en Supabase (sin esto, dry-run)')
     args = ap.parse_args()
 
-    items = leer_tsv(ITEMS_TSV)
+    corpus = leer_tsv(ITEMS_TSV)
+    addendum = leer_tsv(ADDENDUM_TSV) if ADDENDUM_TSV.exists() else []
+    for a in addendum:
+        a['es_addendum'] = True
+    items = corpus + addendum
     juicio = leer_tsv(JUICIO_TSV)
-    print(f'items.tsv  : {len(items)} filas')
+    print(f'items.tsv  : {len(corpus)} filas')
+    print(f'addendum   : {len(addendum)} filas (hallazgos posteriores al 26-ago)')
     print(f'juicio.tsv : {len(juicio)} filas')
 
     errores = validar(items, juicio)
@@ -245,7 +266,7 @@ def main():
         for e in errores:
             print(f'  ✗ {e}')
         return 1
-    print(f'QUALITY GATE: OK ({len(items)} - {len(EXCLUIDAS)} excluidas = {len(juicio)})')
+    print(f'QUALITY GATE: OK ({len(corpus)}+{len(addendum)} - {len(EXCLUIDAS)} excluidas = {len(juicio)})')
 
     filas = construir(items, juicio)
     resumen(juicio)

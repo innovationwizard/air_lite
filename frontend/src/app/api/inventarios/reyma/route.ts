@@ -119,9 +119,26 @@ async function fetchAll<T>(
   }
 }
 
-export async function GET() {
+/** Parámetros por modelo. NULL = nadie lo ha declarado; no se sustituye. */
+interface ModeloProveedorDb {
+  slug: string; nombre: string; provisional: boolean;
+  capacidad_m3: number | null; max_furgones_dia: number | null;
+  furgones_semana: number | null; dias_despacho: string[] | null;
+  cod_comodin: string | null; desc_comodin: string | null;
+  semanas_seguridad: number | null; lead_time_dias: number | null;
+  objetivo_semanas: number | null; alzas_precio_anio: number | null;
+  notas: string | null;
+}
+
+export async function GET(request: Request) {
   const auth = await requireAuth(CAN_VIEW_INVENTARIOS);
   if (auth instanceof Response) return auth;
+
+  // A4.26 — el modelo que se está mirando. El MOTOR es el mismo para todos
+  // («Es el mismo», 13-ago); lo que cambia es el alcance de códigos y los
+  // parámetros. `reyma` por defecto, así que la ruta se comporta exactamente
+  // como antes para quien no pide otra cosa.
+  const modelo = (new URL(request.url).searchParams.get('modelo') ?? 'reyma').trim() || 'reyma';
 
   const service = createServiceRoleClient();
   try {
@@ -141,11 +158,21 @@ export async function GET() {
     }
     const run = runs[0];
 
+    // Parámetros del modelo. Ausente = se cae a las constantes de Reyma, que es
+    // lo que regía antes de que esta tabla existiera.
+    const { data: modeloCfgRaw } = await service
+      .from('modelo_proveedor')
+      .select('slug, nombre, provisional, capacidad_m3, max_furgones_dia, furgones_semana, '
+        + 'dias_despacho, cod_comodin, desc_comodin, semanas_seguridad, lead_time_dias, '
+        + 'objetivo_semanas, alzas_precio_anio, notas')
+      .eq('slug', modelo).maybeSingle();
+    const modeloCfg = modeloCfgRaw as ModeloProveedorDb | null;
+
     const [products, stock, pendientes, transito, ventas, issuesRaw] = await Promise.all([
       fetchAll<ProductRowDb>((a, b) =>
         service.from('reyma_products')
           .select('codigo, clave, nombre_odoo, descripcion, categoria, categoria_fuente, cubicaje, precio_factura, activo')
-          .eq('en_alcance', true).order('codigo').range(a, b)),
+          .eq('en_alcance', true).eq('modelo', modelo).order('codigo').range(a, b)),
       fetchAll<StockRowDb>((a, b) =>
         service.from('reyma_stock').select('codigo, bodega, cantidad')
           .eq('sync_id', run.id).range(a, b)),
@@ -511,9 +538,31 @@ export async function GET() {
         finishedAt: run.finished_at,
         counts: (run.counts ?? {}) as Record<string, number>,
       },
+      // A4.26 — los parámetros del modelo que se está mirando.
+      //
+      // Las constantes de abajo son las de Reyma y siguen siendo el piso: el
+      // motor tiene que seguir dando los MISMOS números con los que se midió la
+      // paridad de 2,752 celdas. Lo que llega de `modelo_proveedor` las
+      // sobreescribe SÓLO cuando tiene valor; un parámetro en NULL viaja como
+      // null y la pantalla lo muestra como «sin definir», que es la verdad —
+      // nadie lo ha declarado todavía para ese proveedor.
+      modelo: {
+        slug: modeloCfg?.slug ?? 'reyma',
+        nombre: modeloCfg?.nombre ?? 'Reyma',
+        provisional: modeloCfg?.provisional ?? false,
+        furgonesSemana: modeloCfg?.furgones_semana ?? null,
+        maxFurgonesDia: modeloCfg?.max_furgones_dia ?? null,
+        diasDespacho: modeloCfg?.dias_despacho ?? null,
+        semanasSeguridad: modeloCfg?.semanas_seguridad ?? null,
+        leadTimeDias: modeloCfg?.lead_time_dias ?? null,
+        objetivoSemanas: modeloCfg?.objetivo_semanas ?? null,
+        alzasPrecioAnio: modeloCfg?.alzas_precio_anio ?? null,
+        descComodin: modeloCfg?.desc_comodin ?? null,
+        notas: modeloCfg?.notas ?? null,
+      },
       config: {
-        capacidadM3: CAPACIDAD_M3,
-        codFurgonCompleto: COD_FURGON_COMPLETO,
+        capacidadM3: modeloCfg?.capacidad_m3 ?? CAPACIDAD_M3,
+        codFurgonCompleto: modeloCfg?.cod_comodin ?? COD_FURGON_COMPLETO,
         mesesPromedioMovil: MESES_PROMEDIO_MOVIL,
         maxEdadPendientesDias: MAX_EDAD_PENDIENTES_DIAS,
         ncCodigos: NC_CODIGOS,

@@ -140,9 +140,16 @@ describe('getDefaultPage', () => {
  * se ve probando con su rol. Estas pruebas son la red.
  */
 describe('ROLLOUT_FOCUS — confinamiento de varias rutas', () => {
-  it('inventario alcanza su modelo en vivo Y la carga de facturas', () => {
+  /**
+   * A4.26 (2026-09-01) — `carvajal-vivo` entra al confinamiento: es el SEGUNDO
+   * modelo de Alexis, con las mismas reglas y otros números. Va después de
+   * `reyma-vivo` porque el primer elemento es la página de aterrizaje y Reyma
+   * sigue siendo el modelo validado.
+   */
+  it('inventario alcanza sus modelos en vivo Y la carga de facturas', () => {
     const rutas = focusRoutes('inventario');
-    expect(rutas).toEqual(['/inventarios/reyma-vivo', '/inventarios/facturas', '/status']);
+    expect(rutas).toEqual(['/inventarios/reyma-vivo', '/inventarios/carvajal-vivo',
+      '/inventarios/facturas', '/status']);
     expect(isWithinFocus('/inventarios/reyma-vivo', rutas!)).toBe(true);
     expect(isWithinFocus('/inventarios/facturas', rutas!)).toBe(true);
   });

@@ -40,6 +40,8 @@ export interface StatusItem {
   confirmable_con: string | null;
   criterio_aceptacion: string | null;
   orden_sugerido: number | null;
+  /** Hallazgo posterior al cierre del corpus (26-ago): vive en el addendum. */
+  es_addendum: boolean;
 }
 
 export interface PlanRow {

@@ -136,7 +136,36 @@ export interface EnlaceFactura {
   fecha: string;
 }
 
+/**
+ * A4.26 — qué modelo de proveedor se está mirando y con qué números.
+ *
+ * El motor es UNO SOLO para todos los modelos («Ese mismo modelo hay que
+ * replicarlo en Carvajal. Es el mismo», 13-ago); lo que cambia son estos
+ * valores y el alcance de códigos.
+ *
+ * Un campo en `null` significa QUE NADIE LO HA DECLARADO para ese proveedor, y
+ * la pantalla lo dice así. No se hereda el de Reyma en silencio: una pantalla
+ * que se ve completa y usa el lead time de otro proveedor es peor que una que
+ * admite el hueco, porque el comprador no tiene forma de notarlo.
+ */
+export interface ModeloProveedor {
+  slug: string;
+  nombre: string;
+  /** El alcance de códigos se derivó y nadie lo confirmó. */
+  provisional: boolean;
+  furgonesSemana: number | null;
+  maxFurgonesDia: number | null;
+  diasDespacho: string[] | null;
+  semanasSeguridad: number | null;
+  leadTimeDias: number | null;
+  objetivoSemanas: number | null;
+  alzasPrecioAnio: number | null;
+  descComodin: string | null;
+  notas: string | null;
+}
+
 export interface ReymaVivoPayload {
+  modelo?: ModeloProveedor;
   sync: {
     id: string;
     startedAt: string;

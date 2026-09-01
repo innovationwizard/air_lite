@@ -193,6 +193,12 @@ const allNavGroups: NavGroup[] = [
         subtitle: 'Datos Odoo en vivo + proyección editable',
       },
       {
+        name: 'Modelo Carvajal',
+        href: '/inventarios/carvajal-vivo',
+        icon: Boxes,
+        subtitle: 'Mismas reglas, otros números',
+      },
+      {
         name: 'Cargar Facturas',
         href: '/inventarios/facturas',
         icon: FileUp,

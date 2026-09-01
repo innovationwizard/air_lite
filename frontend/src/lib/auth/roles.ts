@@ -138,7 +138,8 @@ export const ROLLOUT_FOCUS: Partial<Record<Role, string[]>> = {
   // `/status` is APPENDED, never prepended: the first entry is the landing
   // page, and confined users must still land on the page they work in.
   compras: ['/compras/reabastecimiento-vivo', '/status', '/comercial/forecast'],
-  inventario: ['/inventarios/reyma-vivo', '/inventarios/facturas', '/status'],
+  inventario: ['/inventarios/reyma-vivo', '/inventarios/carvajal-vivo',
+               '/inventarios/facturas', '/status'],
   /**
    * `gerencia` (2026-09-01) — confined to `/status`, and that is not a
    * demotion: it is the first page this role has ever had a recurring reason
@@ -204,6 +205,7 @@ export const PAGE_PERMISSIONS: Record<string, Role[]> = {
   '/compras/reabastecimiento-vivo': CAN_VIEW_COMPRAS,
   '/inventarios/reyma': CAN_VIEW_INVENTARIOS,
   '/inventarios/reyma-vivo': CAN_VIEW_INVENTARIOS,
+  '/inventarios/carvajal-vivo': CAN_VIEW_INVENTARIOS,
   '/inventarios/facturas': CAN_VIEW_INVENTARIOS,
   '/operaciones': CAN_VIEW_OPERACIONES,
   '/gerencia': CAN_VIEW_GERENCIA,

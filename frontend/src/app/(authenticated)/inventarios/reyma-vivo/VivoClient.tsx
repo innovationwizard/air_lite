@@ -100,7 +100,17 @@ type TabId = (typeof TABS)[number]['id'];
 
 // ---------------------------------------------------------------- component
 
-export function VivoClient() {
+/**
+ * A4.26 — la MISMA pantalla sirve a los cuatro modelos de Alexis.
+ *
+ * «Ese mismo modelo hay que replicarlo en Carvajal. Es el mismo» (13-ago). Por
+ * eso acá no hay una rama por proveedor: el componente recibe el slug, la API
+ * devuelve el alcance y los parámetros de ese modelo, y todo lo demás —el
+ * motor, la paridad de 2,752 celdas, el MRP, los furgones— es literalmente el
+ * mismo código. Un segundo componente sería la forma garantizada de que los dos
+ * se separen.
+ */
+export function VivoClient({ modelo = 'reyma' }: { modelo?: string } = {}) {
   const [payload, setPayload] = useState<ReymaVivoPayload | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saveMsg, setSaveMsg] = useState<string | null>(null);
@@ -108,7 +118,7 @@ export function VivoClient() {
   const [proyEdits, setProyEdits] = useState<Record<string, number>>({});
 
   const load = useCallback(() => {
-    fetch('/api/inventarios/reyma')
+    fetch(`/api/inventarios/reyma?modelo=${encodeURIComponent(modelo)}`)
       .then(async (r) => {
         const body = await r.json();
         if (!r.ok) throw new Error(body.error ?? `HTTP ${r.status}`);
@@ -116,7 +126,7 @@ export function VivoClient() {
         setError(null);
       })
       .catch((e: Error) => setError(e.message));
-  }, []);
+  }, [modelo]);
 
   useEffect(() => {
     load();

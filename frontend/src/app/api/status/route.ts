@@ -38,7 +38,7 @@ export async function GET() {
     .select(
       'id, cat, orden_natural, item, tipo, flag, src, notes, estado, estado_sugerido, ' +
       'evidencia, origen, bloqueo, espera_que, temporada, esfuerzo, rodeo, ' +
-      'confirmable_con, criterio_aceptacion, orden_sugerido, updated_at',
+      'confirmable_con, criterio_aceptacion, orden_sugerido, es_addendum, updated_at',
     )
     .eq('visible_ui', true)
     .order('orden_natural', { ascending: true });
