@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import {
-  titular, brechaConfirmacion, esperandoQue, ordenarPlan, prontitud,
+  titular, brechaConfirmacion, /* esperandoQue, */ ordenarPlan, prontitud,
   enAlcance, reordenarIds, ETIQUETA_BLOQUEO, ETIQUETA_AREA, AREAS_PRONTITUD,
   type StatusItem, type PlanRow, type Alcance, type Estado, type Luz,
 } from '@/lib/status/metricas';
@@ -255,7 +255,7 @@ export function StatusClient({ puedeEditarPlan }: { puedeEditarPlan: boolean }) 
 
   const t = useMemo(() => titular(items, alcance), [items, alcance]);
   const grupos = useMemo(() => brechaConfirmacion(items, alcance), [items, alcance]);
-  const esperas = useMemo(() => esperandoQue(items, alcance), [items, alcance]);
+  // const esperas = useMemo(() => esperandoQue(items, alcance), [items, alcance]);
   const planItems = useMemo(
     () => ordenarPlan(items, planMap, alcance), [items, planMap, alcance],
   );
@@ -319,7 +319,7 @@ export function StatusClient({ puedeEditarPlan }: { puedeEditarPlan: boolean }) 
           />
         </div>
 
-        <Franqueza />
+        {/* <Franqueza /> — COMENTADO: la redacción confunde, revisar antes de reactivar */}
       </header>
 
       {vista === 'avance' ? (
@@ -408,7 +408,7 @@ export function StatusClient({ puedeEditarPlan }: { puedeEditarPlan: boolean }) 
             </section>
           )}
 
-          {/* ── Qué se está esperando ────────────────────────────────────── */}
+          {/* ── Qué se está esperando — COMENTADO: la redacción confunde, revisar antes de reactivar ──
           <section className="bg-white border border-gray-200 rounded-lg p-6">
             <h2 className="text-lg font-semibold text-gray-900">Qué se está esperando</h2>
             <p className="text-sm text-gray-600 mt-1">
@@ -445,6 +445,7 @@ export function StatusClient({ puedeEditarPlan }: { puedeEditarPlan: boolean }) 
               })}
             </div>
           </section>
+          */}
         </>
       ) : (
         /* ── Prontitud ──────────────────────────────────────────────────── */
@@ -833,6 +834,7 @@ function BarraApilada({ t }: { t: ReturnType<typeof titular> }) {
  * Lo que no se puede afirmar desde acá. Va arriba y no en un pie de página:
  * un reporte de estado que no declara sus límites se lee como si no los tuviera.
  */
+/* COMENTADO junto con su uso arriba — revisar la redacción antes de reactivar.
 function Franqueza() {
   const [abierto, setAbierto] = useState(false);
   return (
@@ -870,3 +872,4 @@ function Franqueza() {
     </div>
   );
 }
+*/
