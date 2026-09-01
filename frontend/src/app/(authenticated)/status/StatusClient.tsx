@@ -34,6 +34,7 @@ const ETIQUETA_ESTADO: Record<Estado, string> = {
   parcial: 'Parcial o en construcción',
   no_construido: 'No construido',
   fuera_alcance: 'Fuera de alcance',
+  algun_dia: 'Algún día',
   no_software: 'No es software',
   sin_determinar: 'Sin determinar',
 };
@@ -44,6 +45,7 @@ const COLOR_ESTADO: Record<Estado, string> = {
   parcial: 'bg-amber-400',
   no_construido: 'bg-gray-300',
   fuera_alcance: 'bg-gray-200',
+  algun_dia: 'bg-gray-200',
   no_software: 'bg-gray-200',
   sin_determinar: 'bg-purple-300',
 };
@@ -54,6 +56,7 @@ const PILL_ESTADO: Record<Estado, string> = {
   parcial: 'bg-amber-50 text-amber-800 border-amber-200',
   no_construido: 'bg-gray-50 text-gray-600 border-gray-200',
   fuera_alcance: 'bg-gray-50 text-gray-500 border-gray-200',
+  algun_dia: 'bg-slate-50 text-slate-600 border-slate-200',
   no_software: 'bg-gray-50 text-gray-500 border-gray-200',
   sin_determinar: 'bg-purple-50 text-purple-800 border-purple-200',
 };
@@ -65,6 +68,7 @@ const EVIDENCIA_EXIGIDA: Record<string, string> = {
   construido: 'Código en la rama principal y migración aplicada. Nadie del cliente lo ha validado todavía.',
   parcial: 'Ambas mitades identificadas: qué funciona y qué falta, nombrados en la fila.',
   no_construido: 'No existe el código.',
+  algun_dia: 'Fuera del alcance actual y sin descartar. La fila dice qué tendría que cambiar para retomarlo.',
 };
 
 const LUZ_COLOR: Record<Luz, string> = {
@@ -282,7 +286,8 @@ export function StatusClient({ puedeEditarPlan }: { puedeEditarPlan: boolean }) 
   }
 
   const fueraDelConteo = items.filter(
-    (i) => enAlcance(i, alcance) && (i.estado === 'fuera_alcance' || i.estado === 'no_software'),
+    (i) => enAlcance(i, alcance)
+      && (i.estado === 'fuera_alcance' || i.estado === 'algun_dia' || i.estado === 'no_software'),
   ).length;
 
   return (
@@ -344,7 +349,8 @@ export function StatusClient({ puedeEditarPlan }: { puedeEditarPlan: boolean }) 
             {fueraDelConteo > 0 && (
               <p className="text-xs text-gray-500 mt-4">
                 Fuera del conteo: {fueraDelConteo} filas que no son funciones a construir
-                (decisiones de exclusión, contexto, cronología e insumos que ejecuta el cliente).
+                (decisiones de exclusión, «algún día», contexto, cronología e insumos que
+                ejecuta el cliente).
                 Se muestran en el detalle, no en el porcentaje.
               </p>
             )}

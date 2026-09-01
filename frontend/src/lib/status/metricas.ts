@@ -10,7 +10,7 @@
 
 export type Estado =
   | 'funcionando' | 'construido' | 'parcial'
-  | 'no_construido' | 'fuera_alcance' | 'no_software' | 'sin_determinar';
+  | 'no_construido' | 'fuera_alcance' | 'algun_dia' | 'no_software' | 'sin_determinar';
 
 export type Origen = 'contrato' | 'verbal' | 'prerrequisito' | 'anadido' | 'contexto';
 export type Bloqueo = 'jorge' | 'cliente' | 'tercero' | 'nadie' | 'na';

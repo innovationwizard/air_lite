@@ -213,3 +213,67 @@ export function vista<T extends FilaOrdenable>(
 ): T[] {
   return ordenar(filtrar(filas, filtros), orden);
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * COPIAR AL PORTAPAPELES — la tabla visible como TSV
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * POR QUÉ ESTO EXISTE, y por qué NO es un archivo.
+ *
+ * Wilmer digita a mano los códigos de cada orden de compra en Odoo, y lo dijo
+ * con todas sus letras: *«yo no digito, me prefiero copiar y pegar porque se me
+ * equivocó un código»*. El pedido nunca fue un importador — fue dejar de
+ * retipear.
+ *
+ * Durante meses esto se tradujo como «un archivo importable a Odoo» (A4, línea
+ * del contrato del 16-jun). Dos hechos, confirmados el 2026-09-01, cierran esa
+ * lectura:
+ *   1. La importación masiva NO está habilitada en Odoo, y así estaba
+ *      registrado desde el 06-ago.
+ *   2. La decisión vigente del cliente es copiar y pegar; la importación no
+ *      está aprobada por quienes tendrían que aprobarla.
+ *
+ * Un archivo obliga a descargar, abrir, y —el riesgo real— abrirlo en Excel,
+ * que corrompe fechas y códigos con ceros a la izquierda antes de que nadie lo
+ * note. El portapapeles se pega directo en la grilla de Odoo o en Excel sin
+ * pasar por el disco. Es menos trabajo Y menos superficie de error.
+ *
+ * TSV Y NO CSV, deliberado: la grilla de Odoo y Excel pegan tabulaciones en
+ * columnas separadas sin preguntar nada. Un CSV pegado abre un diálogo de
+ * importación, o peor, cae todo en una sola columna.
+ */
+
+/** Una columna tal como se ve en pantalla: el encabezado y cómo sacar su valor. */
+export interface ColumnaCopiable<T> {
+  encabezado: string;
+  valor: (fila: T) => string | number | null | undefined;
+}
+
+/**
+ * Neutraliza lo que rompería el pegado.
+ *
+ * Un tabulador o un salto de línea dentro de una celda desplazaría TODAS las
+ * columnas siguientes de esa fila, y el resultado se ve plausible — que es lo
+ * peor que puede pasar cuando el destino es una orden de compra. Se reemplazan
+ * por espacios en vez de entrecomillar: entrecomillar es lo correcto en CSV,
+ * pero la grilla de Odoo no siempre lo interpreta al pegar.
+ */
+function celda(v: string | number | null | undefined): string {
+  if (v === null || v === undefined) return '';
+  return String(v).replace(/[\t\r\n]+/g, ' ').trim();
+}
+
+/**
+ * La tabla visible como TSV, en el MISMO orden y con las MISMAS filas que se
+ * están viendo.
+ *
+ * `filas` debe venir ya ordenada y filtrada — este módulo no vuelve a decidir
+ * qué se ve. Ese fue exactamente el defecto del 26-ago: el archivo se armaba
+ * por su cuenta y devolvía otra bodega y códigos de otro proveedor que los que
+ * había en pantalla.
+ */
+export function tablaATsv<T>(filas: readonly T[], columnas: readonly ColumnaCopiable<T>[]): string {
+  const cabecera = columnas.map((c) => celda(c.encabezado)).join('\t');
+  const cuerpo = filas.map((f) => columnas.map((c) => celda(c.valor(f))).join('\t'));
+  return [cabecera, ...cuerpo].join('\n');
+}

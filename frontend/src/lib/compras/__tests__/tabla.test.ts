@@ -1,5 +1,6 @@
 import {
   compararPorDefecto, dirInicial, esTexto, filtrar, ordenar, siguienteOrden, vista,
+  tablaATsv,
   type FilaOrdenable,
 } from '../tabla';
 
@@ -140,5 +141,39 @@ describe('vista', () => {
     const out = vista(filas, { proveedor: 'X', umbral: { clave: 'p3', min: 10 } },
                       { clave: 'p3', dir: 'desc' });
     expect(out.map((r) => r.cod)).toEqual(['B', 'D']);
+  });
+});
+
+describe('tablaATsv — copiar lo visible', () => {
+  const cols = [
+    { encabezado: 'Código', valor: (r: Record<string, unknown>) => r.cod as string },
+    { encabezado: 'Sugerido', valor: (r: Record<string, unknown>) => r.sug as number },
+  ];
+
+  it('encabezado y filas separados por tabulaciones', () => {
+    const tsv = tablaATsv([{ cod: 'A1', sug: 10 }, { cod: 'B2', sug: 20 }], cols);
+    expect(tsv).toBe('Código\tSugerido\nA1\t10\nB2\t20');
+  });
+
+  it('respeta el orden recibido: no reordena nada', () => {
+    // El defecto del 26-ago fue exactamente que el archivo decidia por su cuenta.
+    const tsv = tablaATsv([{ cod: 'Z9', sug: 1 }, { cod: 'A1', sug: 2 }], cols);
+    expect(tsv.split('\n')[1]).toBe('Z9\t1');
+  });
+
+  it('neutraliza tabuladores y saltos dentro de una celda', () => {
+    // Sin esto, una descripcion con un tabulador corre todas las columnas
+    // siguientes y el resultado se ve plausible — que es lo peor posible.
+    const tsv = tablaATsv([{ cod: 'A\t1', sug: 5 }], cols);
+    expect(tsv.split('\n')[1]).toBe('A 1\t5');
+    expect(tablaATsv([{ cod: 'x\ny', sug: 1 }], cols).split('\n')).toHaveLength(2);
+  });
+
+  it('vacio y nulo se copian como celda vacia, no como «null»', () => {
+    expect(tablaATsv([{ cod: null, sug: undefined }], cols).split('\n')[1]).toBe('\t');
+  });
+
+  it('sin filas copia solo el encabezado', () => {
+    expect(tablaATsv([], cols)).toBe('Código\tSugerido');
   });
 });

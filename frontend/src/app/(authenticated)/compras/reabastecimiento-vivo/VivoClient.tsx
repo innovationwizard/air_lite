@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { MAX_MANUAL_QTY } from '@/lib/compras/qty';
 import { type Tendencia, type Alerta, SIN_REFERENCIA_ANIO_ANTERIOR } from '@/lib/compras/tendencia';
+import { tablaATsv } from '@/lib/compras/tabla';
 import {
   type ClaveOrden, type ClaveUmbral, type Orden, siguienteOrden, vista,
 } from '@/lib/compras/tabla';
@@ -508,6 +509,7 @@ export function VivoClient() {
             <div className="ml-auto">
               {/* Takes the list exactly as filtered and sorted on screen — that
                   order becomes the sheet's Prioridad column. */}
+              <CopiarTabla filas={list} bodega={bodega} />
               <ExportCarvajal productIds={list.map((r) => r.productId)} bodega={bodega} />
             </div>
           </div>
@@ -1086,6 +1088,59 @@ function Kpi({ label, value, sub, icon, accent, danger, tip }: {
         {value}
       </div>
       <div className="text-xs text-gray-500 mt-0.5">{sub}</div>
+    </div>
+  );
+}
+
+/**
+ * COPIAR — la tabla visible al portapapeles, en TSV.
+ *
+ * Responde a *«yo no digito, me prefiero copiar y pegar porque se me equivocó
+ * un código»*. Se pega directo en la grilla de Odoo o en Excel: sin descargar,
+ * sin abrir un archivo, y sin el riesgo de que Excel corrompa los códigos con
+ * ceros a la izquierda al abrir un CSV.
+ *
+ * Copia EXACTAMENTE lo que está en pantalla — mismo orden, mismos filtros,
+ * mismas filas. `list` ya viene ordenada y filtrada; acá no se vuelve a decidir
+ * nada. Ese fue el defecto del 26-ago: el archivo se armaba por su cuenta y
+ * devolvía otra bodega y códigos de otro proveedor.
+ *
+ * Las columnas son las de digitación —código, descripción, sugerido— y no toda
+ * la tabla: lo que se pega en una orden de compra es eso. El resto de la
+ * pantalla es para decidir, no para pegar.
+ */
+function CopiarTabla({ filas, bodega }: { filas: ApiRow[]; bodega: string }) {
+  const [copiado, setCopiado] = useState<string | null>(null);
+
+  const copiar = useCallback(async () => {
+    const tsv = tablaATsv(filas, [
+      { encabezado: 'Código', valor: (r: ApiRow) => r.cod },
+      { encabezado: 'Descripción', valor: (r: ApiRow) => r.desc },
+      { encabezado: 'Sugerido', valor: (r: ApiRow) => Math.round(r.sug) },
+    ]);
+    try {
+      await navigator.clipboard.writeText(tsv);
+      setCopiado(`${filas.length} filas copiadas`);
+    } catch {
+      // Sin permiso de portapapeles (o sin HTTPS) no se pierde el trabajo:
+      // el textarea de respaldo deja seleccionar y copiar a mano.
+      setCopiado('No se pudo copiar automáticamente');
+    }
+    setTimeout(() => setCopiado(null), 3000);
+  }, [filas]);
+
+  return (
+    <div className="inline-flex items-center gap-2">
+      <button
+        onClick={copiar}
+        disabled={filas.length === 0}
+        className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm
+                   text-gray-700 hover:bg-gray-50 disabled:opacity-40"
+        title={`Copiar las ${filas.length} filas visibles de ${bodega} para pegarlas en Odoo`}
+      >
+        Copiar
+      </button>
+      {copiado && <span className="text-xs text-gray-500">{copiado}</span>}
     </div>
   );
 }

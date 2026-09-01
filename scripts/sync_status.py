@@ -58,7 +58,7 @@ EXCLUIDAS = {
 }
 
 ESTADOS = {'funcionando', 'construido', 'parcial', 'no_construido',
-           'fuera_alcance', 'no_software', 'sin_determinar'}
+           'fuera_alcance', 'algun_dia', 'no_software', 'sin_determinar'}
 ORIGENES = {'contrato', 'verbal', 'prerrequisito', 'anadido', 'contexto'}
 BLOQUEOS = {'jorge', 'cliente', 'tercero', 'nadie', 'na'}
 TEMPORADAS = {'critico', 'mejora', 'puede_esperar', 'na'}
@@ -66,8 +66,10 @@ ESFUERZOS = {'horas', 'dias', 'semanas', 'no_estimable', 'na'}
 AREAS = {'compras_local', 'compras_intl', 'gerencia', 'gerencia_proyecto', 'na'}
 
 # Estados que cuentan como entregables: el denominador del porcentaje.
-# `no_software` y `fuera_alcance` quedan fuera — nunca fueron cosas a construir,
-# y meterlos al denominador inventaría una brecha que no existe.
+# `no_software`, `fuera_alcance` y `algun_dia` quedan fuera — nunca fueron cosas
+# a construir, o se decidió que no se están haciendo, y meterlos al denominador
+# inventaría una brecha que no existe. `algun_dia` no es un descarte: es fuera
+# del alcance actual, con la condición que lo reviviría escrita en `evidencia`.
 ENTREGABLES = {'funcionando', 'construido', 'parcial', 'no_construido', 'sin_determinar'}
 
 # ── Prioridad ───────────────────────────────────────────────────────────────
