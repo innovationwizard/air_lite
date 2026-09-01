@@ -972,6 +972,35 @@ def warehouse_by_picking_type(execute):
             for t in types}
 
 
+def map_detalle_rows(transito_detalle, product_map, sync_id):
+    """Traduce el desglose de tránsito a filas de `transito_detalle`.
+
+    Existe como función aparte para que se pueda PROBAR. La primera versión
+    vivía suelta dentro de `main()` y buscaba `product_map[opid]` con un int,
+    cuando el mapa está indexado por STRING del id de Odoo: devolvía None para
+    todas las líneas y escribía una tabla vacía sin lanzar un solo error. Las
+    pruebas de `attribute_transit` pasaban perfectas, porque el error no estaba
+    en la atribución sino en la traducción — que era la única parte sin cubrir.
+
+    Una línea cuyo producto no está en el catálogo se descarta, igual que en el
+    resto del sync: no tendría fila donde mostrarse.
+    """
+    filas = []
+    for d in transito_detalle:
+        pid = product_map.get(str(d['opid']))
+        if not pid:
+            continue
+        filas.append({
+            'product_id': pid,
+            'bodega': d['bodega'],
+            'fecha': (d['fecha'] or '')[:10] or None,
+            'qty': round(d['qty'], 4),
+            'orden': d['orden'],
+            'sync_id': sync_id,
+        })
+    return filas
+
+
 def sync_transit(execute, issues, bodega_codes):
     """Per-BODEGA transit: confirmed PO lines with pending qty
     (product_qty - qty_received > 0) on orders expected TODAY OR LATER,
@@ -1261,19 +1290,7 @@ def main():
         # de Odoo al nuestro; una línea cuyo producto no está en el catálogo se
         # descarta acá igual que en el resto del sync, porque no tendría fila
         # donde mostrarse.
-        detalle_rows = []
-        for d in transito_detalle:
-            pid = product_map.get(d['opid'])
-            if not pid:
-                continue
-            detalle_rows.append({
-                'product_id': pid,
-                'bodega': d['bodega'],
-                'fecha': (d['fecha'] or '')[:10] or None,
-                'qty': round(d['qty'], 4),
-                'orden': d['orden'],
-                'sync_id': sync_id,
-            })
+        detalle_rows = map_detalle_rows(transito_detalle, product_map, sync_id)
 
         # DATA HORIZON — the newest business activity in Odoo (NOT the sync
         # time). Surfaced so the UI never claims freshness the data lacks
@@ -1314,6 +1331,15 @@ def main():
         # dato. Si el borrado funciona y la escritura falla, la próxima corrida
         # (dentro de una hora) lo repone; mientras tanto la columna Tránsito
         # sigue mostrando su total, que no depende de esta tabla.
+        # Control: si hay tránsito pero el desglose salió vacío, algo se rompió
+        # en la traducción de ids y la columna quedaría sin explicación. Se avisa
+        # en vez de escribir una tabla vacía en silencio — que es exactamente lo
+        # que pasó la primera vez que esto corrió.
+        hay_transito = any(v for b, v in transit.items() if b != GENERAL_BODEGA)
+        if hay_transito and not detalle_rows:
+            issues.add('warn', 'transito_detalle',
+                       'hay transito pero el desglose salio vacio: revisar la traduccion '
+                       'de product_id (product_map se indexa por str, no por int)')
         sb_request('DELETE', 'transito_detalle?id=not.is.null')
         sb_insert_batched('transito_detalle', detalle_rows)
         logger.info('transito_detalle: %d lineas', len(detalle_rows))

@@ -18,7 +18,8 @@ alcance de compras (subcontratación, Zona 11, tiendas) e inflaba a las tres.
 LA REGLA (Jorge, Q26/Q2, 2026-08-27): sólo destino final — una cantidad
 pendiente pertenece a EXACTAMENTE UNA bodega, la que la recibe.
 """
-from odoo_sync_reabastecimiento import GENERAL_BODEGA, attribute_transit
+from odoo_sync_reabastecimiento import (
+    GENERAL_BODEGA, attribute_transit, map_detalle_rows)
 
 # Mapeo vigente (W11, migración 20260821000002).
 BODEGAS = {'San Jose VN': ['1CET'], 'Petén': ['3PET'], 'Zacapa': ['4ZAC']}
@@ -173,3 +174,29 @@ def test_el_detalle_no_duplica_por_el_roll_up_general():
     _, _, _, detalle = attribute_transit(lineas, {6: '1CET'}, BODEGAS)
     assert [d['bodega'] for d in detalle] == ['San Jose VN']
     assert GENERAL_BODEGA not in {d['bodega'] for d in detalle}
+
+
+# ─── La traducción de ids, que es donde estuvo el error ──────────────────────
+
+def test_el_mapa_de_productos_se_indexa_por_STRING_no_por_int():
+    # El bug del 2026-09-01: buscar product_map[opid] con un int devolvía None
+    # para TODAS las líneas y escribía la tabla vacía sin un solo error. Las
+    # pruebas de attribute_transit pasaban, porque el fallo estaba acá.
+    detalle = [{'bodega': 'San Jose VN', 'opid': 100, 'fecha': '2026-09-24 08:00:00',
+                'qty': 500.0, 'orden': 'PO1'}]
+    filas = map_detalle_rows(detalle, {'100': 77}, 'sync-1')
+    assert len(filas) == 1
+    assert filas[0]['product_id'] == 77
+
+
+def test_la_fecha_se_recorta_a_dia_y_el_vacio_queda_en_none():
+    detalle = [{'bodega': 'Zacapa', 'opid': 1, 'fecha': '2026-09-24 08:00:00', 'qty': 5, 'orden': None},
+               {'bodega': 'Zacapa', 'opid': 1, 'fecha': None, 'qty': 3, 'orden': None}]
+    filas = map_detalle_rows(detalle, {'1': 9}, 's')
+    assert filas[0]['fecha'] == '2026-09-24'
+    assert filas[1]['fecha'] is None
+
+
+def test_un_producto_fuera_del_catalogo_se_descarta_sin_romper():
+    detalle = [{'bodega': 'Petén', 'opid': 999, 'fecha': None, 'qty': 1, 'orden': None}]
+    assert map_detalle_rows(detalle, {'100': 77}, 's') == []
