@@ -15,6 +15,14 @@ export const ROLES = {
   FINANCIERO: 'financiero',
   TESTUSER: 'testuser',
   OPERACIONES: 'operaciones',
+  /**
+   * The client's project manager. Owns the PLAN on /status — priority order,
+   * target dates, notes — and nothing else. Deliberately NOT given the compras
+   * or inventarios silos: he had been entering with a `compras` credential, so
+   * authorising the plan by that role would have handed the same authority to
+   * the buyer the plan measures. See 20260901000002_add_project_manager_role.sql
+   */
+  PROJECT_MANAGER: 'project_manager',
 } as const;
 
 export type Role = (typeof ROLES)[keyof typeof ROLES];
@@ -35,8 +43,19 @@ export const CAN_VIEW_SYSTEM: Role[] = ['superuser'];
 export const CAN_VIEW_ADMIN: Role[] = ['superuser', 'admin'];
 
 export const CAN_VIEW_OPERATIONAL: Role[] = [
-  'superuser', 'admin', 'gerencia', 'compras', 'ventas', 'inventario', 'financiero', 'testuser', 'operaciones',
+  'superuser', 'admin', 'gerencia', 'compras', 'ventas', 'inventario', 'financiero', 'testuser', 'operaciones', 'project_manager',
 ];
+
+/**
+ * Who may write `status_plan` — the PLAN half of /status (priority order,
+ * target dates, notes).
+ *
+ * The split this enforces: the STATE of each item ("is it done?") is judged by
+ * whoever built it, through a versioned TSV and `scripts/sync_status.py`, and
+ * there is no route that lets this role touch it. The PLAN ("by when?") is the
+ * client PM's. Neither can overwrite the other.
+ */
+export const CAN_EDIT_STATUS_PLAN: Role[] = ['superuser', 'project_manager'];
 
 /** Roles that can access OA (Open Orders) module */
 export const CAN_VIEW_OA: Role[] = [
@@ -81,8 +100,10 @@ export const CAN_VIEW_POC_ONLY: Role[] = ['testuser'];
  * landing page**; every entry is reachable.
  */
 export const ROLLOUT_FOCUS: Partial<Record<Role, string[]>> = {
-  compras: ['/compras/reabastecimiento-vivo'],
-  inventario: ['/inventarios/reyma-vivo', '/inventarios/facturas'],
+  // `/status` is APPENDED, never prepended: the first entry is the landing
+  // page, and confined users must still land on the page they work in.
+  compras: ['/compras/reabastecimiento-vivo', '/status'],
+  inventario: ['/inventarios/reyma-vivo', '/inventarios/facturas', '/status'],
 };
 
 /** Routes a role is confined to, or `undefined` when it is not confined. */
@@ -132,6 +153,8 @@ export const PAGE_PERMISSIONS: Record<string, Role[]> = {
   '/superuser': CAN_VIEW_SYSTEM,
   '/admin': CAN_VIEW_ADMIN,
   '/configuracion': CAN_VIEW_ADMIN,
+  // The gap analysis is readable by everyone, including the confined roles.
+  '/status': CAN_VIEW_OPERATIONAL,
 };
 
 /**
@@ -158,6 +181,8 @@ export function getDefaultPage(
       return '/inventarios/reyma';
     case ROLES.GERENCIA:
       return '/gerencia/forecast';
+    case ROLES.PROJECT_MANAGER:
+      return '/status';
     case ROLES.ADMIN:
       return '/backtest';
     default:
@@ -178,4 +203,5 @@ export const ROLE_LABELS: Record<Role, string> = {
   financiero: 'Financiero',
   testuser: 'Usuario de Prueba',
   operaciones: 'Operaciones',
+  project_manager: 'Gerente de Proyecto',
 };

@@ -137,9 +137,26 @@ describe('getDefaultPage', () => {
 describe('ROLLOUT_FOCUS — confinamiento de varias rutas', () => {
   it('inventario alcanza su modelo en vivo Y la carga de facturas', () => {
     const rutas = focusRoutes('inventario');
-    expect(rutas).toEqual(['/inventarios/reyma-vivo', '/inventarios/facturas']);
+    expect(rutas).toEqual(['/inventarios/reyma-vivo', '/inventarios/facturas', '/status']);
     expect(isWithinFocus('/inventarios/reyma-vivo', rutas!)).toBe(true);
     expect(isWithinFocus('/inventarios/facturas', rutas!)).toBe(true);
+  });
+
+  /**
+   * 2026-09-01 — `/status` (el gap analysis) se AÑADE a cada confinamiento en
+   * lugar de quedar fuera: es el reporte de estado del proyecto y quienes lo
+   * usan tienen derecho a leerlo. Va SIEMPRE al final, nunca al principio,
+   * porque el primer elemento es la página de aterrizaje y un usuario confinado
+   * tiene que seguir cayendo en la pantalla donde trabaja.
+   */
+  it('/status es alcanzable por los roles confinados, sin ser su aterrizaje', () => {
+    for (const rol of ['compras', 'inventario']) {
+      const rutas = focusRoutes(rol)!;
+      expect(isWithinFocus('/status', rutas)).toBe(true);
+      expect(rutas).toContain('/status');
+      expect(rutas[0]).not.toBe('/status');
+      expect(getDefaultPage(rol)).toBe(rutas[0]);
+    }
   });
 
   it('y NADA más — el confinamiento sigue cerrado', () => {
@@ -147,6 +164,7 @@ describe('ROLLOUT_FOCUS — confinamiento de varias rutas', () => {
     for (const fuera of [
       '/inventarios/reyma',        // el prefijo de reyma-vivo: NO debe pasar
       '/backtest',
+      '/statusquo',                // hermano por prefijo de /status: NO pasa
       '/compras/reabastecimiento-vivo',
       '/gerencia/forecast',
       '/admin',
@@ -164,8 +182,8 @@ describe('ROLLOUT_FOCUS — confinamiento de varias rutas', () => {
     expect(isWithinFocus('/inventarios/facturas-de-otro', rutas)).toBe(false);
   });
 
-  it('compras sigue confinado a su única página', () => {
-    expect(focusRoutes('compras')).toEqual(['/compras/reabastecimiento-vivo']);
+  it('compras sigue confinado a su página de trabajo, más el estado', () => {
+    expect(focusRoutes('compras')).toEqual(['/compras/reabastecimiento-vivo', '/status']);
   });
 
   it('los roles sin entrada NO están confinados', () => {

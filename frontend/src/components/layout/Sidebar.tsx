@@ -5,6 +5,7 @@ import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import {
   BarChart3,
+  ClipboardCheck,
   AlertTriangle,
   Boxes,
   Warehouse,
@@ -69,6 +70,12 @@ const allNavGroups: NavGroup[] = [
         href: '/backtest',
         icon: BarChart3,
         subtitle: null,
+      },
+      {
+        name: 'Estado del Proyecto',
+        href: '/status',
+        icon: ClipboardCheck,
+        subtitle: 'Análisis de brechas',
       },
     ],
   },
