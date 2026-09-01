@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   titular, brechaConfirmacion, esperandoQue, ordenarPlan, prontitud,
-  enAlcance, ETIQUETA_BLOQUEO, ETIQUETA_AREA, AREAS_PRONTITUD,
+  enAlcance, reordenarIds, ETIQUETA_BLOQUEO, ETIQUETA_AREA, AREAS_PRONTITUD,
   type StatusItem, type PlanRow, type Alcance, type Estado, type Luz,
 } from '@/lib/status/metricas';
 
@@ -115,6 +115,9 @@ export function StatusClient({ puedeEditarPlan }: { puedeEditarPlan: boolean }) 
   const [abierta, setAbierta] = useState<string | null>(null);
   const [guardando, setGuardando] = useState(false);
   const [errorPlan, setErrorPlan] = useState<string | null>(null);
+  const [arrastrando, setArrastrando] = useState<string | null>(null);
+  /** Dónde caería la fila si se soltara ahora: id del ancla + antes/después. */
+  const [destino, setDestino] = useState<{ id: string; antes: boolean } | null>(null);
 
   /**
    * Escribe UN campo del plan y refleja la respuesta del servidor, no lo que
@@ -142,6 +145,71 @@ export function StatusClient({ puedeEditarPlan }: { puedeEditarPlan: boolean }) 
       }));
     } catch (e) {
       setErrorPlan(e instanceof Error ? e.message : 'No se pudo guardar');
+    } finally {
+      setGuardando(false);
+    }
+  }
+
+  /**
+   * Aplica el arrastre. El orden que se manda es el CANÓNICO —todos los
+   * pendientes, no sólo los visibles— porque la tabla puede estar filtrada por
+   * alcance y numerar sobre un subconjunto daría posiciones sin sentido al
+   * cambiar el filtro.
+   *
+   * Optimista con reversión: la fila se mueve en pantalla al instante, y si el
+   * servidor rechaza el orden se vuelve al anterior y se dice por qué. Sin la
+   * reversión, un fallo dejaría la pantalla mostrando un orden que la base no
+   * tiene.
+   */
+  async function soltar(movidoId: string, anclaId: string, antes: boolean) {
+    const canonico = ordenarPlan(items, planMap, 'todo').map((i) => i.id);
+    const nuevo = reordenarIds(canonico, movidoId, anclaId, antes);
+    if (nuevo === canonico) return;
+
+    const previo = datos?.plan ?? [];
+    setDatos((d) => d && ({
+      ...d,
+      plan: nuevo.map((id, n) => ({
+        ...(previo.find((p) => p.item_id === id)
+            ?? { item_id: id, fecha_objetivo: null, nota: null }),
+        prioridad: n + 1,
+      })),
+    }));
+
+    setGuardando(true);
+    setErrorPlan(null);
+    try {
+      const r = await fetch('/api/status/plan', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orden: nuevo }),
+      });
+      if (!r.ok) throw new Error((await r.json()).error ?? 'No se pudo reordenar');
+    } catch (e) {
+      setDatos((d) => d && ({ ...d, plan: previo }));
+      setErrorPlan(e instanceof Error ? e.message : 'No se pudo reordenar');
+    } finally {
+      setGuardando(false);
+    }
+  }
+
+  /** Devuelve el plan al orden que calcula el sincronizador. */
+  async function restaurarOrden() {
+    const previo = datos?.plan ?? [];
+    setGuardando(true);
+    setErrorPlan(null);
+    try {
+      const r = await fetch('/api/status/plan', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reset: true }),
+      });
+      if (!r.ok) throw new Error((await r.json()).error ?? 'No se pudo restaurar');
+      setDatos((d) => d && ({
+        ...d, plan: previo.map((p) => ({ ...p, prioridad: null })),
+      }));
+    } catch (e) {
+      setErrorPlan(e instanceof Error ? e.message : 'No se pudo restaurar');
     } finally {
       setGuardando(false);
     }
@@ -449,19 +517,28 @@ export function StatusClient({ puedeEditarPlan }: { puedeEditarPlan: boolean }) 
         </p>
 
         {puedeEditarPlan && (
-          <p className="text-xs text-gray-500 mt-2">
-            Podés escribir la <strong>posición</strong> que querés que ocupe cada pendiente, su
-            fecha objetivo y una nota. Dejá la posición vacía para devolver la fila al orden
-            calculado. {guardando && <span className="text-sky-700">Guardando…</span>}
-            {errorPlan && <span className="text-red-700">{errorPlan}</span>}
-          </p>
+          <div className="mt-2 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+            <p className="text-xs text-gray-500">
+              Arrastrá una fila por el asa <span className="text-gray-400">⠿</span> para
+              reordenarla, o escribí la <strong>posición</strong> si preferís el teclado.
+              También podés poner fecha objetivo y una nota.
+            </p>
+            <button
+              onClick={restaurarOrden}
+              className="text-xs text-gray-600 underline hover:text-gray-900"
+            >
+              Restaurar el orden calculado
+            </button>
+            {guardando && <span className="text-xs text-sky-700">Guardando…</span>}
+            {errorPlan && <span className="text-xs text-red-700">{errorPlan}</span>}
+          </div>
         )}
 
         <div className="overflow-x-auto mt-4">
           <table className="w-full text-sm">
             <thead>
               <tr className="text-left text-xs text-gray-500 border-b border-gray-200">
-                <th className="py-2 pr-3 font-medium w-8">#</th>
+                <th className="py-2 pr-3 font-medium w-20">#</th>
                 <th className="py-2 pr-3 font-medium">Pendiente</th>
                 <th className="py-2 pr-3 font-medium">Espera</th>
                 <th className="py-2 pr-3 font-medium">Esfuerzo</th>
@@ -472,9 +549,46 @@ export function StatusClient({ puedeEditarPlan }: { puedeEditarPlan: boolean }) 
             <tbody>
               {planItems.map((i, n) => {
                 const fila = planMap.get(i.id);
+                const esDestino = destino?.id === i.id;
                 return (
-                  <tr key={i.id} className="border-b border-gray-100 align-top">
-                    <td className="py-2 pr-3 tabular-nums">
+                  <tr
+                    key={i.id}
+                    onDragOver={puedeEditarPlan ? (e) => {
+                      if (!arrastrando || arrastrando === i.id) return;
+                      e.preventDefault();
+                      // Mitad superior de la fila = soltar antes; inferior = después.
+                      const r = e.currentTarget.getBoundingClientRect();
+                      setDestino({ id: i.id, antes: e.clientY < r.top + r.height / 2 });
+                    } : undefined}
+                    onDrop={puedeEditarPlan ? (e) => {
+                      e.preventDefault();
+                      if (arrastrando && destino) soltar(arrastrando, destino.id, destino.antes);
+                      setArrastrando(null); setDestino(null);
+                    } : undefined}
+                    className={`border-b border-gray-100 align-top
+                      ${arrastrando === i.id ? 'opacity-40' : ''}
+                      ${esDestino && destino?.antes ? 'border-t-2 border-t-sky-500' : ''}
+                      ${esDestino && !destino?.antes ? 'border-b-2 border-b-sky-500' : ''}`}
+                  >
+                    <td className="py-2 pr-3 tabular-nums whitespace-nowrap">
+                      {puedeEditarPlan && (
+                        <span
+                          draggable
+                          onDragStart={(e) => {
+                            setArrastrando(i.id);
+                            e.dataTransfer.effectAllowed = 'move';
+                            // Firefox no inicia el arrastre sin datos en el evento.
+                            e.dataTransfer.setData('text/plain', i.id);
+                          }}
+                          onDragEnd={() => { setArrastrando(null); setDestino(null); }}
+                          title="Arrastrar para reordenar"
+                          aria-label={`Reordenar ${i.id}`}
+                          className="inline-block mr-1.5 cursor-grab active:cursor-grabbing
+                                     text-gray-300 hover:text-gray-500 select-none"
+                        >
+                          ⠿
+                        </span>
+                      )}
                       {puedeEditarPlan ? (
                         <input
                           type="number"
@@ -485,7 +599,7 @@ export function StatusClient({ puedeEditarPlan }: { puedeEditarPlan: boolean }) 
                             const v = e.target.value.trim();
                             guardarPlan(i.id, { prioridad: v === '' ? null : Number(v) });
                           }}
-                          className="w-14 px-1.5 py-1 text-xs border border-gray-300 rounded
+                          className="w-12 px-1.5 py-1 text-xs border border-gray-300 rounded
                                      text-gray-800 placeholder:text-gray-300"
                           title="Posición en el plan. Vacío = orden calculado."
                         />

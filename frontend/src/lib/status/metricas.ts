@@ -257,3 +257,31 @@ export function prontitud(items: StatusItem[], area: Area): Prontitud {
   }
   return { area, etiqueta: ETIQUETA_AREA[area], luz, criterio, criticosAbiertos: criticos, rodeos };
 }
+
+/**
+ * Nuevo orden canónico tras arrastrar una fila.
+ *
+ * Es puro y vive acá, y no dentro del componente, por la misma razón que el
+ * resto de este módulo: es la operación que decide en qué orden se va a
+ * trabajar, y tiene que poder probarse sin montar una tabla ni simular un
+ * ratón.
+ *
+ * `canonico` son los ids de TODOS los pendientes, no sólo los visibles. La
+ * tabla puede estar filtrada por alcance, y numerar sobre un subconjunto
+ * produciría posiciones que dejan de significar algo al cambiar el filtro. El
+ * ancla es un id real, así que soltar entre dos filas visibles coloca el ítem
+ * en el lugar correcto de la lista completa aunque haya filas ocultas en medio.
+ */
+export function reordenarIds(
+  canonico: string[],
+  movidoId: string,
+  anclaId: string,
+  colocarAntes: boolean,
+): string[] {
+  if (movidoId === anclaId) return canonico;
+  const sinMovido = canonico.filter((id) => id !== movidoId);
+  const i = sinMovido.indexOf(anclaId);
+  if (i === -1) return canonico;          // ancla desconocida: no se toca nada
+  const destino = colocarAntes ? i : i + 1;
+  return [...sinMovido.slice(0, destino), movidoId, ...sinMovido.slice(destino)];
+}

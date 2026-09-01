@@ -1,5 +1,5 @@
 import {
-  titular, brechaConfirmacion, esperandoQue, ordenarPlan, prontitud, enAlcance,
+  titular, brechaConfirmacion, esperandoQue, ordenarPlan, prontitud, enAlcance, reordenarIds,
   type StatusItem, type PlanRow,
 } from '../metricas';
 
@@ -183,5 +183,42 @@ describe('prontitud', () => {
       item({ id: '2', cat: 'A4', area: 'compras_local', estado: 'no_construido', temporada: 'critico' }),
     ], 'gerencia');
     expect(p.criticosAbiertos).toHaveLength(1);
+  });
+});
+
+describe('reordenarIds — arrastrar y soltar', () => {
+  const c = ['a', 'b', 'c', 'd'];
+
+  it('mueve hacia arriba, soltando antes del ancla', () => {
+    expect(reordenarIds(c, 'd', 'b', true)).toEqual(['a', 'd', 'b', 'c']);
+  });
+
+  it('mueve hacia abajo, soltando despues del ancla', () => {
+    expect(reordenarIds(c, 'a', 'c', false)).toEqual(['b', 'c', 'a', 'd']);
+  });
+
+  it('soltar sobre si mismo no cambia nada', () => {
+    expect(reordenarIds(c, 'b', 'b', true)).toEqual(c);
+  });
+
+  it('un ancla desconocida deja la lista intacta en vez de adivinar', () => {
+    expect(reordenarIds(c, 'a', 'zzz', true)).toEqual(c);
+  });
+
+  it('mover al principio y al final', () => {
+    expect(reordenarIds(c, 'c', 'a', true)).toEqual(['c', 'a', 'b', 'd']);
+    expect(reordenarIds(c, 'a', 'd', false)).toEqual(['b', 'c', 'd', 'a']);
+  });
+
+  it('conserva todos los ids, sin perder ni duplicar', () => {
+    const r = reordenarIds(c, 'b', 'd', false);
+    expect([...r].sort()).toEqual([...c].sort());
+    expect(new Set(r).size).toBe(c.length);
+  });
+
+  it('ancla en una lista con filas ocultas: coloca en la posicion canonica', () => {
+    // La tabla muestra a, c (b y d filtrados). Soltar 'a' despues de 'c' debe
+    // dejar 'a' inmediatamente despues de 'c' en la lista COMPLETA.
+    expect(reordenarIds(c, 'a', 'c', false)).toEqual(['b', 'c', 'a', 'd']);
   });
 });

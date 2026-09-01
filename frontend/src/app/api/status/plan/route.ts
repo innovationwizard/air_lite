@@ -42,6 +42,8 @@ function isIsoDate(v: unknown): v is string {
 }
 
 const MAX_NOTA = 2000;
+/** Tope defensivo: el plan entero son ~70 pendientes, no miles. */
+const MAX_ORDEN = 500;
 
 export async function PATCH(request: Request) {
   const auth = await requireAuth(CAN_EDIT_STATUS_PLAN);
@@ -111,4 +113,95 @@ export async function PATCH(request: Request) {
   }
 
   return NextResponse.json({ plan: data });
+}
+
+/**
+ * PUT /api/status/plan — reordenamiento en bloque, o vuelta al orden calculado.
+ *
+ *   { orden: string[] }   asigna prioridad = posición (1..N) en ese orden
+ *   { reset: true }       borra TODA prioridad manual y devuelve el plan al
+ *                         orden que calcula scripts/sync_status.py
+ *
+ * POR QUÉ EN BLOQUE Y NO N PATCH. Arrastrar una fila cambia la posición de
+ * todas las que quedan entre el origen y el destino. Mandarlo fila por fila
+ * sería lento y, sobre todo, no atómico: una tanda a medio aplicar deja el
+ * plan en un orden que nadie eligió y que no se parece ni al viejo ni al nuevo.
+ *
+ * EL CLIENTE MANDA EL ORDEN CANÓNICO COMPLETO, no sólo lo que se ve en
+ * pantalla. La tabla se puede estar filtrando por alcance, y numerar 1..N
+ * sobre un subconjunto visible produciría posiciones que no significan nada
+ * cuando el filtro cambia. Se numera sobre la lista entera de pendientes.
+ *
+ * `fecha_objetivo` y `nota` NO se tocan: el upsert sólo nombra `prioridad`, así
+ * que en las filas que ya existen el resto de columnas queda intacto.
+ */
+export async function PUT(request: Request) {
+  const auth = await requireAuth(CAN_EDIT_STATUS_PLAN);
+  if (auth instanceof Response) return auth;
+
+  let body: Record<string, unknown>;
+  try {
+    body = await request.json();
+  } catch {
+    return badRequest('cuerpo JSON inválido');
+  }
+
+  const db = createServiceRoleClient();
+  const ahora = new Date().toISOString();
+
+  if (body.reset === true) {
+    const { error } = await db
+      .from('status_plan')
+      .update({ prioridad: null, autor: auth.email, updated_at: ahora })
+      .not('prioridad', 'is', null);
+    if (error) {
+      return NextResponse.json(
+        { error: 'No se pudo restaurar el orden', detail: error.message }, { status: 500 },
+      );
+    }
+    return NextResponse.json({ reset: true });
+  }
+
+  const { orden } = body;
+  if (!Array.isArray(orden) || orden.length === 0) {
+    return badRequest('orden debe ser un arreglo de ids, o enviar { reset: true }');
+  }
+  if (orden.length > MAX_ORDEN) {
+    return badRequest(`orden admite hasta ${MAX_ORDEN} ítems`);
+  }
+  if (!orden.every((x): x is string => typeof x === 'string' && x.trim().length > 0)) {
+    return badRequest('orden debe contener sólo ids no vacíos');
+  }
+  if (new Set(orden).size !== orden.length) {
+    return badRequest('orden tiene ids repetidos');
+  }
+
+  // Todos los ids tienen que existir. La llave foránea también lo impediría,
+  // pero un 400 que nombra el id sobrante es más útil que un error de
+  // integridad — y evita aplicar la mitad del reordenamiento.
+  const { data: existentes, error: errLectura } = await db
+    .from('status_items').select('id').in('id', orden);
+  if (errLectura) {
+    return NextResponse.json(
+      { error: 'No se pudo validar el orden', detail: errLectura.message }, { status: 500 },
+    );
+  }
+  const conocidos = new Set((existentes ?? []).map((r) => r.id));
+  const desconocidos = orden.filter((id) => !conocidos.has(id));
+  if (desconocidos.length > 0) {
+    return badRequest(`estos ítems no existen: ${desconocidos.slice(0, 5).join(', ')}`);
+  }
+
+  const filas = orden.map((itemId, i) => ({
+    item_id: itemId, prioridad: i + 1, autor: auth.email, updated_at: ahora,
+  }));
+
+  const { error } = await db.from('status_plan').upsert(filas, { onConflict: 'item_id' });
+  if (error) {
+    return NextResponse.json(
+      { error: 'No se pudo guardar el orden', detail: error.message }, { status: 500 },
+    );
+  }
+
+  return NextResponse.json({ ordenadas: filas.length });
 }
