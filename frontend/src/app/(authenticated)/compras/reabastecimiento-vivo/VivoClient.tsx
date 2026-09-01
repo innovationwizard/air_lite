@@ -6,7 +6,7 @@ import {
   Pencil, RefreshCw, Search, TrendingUp, X,
 } from 'lucide-react';
 import { MAX_MANUAL_QTY } from '@/lib/compras/qty';
-import { type Tendencia } from '@/lib/compras/tendencia';
+import { type Tendencia, type Alerta, SIN_REFERENCIA_ANIO_ANTERIOR } from '@/lib/compras/tendencia';
 import {
   type ClaveOrden, type ClaveUmbral, type Orden, siguienteOrden, vista,
 } from '@/lib/compras/tabla';
@@ -133,10 +133,13 @@ interface ApiRow {
   seasonalMotivo: string | null;
   /** Rising-trend evaluation over the last 3 complete months. Display only. */
   tendencia: Tendencia;
+  alerta: Alerta;
   doh: number; sug: number;
   flags: {
     pendingUnknown: boolean; seasonalLowConfidence: boolean; seasonalExcluded: boolean;
     tendenciaCreciente: boolean;
+    revisar: boolean;
+    sinReferenciaAnioAnterior: boolean;
   };
 }
 interface ApiMeta {
@@ -573,7 +576,11 @@ export function VivoClient() {
                 <tbody className="tabular-nums">
                   {list.slice(0, 400).map((r) => {
                     const band = sev(r.doh);
-                    const alzaRow = r.flags.tendenciaCreciente;
+                    // El resaltado de fila lo dispara la alerta COMBINADA
+                    // (sube Y se despegó de su base), no las dos alzas solas:
+                    // medido el 2026-09-01, subir por sí solo marcaba una
+                    // porción de la tabla demasiado grande para leerse.
+                    const alzaRow = r.flags.revisar;
                     return (
                       <tr key={r.productId}
                           className={alzaRow
@@ -639,7 +646,8 @@ export function VivoClient() {
                           <MesEnCurso mtd={r.mtd} dias={r.mtdDias} ritmo={r.mtdRitmo} p3={r.p3} />
                         </td>
                         <td className="px-3 py-2 border-b border-gray-100 text-center">
-                          <TendenciaCell t={r.tendencia} />
+                          <TendenciaCell t={r.tendencia} alerta={r.alerta}
+                                         sinRef={r.flags.sinReferenciaAnioAnterior} />
                         </td>
                         {/* Q9 — see the header comment. Restore these three
                             together with their <Th> or the columns misalign. */}
@@ -786,7 +794,26 @@ export function VivoClient() {
  * `no-evaluable` renders ¿? with the reason, never a blank or a dash: "we
  * cannot tell" and "it is not rising" are different answers.
  */
-function TendenciaCell({ t }: { t: Tendencia }) {
+function TendenciaCell(
+  { t, alerta, sinRef }: { t: Tendencia; alerta: Alerta; sinRef: boolean },
+) {
+  // «Revisar» gana sobre todo lo demás: es la conjunción de venir subiendo y
+  // haberse despegado del propio promedio de 6 meses, que es el conjunto chico
+  // y accionable. Ver el bloque DIVERGENCIA en lib/compras/tendencia.ts.
+  if (alerta.estado === 'revisar') {
+    return (
+      <span
+        className="inline-flex items-center gap-1 rounded-full bg-amber-500 px-2 py-0.5
+                   text-[11px] font-bold uppercase tracking-wide text-white shadow-sm cursor-help"
+        title={`${alerta.motivo} Es un aviso para que lo revises en Odoo; `
+          + 'el Sugerido no fue modificado.'
+          + (sinRef ? ` ${SIN_REFERENCIA_ANIO_ANTERIOR}.` : '')}
+      >
+        <TrendingUp size={12} strokeWidth={3} />
+        Revisar
+      </span>
+    );
+  }
   if (t.estado === 'no-evaluable') {
     return (
       <span className="text-gray-300 cursor-help"

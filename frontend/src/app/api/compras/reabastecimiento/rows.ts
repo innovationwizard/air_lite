@@ -15,7 +15,10 @@ import {
   sugerido,
   doh,
 } from '@/app/(authenticated)/compras/reabastecimiento/engine';
-import { evaluarTendencia, type Tendencia } from '@/lib/compras/tendencia';
+import {
+  evaluarTendencia, evaluarDivergencia, evaluarAlerta, tieneReferenciaAnioAnterior,
+  type Tendencia, type Divergencia, type Alerta,
+} from '@/lib/compras/tendencia';
 import {
   type DestinoDeclarado, destinoAfectaFila, transitoSegunDestino, ultimaPorProducto,
 } from '@/lib/compras/destino';
@@ -102,9 +105,16 @@ export interface LiveRow {
   mtd: number | null; mtdDias: number | null; mtdRitmo: number | null;
   win: number; doh: number; sug: number;
   tendencia: Tendencia;
+  divergencia: Divergencia;
+  alerta: Alerta;
   flags: {
     pendingUnknown: boolean; seasonalLowConfidence: boolean;
     seasonalExcluded: boolean; tendenciaCreciente: boolean;
+    // Sube Y se despegó de su base: la conjunción, no dos banderas sueltas.
+    // Ver el bloque DIVERGENCIA en lib/compras/tendencia.ts.
+    revisar: boolean;
+    // Informativo: no hay mes equivalente del año pasado con qué compararse.
+    sinReferenciaAnioAnterior: boolean;
   };
   seasonalMotivo: string | null;
 }
@@ -220,6 +230,10 @@ export async function buildRows(
       // Display only — the trend NEVER touches engineRow. Wilmer asked to be
       // warned, not to have the number changed for him.
       const tendencia = evaluarTendencia(r.demanda_mensual);
+      // Divergencia sobre p3/p6, NO sobre `h`: medido el 2026-09-01, la base
+      // interanual daba 75% de divergencia mediana y 49% de cobertura.
+      const divergencia = evaluarDivergencia(r.p3, r.p6);
+      const alerta = evaluarAlerta(tendencia, divergencia);
 
       const engineRow: ProductRow = {
         cod,
@@ -273,11 +287,15 @@ export async function buildRows(
         doh: round1(doh(engineRow)),
         sug: round1(sugerido(engineRow, trans)),
         tendencia,
+        divergencia,
+        alerta,
         flags: {
           pendingUnknown: pending === null,
           seasonalLowConfidence: engineRow.win === 10 && r.h === 0,
           seasonalExcluded,
           tendenciaCreciente: tendencia.estado === 'creciente',
+          revisar: alerta.estado === 'revisar',
+          sinReferenciaAnioAnterior: !tieneReferenciaAnioAnterior(r.h),
         },
         seasonalMotivo: SEASONAL_EXCLUDED[cod]?.motivo ?? null,
       };

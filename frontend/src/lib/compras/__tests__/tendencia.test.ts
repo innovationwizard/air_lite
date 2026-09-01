@@ -1,4 +1,6 @@
-import { evaluarTendencia, TREND_RISES, TREND_WINDOW_MONTHS } from '../tendencia';
+import { evaluarTendencia, TREND_RISES, TREND_WINDOW_MONTHS ,
+  evaluarDivergencia, evaluarAlerta, tieneReferenciaAnioAnterior,
+  DIVERGENCIA_UMBRAL, SIN_REFERENCIA_ANIO_ANTERIOR,} from '../tendencia';
 
 describe('evaluarTendencia', () => {
   it('fires on three strictly increasing complete months', () => {
@@ -105,5 +107,77 @@ describe('evaluarTendencia', () => {
     // A third rise would cost a month of warning; the alert fires at two.
     expect(evaluarTendencia({ '2026-05': 10, '2026-06': 20, '2026-07': 30 }).estado)
       .toBe('creciente');
+  });
+});
+
+describe('divergencia — p3 contra p6', () => {
+  it('dispara cuando lo reciente se despega del promedio largo', () => {
+    const d = evaluarDivergencia(150, 100);           // +50%
+    expect(d.estado).toBe('divergente');
+    expect(d.pct).toBeCloseTo(0.5);
+  });
+
+  it('no dispara dentro del umbral', () => {
+    expect(evaluarDivergencia(130, 100).estado).toBe('sin-divergencia'); // +30%
+  });
+
+  it('el umbral es estricto, no inclusivo', () => {
+    // Exactamente en el umbral NO es despegarse; es estar en el borde.
+    expect(evaluarDivergencia(140, 100).estado).toBe('sin-divergencia');
+    expect(evaluarDivergencia(140.1, 100).estado).toBe('divergente');
+  });
+
+  it('detecta la caida igual que la subida — el signo se conserva', () => {
+    const d = evaluarDivergencia(40, 100);
+    expect(d.estado).toBe('divergente');
+    expect(d.pct).toBeCloseTo(-0.6);
+  });
+
+  it('sin promedio de 6 meses NO evalua, y por lo tanto no dispara', () => {
+    // La regla del dia: excluida de disparar, no meramente etiquetada.
+    const d = evaluarDivergencia(500, 0);
+    expect(d.estado).toBe('sin-base');
+    expect(d.pct).toBeNull();
+  });
+
+  it('el umbral vive en una constante, para volverse configurable', () => {
+    expect(DIVERGENCIA_UMBRAL).toBe(0.40);
+  });
+});
+
+describe('referencia del ano anterior', () => {
+  it('h en cero es falta de referencia, no una afirmacion sobre el producto', () => {
+    expect(tieneReferenciaAnioAnterior(0)).toBe(false);
+    expect(tieneReferenciaAnioAnterior(12)).toBe(true);
+    expect(SIN_REFERENCIA_ANIO_ANTERIOR).toBe('Sin referencia del año pasado');
+  });
+});
+
+describe('alerta combinada — subir Y despegarse', () => {
+  const creciente = evaluarTendencia({ '2026-06': 10, '2026-07': 20, '2026-08': 30 });
+  const plana = evaluarTendencia({ '2026-06': 30, '2026-07': 20, '2026-08': 10 });
+
+  it('pide AMBAS condiciones', () => {
+    expect(evaluarAlerta(creciente, evaluarDivergencia(200, 100)).estado).toBe('revisar');
+  });
+
+  it('subir despacio y parejo no amerita revision', () => {
+    expect(evaluarAlerta(creciente, evaluarDivergencia(110, 100)).estado).toBe('sin-alerta');
+  });
+
+  it('despegarse sin venir subiendo tampoco', () => {
+    expect(evaluarAlerta(plana, evaluarDivergencia(200, 100)).estado).toBe('sin-alerta');
+  });
+
+  it('falta de dato no se disfraza de «no pasa nada»', () => {
+    expect(evaluarAlerta(creciente, evaluarDivergencia(50, 0)).estado).toBe('no-evaluable');
+    expect(evaluarAlerta(evaluarTendencia(null), evaluarDivergencia(150, 100)).estado)
+      .toBe('no-evaluable');
+  });
+
+  it('el motivo dice el porcentaje y la direccion, para no obligar a abrir Odoo', () => {
+    const a = evaluarAlerta(creciente, evaluarDivergencia(200, 100));
+    expect(a.motivo).toContain('100%');
+    expect(a.motivo).toContain('por encima de');
   });
 });
