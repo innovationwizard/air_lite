@@ -148,8 +148,12 @@ describe('ROLLOUT_FOCUS — confinamiento de varias rutas', () => {
    */
   it('inventario alcanza sus modelos en vivo Y la carga de facturas', () => {
     const rutas = focusRoutes('inventario');
-    expect(rutas).toEqual(['/inventarios/reyma-vivo', '/inventarios/carvajal-vivo',
-      '/inventarios/facturas', '/status']);
+    // A6.20 — los CUATRO modelos de Alexis, cada uno con su juego de reglas.
+    expect(rutas).toEqual([
+      '/inventarios/reyma-vivo', '/inventarios/carvajal-vivo',
+      '/inventarios/darnel-vivo', '/inventarios/asia-vivo',
+      '/inventarios/facturas', '/status',
+    ]);
     expect(isWithinFocus('/inventarios/reyma-vivo', rutas!)).toBe(true);
     expect(isWithinFocus('/inventarios/facturas', rutas!)).toBe(true);
   });

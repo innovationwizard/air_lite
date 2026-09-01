@@ -199,6 +199,18 @@ const allNavGroups: NavGroup[] = [
         subtitle: 'Mismas reglas, otros números',
       },
       {
+        name: 'Modelo Darnel',
+        href: '/inventarios/darnel-vivo',
+        icon: Boxes,
+        subtitle: 'Punto de reorden + alcance máximo',
+      },
+      {
+        name: 'Modelo Asia',
+        href: '/inventarios/asia-vivo',
+        icon: Boxes,
+        subtitle: 'Mismo motor que Darnel',
+      },
+      {
         name: 'Cargar Facturas',
         href: '/inventarios/facturas',
         icon: FileUp,

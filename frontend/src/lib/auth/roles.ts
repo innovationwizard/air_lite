@@ -138,7 +138,10 @@ export const ROLLOUT_FOCUS: Partial<Record<Role, string[]>> = {
   // `/status` is APPENDED, never prepended: the first entry is the landing
   // page, and confined users must still land on the page they work in.
   compras: ['/compras/reabastecimiento-vivo', '/status', '/comercial/forecast'],
+  // A6.20 — los CUATRO modelos de Alexis, cada uno con su juego de reglas.
+  // `reyma-vivo` sigue primero: es la landing y el modelo validado.
   inventario: ['/inventarios/reyma-vivo', '/inventarios/carvajal-vivo',
+               '/inventarios/darnel-vivo', '/inventarios/asia-vivo',
                '/inventarios/facturas', '/status'],
   /**
    * `gerencia` (2026-09-01) — confined to `/status`, and that is not a
@@ -206,6 +209,8 @@ export const PAGE_PERMISSIONS: Record<string, Role[]> = {
   '/inventarios/reyma': CAN_VIEW_INVENTARIOS,
   '/inventarios/reyma-vivo': CAN_VIEW_INVENTARIOS,
   '/inventarios/carvajal-vivo': CAN_VIEW_INVENTARIOS,
+  '/inventarios/darnel-vivo': CAN_VIEW_INVENTARIOS,
+  '/inventarios/asia-vivo': CAN_VIEW_INVENTARIOS,
   '/inventarios/facturas': CAN_VIEW_INVENTARIOS,
   '/operaciones': CAN_VIEW_OPERACIONES,
   '/gerencia': CAN_VIEW_GERENCIA,
