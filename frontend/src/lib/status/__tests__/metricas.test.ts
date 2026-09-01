@@ -124,6 +124,24 @@ describe('ordenarPlan', () => {
     expect(ordenarPlan(items, p, 'todo').map((i) => i.id)).toEqual(['a', 'b', 'c']);
   });
 
+  it('escribir una posicion la coloca AHI, no al principio de la lista', () => {
+    // El modelo anterior mandaba toda fila con prioridad manual al frente, asi
+    // que pedir el puesto 3 la saltaba por encima de las dos que no se tocaron.
+    const p = plan([{ item_id: 'a', prioridad: 3, fecha_objetivo: null, nota: null }]);
+    expect(ordenarPlan(items, p, 'todo').map((i) => i.id)).toEqual(['b', 'c', 'a']);
+  });
+
+  it('en empate gana la decision manual sobre el calculo', () => {
+    // 'a' pide el puesto 2, que el calculo ya le habia dado a 'c'.
+    const p = plan([{ item_id: 'a', prioridad: 2, fecha_objetivo: null, nota: null }]);
+    expect(ordenarPlan(items, p, 'todo').map((i) => i.id)).toEqual(['b', 'a', 'c']);
+  });
+
+  it('quitar la prioridad devuelve la fila al orden calculado', () => {
+    const p = plan([{ item_id: 'a', prioridad: null, fecha_objetivo: '2026-09-15', nota: null }]);
+    expect(ordenarPlan(items, p, 'todo').map((i) => i.id)).toEqual(['b', 'c', 'a']);
+  });
+
   it('excluye lo ya terminado del plan', () => {
     expect(ordenarPlan(items, plan([]), 'todo').map((i) => i.id)).not.toContain('d');
   });

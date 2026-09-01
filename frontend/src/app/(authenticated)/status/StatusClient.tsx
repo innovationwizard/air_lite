@@ -113,6 +113,39 @@ export function StatusClient({ puedeEditarPlan }: { puedeEditarPlan: boolean }) 
   const [fBloqueo, setFBloqueo] = useState<string>('');
   const [busqueda, setBusqueda] = useState('');
   const [abierta, setAbierta] = useState<string | null>(null);
+  const [guardando, setGuardando] = useState(false);
+  const [errorPlan, setErrorPlan] = useState<string | null>(null);
+
+  /**
+   * Escribe UN campo del plan y refleja la respuesta del servidor, no lo que
+   * escribió el usuario: si el servidor normaliza o rechaza algo, la pantalla
+   * tiene que mostrar lo que quedó guardado y no una versión optimista que
+   * nadie confirmó. La tabla se reordena sola porque `planMap` cambia.
+   */
+  async function guardarPlan(
+    itemId: string,
+    campos: { prioridad?: number | null; fechaObjetivo?: string | null; nota?: string | null },
+  ) {
+    setGuardando(true);
+    setErrorPlan(null);
+    try {
+      const r = await fetch('/api/status/plan', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ itemId, ...campos }),
+      });
+      const cuerpo = await r.json();
+      if (!r.ok) throw new Error(cuerpo.error ?? 'No se pudo guardar');
+      setDatos((d) => d && ({
+        ...d,
+        plan: [...d.plan.filter((p) => p.item_id !== itemId), cuerpo.plan],
+      }));
+    } catch (e) {
+      setErrorPlan(e instanceof Error ? e.message : 'No se pudo guardar');
+    } finally {
+      setGuardando(false);
+    }
+  }
 
   useEffect(() => {
     const p = new URLSearchParams(window.location.search);
@@ -410,8 +443,19 @@ export function StatusClient({ puedeEditarPlan }: { puedeEditarPlan: boolean }) 
         <p className="text-sm text-gray-600 mt-1 max-w-3xl">
           Ordenado por prioridad calculada: peso de temporada, más si está desbloqueado, más si
           es corto, más si ya está empezado. El orden lo propone el sistema; las fechas las pone
-          la gerencia de proyecto.
+          la gerencia de proyecto. Ninguna fecha sale de este documento — la app no propone
+          plazos, porque las etapas que se acordaron nunca se detallaron y llenarlas sería
+          inventarlas.
         </p>
+
+        {puedeEditarPlan && (
+          <p className="text-xs text-gray-500 mt-2">
+            Podés escribir la <strong>posición</strong> que querés que ocupe cada pendiente, su
+            fecha objetivo y una nota. Dejá la posición vacía para devolver la fila al orden
+            calculado. {guardando && <span className="text-sky-700">Guardando…</span>}
+            {errorPlan && <span className="text-red-700">{errorPlan}</span>}
+          </p>
+        )}
 
         <div className="overflow-x-auto mt-4">
           <table className="w-full text-sm">
@@ -422,42 +466,79 @@ export function StatusClient({ puedeEditarPlan }: { puedeEditarPlan: boolean }) 
                 <th className="py-2 pr-3 font-medium">Espera</th>
                 <th className="py-2 pr-3 font-medium">Esfuerzo</th>
                 <th className="py-2 pr-3 font-medium">Fecha objetivo</th>
+                {puedeEditarPlan && <th className="py-2 pr-3 font-medium">Nota</th>}
               </tr>
             </thead>
             <tbody>
-              {planItems.slice(0, 25).map((i, n) => (
-                <tr key={i.id} className="border-b border-gray-100 align-top">
-                  <td className="py-2 pr-3 text-gray-400 tabular-nums">{n + 1}</td>
-                  <td className="py-2 pr-3">
-                    <span className="font-mono text-xs text-gray-400">{i.id}</span>{' '}
-                    <span className="text-gray-800">{i.item.slice(0, 110)}</span>
-                    {i.temporada === 'critico' && (
-                      <span className="ml-2 text-xs text-red-700">crítico</span>
+              {planItems.map((i, n) => {
+                const fila = planMap.get(i.id);
+                return (
+                  <tr key={i.id} className="border-b border-gray-100 align-top">
+                    <td className="py-2 pr-3 tabular-nums">
+                      {puedeEditarPlan ? (
+                        <input
+                          type="number"
+                          min={1}
+                          defaultValue={fila?.prioridad ?? ''}
+                          placeholder={String(n + 1)}
+                          onBlur={(e) => {
+                            const v = e.target.value.trim();
+                            guardarPlan(i.id, { prioridad: v === '' ? null : Number(v) });
+                          }}
+                          className="w-14 px-1.5 py-1 text-xs border border-gray-300 rounded
+                                     text-gray-800 placeholder:text-gray-300"
+                          title="Posición en el plan. Vacío = orden calculado."
+                        />
+                      ) : (
+                        <span className="text-gray-400">{n + 1}</span>
+                      )}
+                    </td>
+                    <td className="py-2 pr-3">
+                      <span className="font-mono text-xs text-gray-400">{i.id}</span>{' '}
+                      <span className="text-gray-800">{i.item.slice(0, 110)}</span>
+                      {i.temporada === 'critico' && (
+                        <span className="ml-2 text-xs text-red-700">crítico</span>
+                      )}
+                    </td>
+                    <td className="py-2 pr-3 text-xs text-gray-600">
+                      {i.espera_que ?? ETIQUETA_BLOQUEO[i.bloqueo]}
+                    </td>
+                    <td className="py-2 pr-3 text-xs text-gray-600">
+                      {ETIQUETA_ESFUERZO[i.esfuerzo]}
+                    </td>
+                    <td className="py-2 pr-3 text-xs text-gray-600">
+                      {puedeEditarPlan ? (
+                        <input
+                          type="date"
+                          defaultValue={fila?.fecha_objetivo ?? ''}
+                          onBlur={(e) => guardarPlan(i.id, {
+                            fechaObjetivo: e.target.value || null,
+                          })}
+                          className="px-1.5 py-1 text-xs border border-gray-300 rounded text-gray-800"
+                        />
+                      ) : (
+                        fila?.fecha_objetivo ?? <span className="text-gray-300">—</span>
+                      )}
+                    </td>
+                    {puedeEditarPlan && (
+                      <td className="py-2 pr-3">
+                        <input
+                          type="text"
+                          defaultValue={fila?.nota ?? ''}
+                          placeholder="…"
+                          maxLength={2000}
+                          onBlur={(e) => guardarPlan(i.id, { nota: e.target.value || null })}
+                          className="w-44 px-1.5 py-1 text-xs border border-gray-300 rounded
+                                     text-gray-800 placeholder:text-gray-300"
+                        />
+                      </td>
                     )}
-                  </td>
-                  <td className="py-2 pr-3 text-xs text-gray-600">
-                    {i.espera_que ?? ETIQUETA_BLOQUEO[i.bloqueo]}
-                  </td>
-                  <td className="py-2 pr-3 text-xs text-gray-600">
-                    {ETIQUETA_ESFUERZO[i.esfuerzo]}
-                  </td>
-                  <td className="py-2 pr-3 text-xs text-gray-600">
-                    {planMap.get(i.id)?.fecha_objetivo ?? (
-                      <span className="text-gray-300">
-                        {puedeEditarPlan ? 'sin fecha' : '—'}
-                      </span>
-                    )}
-                  </td>
-                </tr>
-              ))}
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
-        {planItems.length > 25 && (
-          <p className="text-xs text-gray-400 mt-2">
-            Se muestran los 25 primeros de {planItems.length}. El resto está en el detalle.
-          </p>
-        )}
       </section>
 
       {/* ── Detalle ────────────────────────────────────────────────────── */}

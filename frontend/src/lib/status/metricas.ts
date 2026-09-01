@@ -173,27 +173,32 @@ export function esperandoQue(
 
 /**
  * Orden del plan. `orden_sugerido` lo calcula `scripts/sync_status.py` con la
- * fórmula temporada × bloqueo × esfuerzo × estado; acá sólo se aplica la
- * prioridad manual del PM por encima.
+ * fórmula temporada × bloqueo × esfuerzo × estado; `prioridad` es la posición
+ * que el PM escribe a mano.
  *
- * Las filas con prioridad manual van primero, en su orden; el resto sigue el
- * orden calculado. Así reordenar una fila no obliga a reordenar las demás.
+ * LAS DOS VIVEN EN EL MISMO ESPACIO DE POSICIONES (1..N) y por eso la clave de
+ * orden es `prioridad ?? orden_sugerido`. La alternativa —mandar todas las
+ * filas con prioridad manual al principio— hace que mover UNA fila al puesto 12
+ * la salte hasta arriba de las once que no tocó, que es justo lo contrario de
+ * lo que pidió. Con esta clave, escribir «12» la pone en el puesto 12 y el
+ * resto se acomoda alrededor.
+ *
+ * Empates: gana la manual, porque es una decisión y la otra es un cálculo.
  */
 export function ordenarPlan(
   items: StatusItem[],
   plan: Map<string, PlanRow>,
   alcance: Alcance,
 ): StatusItem[] {
+  const clave = (i: StatusItem) => plan.get(i.id)?.prioridad ?? i.orden_sugerido ?? 1e9;
+  const esManual = (i: StatusItem) => plan.get(i.id)?.prioridad != null;
   return items
     .filter((i) => enAlcance(i, alcance) && (i.estado === 'parcial' || i.estado === 'no_construido'))
-    .sort((a, b) => {
-      const pa = plan.get(a.id)?.prioridad ?? null;
-      const pb = plan.get(b.id)?.prioridad ?? null;
-      if (pa !== null && pb !== null) return pa - pb;
-      if (pa !== null) return -1;
-      if (pb !== null) return 1;
-      return (a.orden_sugerido ?? 1e9) - (b.orden_sugerido ?? 1e9);
-    });
+    .sort((a, b) =>
+      clave(a) - clave(b)
+      || Number(esManual(b)) - Number(esManual(a))
+      || (a.orden_sugerido ?? 1e9) - (b.orden_sugerido ?? 1e9)
+      || a.id.localeCompare(b.id));
 }
 
 /**
