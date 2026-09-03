@@ -5,9 +5,11 @@ import { requireAuth } from '@/lib/auth/server';
 import { CAN_MANAGE_USERS, Role } from '@/lib/auth/roles';
 import { createServiceRoleClient } from '@/lib/supabase/server';
 
-const VALID_ROLES: Role[] = ['admin', 'gerencia', 'compras', 'ventas', 'inventario', 'financiero', 'testuser'];
+const VALID_ROLES: Role[] = [
+  'admin', 'gerencia', 'compras', 'ventas', 'inventario', 'financiero', 'testuser', 'ceo', 'sales_manager',
+];
 
-/** GET /api/admin/users — list all users with profiles */
+/** GET /api/admin/users — list all users with profiles, plus the área catalog */
 export async function GET() {
   const authResult = await requireAuth(CAN_MANAGE_USERS);
   if (authResult instanceof Response) return authResult;
@@ -17,7 +19,7 @@ export async function GET() {
   // Get all user profiles
   const { data: profiles, error: profileError } = await supabase
     .from('user_profiles')
-    .select('id, display_name, role, created_at')
+    .select('id, display_name, role, area, created_at')
     .order('created_at', { ascending: false });
 
   if (profileError) {
@@ -31,6 +33,14 @@ export async function GET() {
     return NextResponse.json({ error: authError.message }, { status: 500 });
   }
 
+  // Áreas comerciales, para que el formulario de creación pueda asignarle una
+  // a un usuario `ventas` — sin esto no hay forma de que capture nada.
+  const { data: areas } = await supabase
+    .from('comercial_areas')
+    .select('slug, nombre')
+    .eq('activa', true)
+    .order('nombre');
+
   // Merge profiles with auth data
   const authMap = new Map(authUsers.map((u) => [u.id, u]));
   const users = (profiles ?? []).map((p) => {
@@ -40,12 +50,13 @@ export async function GET() {
       email: authUser?.email ?? '',
       displayName: p.display_name,
       role: p.role,
+      area: p.area,
       createdAt: p.created_at,
       lastSignIn: authUser?.last_sign_in_at ?? null,
     };
   });
 
-  return NextResponse.json(users);
+  return NextResponse.json({ users, areas: areas ?? [] });
 }
 
 /** POST /api/admin/users — create a new user */
@@ -54,7 +65,7 @@ export async function POST(request: NextRequest) {
   if (authResult instanceof Response) return authResult;
 
   const body = await request.json();
-  const { email, password, displayName, role } = body;
+  const { email, password, displayName, role, area } = body;
 
   // Validation
   if (!email || !password || !role) {
@@ -88,6 +99,22 @@ export async function POST(request: NextRequest) {
 
   const supabase = createServiceRoleClient();
 
+  // `area` es el canal comercial (rol `ventas`): sin esta validación, un jefe
+  // de canal quedaría creado pero sin poder cargar nada — exactamente la
+  // fricción silenciosa que ForecastClient ya avisa en pantalla.
+  let areaValida: string | null = null;
+  if (area != null && area !== '') {
+    if (typeof area !== 'string') {
+      return NextResponse.json({ error: 'area inválida' }, { status: 400 });
+    }
+    const { data: areaRow } = await supabase
+      .from('comercial_areas').select('slug').eq('slug', area).eq('activa', true).maybeSingle();
+    if (!areaRow) {
+      return NextResponse.json({ error: `Área desconocida: ${area}` }, { status: 400 });
+    }
+    areaValida = area;
+  }
+
   // Create auth user
   const { data: authData, error: authError } = await supabase.auth.admin.createUser({
     email,
@@ -106,6 +133,7 @@ export async function POST(request: NextRequest) {
       id: authData.user.id,
       display_name: displayName ?? null,
       role,
+      area: areaValida,
     });
 
   if (profileError) {
@@ -119,6 +147,7 @@ export async function POST(request: NextRequest) {
     email,
     displayName,
     role,
+    area: areaValida,
   }, { status: 201 });
 }
 

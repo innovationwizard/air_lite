@@ -1,7 +1,7 @@
 /**
  * RBAC role definitions and authorization helpers.
  *
- * 9 roles: superuser, admin, gerencia, compras, ventas, inventario, financiero, testuser, operaciones
+ * 11 roles: superuser, admin, gerencia, compras, ventas, inventario, financiero, testuser, operaciones, ceo, sales_manager
  * Superuser bypasses all checks.
  */
 
@@ -23,12 +23,27 @@ export const ROLES = {
    * the buyer the plan measures. See 20260901000002_add_project_manager_role.sql
    */
   PROJECT_MANAGER: 'project_manager',
+  /**
+   * Luis Roberto Cerezo (CEO). Created 2026-09-03 as an explicit CLONE of
+   * `gerencia` — same permission arrays, same ROLLOUT_FOCUS confinement — so
+   * he has his own account instead of the shared `gerencia@airefill.app`
+   * login. Jorge's own words: "clones of gerencia to begin with, we fine tune
+   * later" — expect this to diverge from `gerencia` once that tuning happens.
+   */
+  CEO: 'ceo',
+  /**
+   * Raquel López (comercial). Same clone-of-`gerencia` origin and caveat as
+   * CEO above. Named `sales_manager` (snake_case) to match `project_manager`,
+   * the existing multi-word role — the user asked for this over the literal
+   * "salesmanager" they typed.
+   */
+  SALES_MANAGER: 'sales_manager',
 } as const;
 
 export type Role = (typeof ROLES)[keyof typeof ROLES];
 
 /** Roles that can run backtests (not just view results) */
-export const CAN_RUN_BACKTEST: Role[] = ['superuser', 'admin', 'gerencia'];
+export const CAN_RUN_BACKTEST: Role[] = ['superuser', 'admin', 'gerencia', 'ceo', 'sales_manager'];
 
 /** Roles that can manage users */
 export const CAN_MANAGE_USERS: Role[] = ['superuser', 'admin'];
@@ -44,6 +59,7 @@ export const CAN_VIEW_ADMIN: Role[] = ['superuser', 'admin'];
 
 export const CAN_VIEW_OPERATIONAL: Role[] = [
   'superuser', 'admin', 'gerencia', 'compras', 'ventas', 'inventario', 'financiero', 'testuser', 'operaciones', 'project_manager',
+  'ceo', 'sales_manager',
 ];
 
 /**
@@ -59,7 +75,7 @@ export const CAN_EDIT_STATUS_PLAN: Role[] = ['superuser', 'project_manager'];
 
 /** Quién LEE el forecast comercial consolidado. */
 export const CAN_VIEW_FORECAST_COMERCIAL: Role[] = [
-  'superuser', 'admin', 'gerencia', 'compras', 'ventas', 'operaciones',
+  'superuser', 'admin', 'gerencia', 'compras', 'ventas', 'operaciones', 'ceo', 'sales_manager',
 ];
 
 /**
@@ -74,27 +90,27 @@ export const CAN_CAPTURE_FORECAST: Role[] = ['superuser', 'admin', 'ventas'];
 
 /** Roles that can access OA (Open Orders) module */
 export const CAN_VIEW_OA: Role[] = [
-  'superuser', 'admin', 'gerencia', 'compras', 'inventario', 'financiero', 'operaciones',
+  'superuser', 'admin', 'gerencia', 'compras', 'inventario', 'financiero', 'operaciones', 'ceo', 'sales_manager',
 ];
 
 /** Roles that can access the Operaciones silo (Mario's tool) */
 export const CAN_VIEW_OPERACIONES: Role[] = [
-  'superuser', 'admin', 'gerencia', 'operaciones',
+  'superuser', 'admin', 'gerencia', 'operaciones', 'ceo', 'sales_manager',
 ];
 
 /** Roles that can access the Compras silo (Wilmer's tool) */
 export const CAN_VIEW_COMPRAS: Role[] = [
-  'superuser', 'admin', 'gerencia', 'compras',
+  'superuser', 'admin', 'gerencia', 'compras', 'ceo', 'sales_manager',
 ];
 
 /** Roles that can access the Inventarios silo (Alexis' tool) */
 export const CAN_VIEW_INVENTARIOS: Role[] = [
-  'superuser', 'admin', 'gerencia', 'inventario',
+  'superuser', 'admin', 'gerencia', 'inventario', 'ceo', 'sales_manager',
 ];
 
 /** Roles that can access the Gerencia silo (Luis-facing validation) */
 export const CAN_VIEW_GERENCIA: Role[] = [
-  'superuser', 'admin', 'gerencia',
+  'superuser', 'admin', 'gerencia', 'ceo', 'sales_manager',
 ];
 
 export const CAN_VIEW_POC_ONLY: Role[] = ['testuser'];
@@ -117,6 +133,7 @@ export const CAN_VIEW_POC_ONLY: Role[] = ['testuser'];
  */
 export const CAN_VIEW_POC: Role[] = [
   'superuser', 'admin', 'gerencia', 'compras', 'ventas', 'inventario', 'financiero', 'testuser',
+  'ceo', 'sales_manager',
 ];
 
 /**
@@ -165,6 +182,13 @@ export const ROLLOUT_FOCUS: Partial<Record<Role, string[]>> = {
   // `/comercial/forecast` sí entra: no es una demostración, es la vista donde
   // se decide el ajuste de compra del mes.
   gerencia: ['/status', '/comercial/forecast'],
+  // `ceo` (Luis Roberto) y `sales_manager` (Raquel) — creados 2026-09-03 como
+  // clones de `gerencia` para el arranque del forecast comercial. Mismo
+  // confinamiento que `gerencia` a propósito: son exactamente las dos personas
+  // que este ciclo necesita mirando el consolidado. Ajustar cuando se afinen
+  // estos roles (palabras de Jorge: "clones... fine tune later").
+  ceo: ['/status', '/comercial/forecast'],
+  sales_manager: ['/status', '/comercial/forecast'],
 };
 
 /** Routes a role is confined to, or `undefined` when it is not confined. */
@@ -258,6 +282,8 @@ export function getDefaultPage(
     case ROLES.INVENTARIO:
       return '/inventarios/reyma';
     case ROLES.GERENCIA:
+    case ROLES.CEO:
+    case ROLES.SALES_MANAGER:
       return '/gerencia/forecast';
     case ROLES.PROJECT_MANAGER:
       return '/status';
@@ -284,4 +310,6 @@ export const ROLE_LABELS: Record<Role, string> = {
   testuser: 'Usuario de Prueba',
   operaciones: 'Operaciones',
   project_manager: 'Gerente de Proyecto',
+  ceo: 'CEO',
+  sales_manager: 'Gerente de Ventas',
 };

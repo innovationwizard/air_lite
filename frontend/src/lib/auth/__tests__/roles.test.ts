@@ -44,8 +44,12 @@ describe('isAuthorized', () => {
 });
 
 describe('role-matrix invariants (guard against accidental privilege widening)', () => {
-  it('CAN_VIEW_GERENCIA is exactly superuser/admin/gerencia', () => {
-    expect([...CAN_VIEW_GERENCIA].sort()).toEqual(['admin', 'gerencia', 'superuser']);
+  it('CAN_VIEW_GERENCIA is exactly superuser/admin/gerencia/ceo/sales_manager', () => {
+    // `ceo` y `sales_manager` se sumaron 2026-09-03 como clones deliberados de
+    // `gerencia` (Luis Roberto Cerezo y Raquel López) — no es un ensanchamiento
+    // accidental, así que el invariante se actualiza para incluirlos.
+    expect([...CAN_VIEW_GERENCIA].sort())
+      .toEqual(['admin', 'ceo', 'gerencia', 'sales_manager', 'superuser']);
   });
 
   it('CAN_MANAGE_USERS is exactly superuser/admin', () => {

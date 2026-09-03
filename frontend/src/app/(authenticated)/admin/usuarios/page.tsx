@@ -11,19 +11,28 @@ interface UserRecord {
   email: string;
   displayName: string | null;
   role: string;
+  area: string | null;
   createdAt: string;
   lastSignIn: string | null;
 }
 
-const ASSIGNABLE_ROLES: Role[] = ['admin', 'gerencia', 'compras', 'ventas', 'inventario', 'financiero', 'testuser'];
+interface AreaRecord {
+  slug: string;
+  nombre: string;
+}
+
+const ASSIGNABLE_ROLES: Role[] = [
+  'admin', 'gerencia', 'compras', 'ventas', 'inventario', 'financiero', 'testuser', 'ceo', 'sales_manager',
+];
 
 export default function UsuariosPage() {
   const [users, setUsers] = useState<UserRecord[]>([]);
+  const [areas, setAreas] = useState<AreaRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [creating, setCreating] = useState(false);
-  const [newUser, setNewUser] = useState({ email: '', password: '', displayName: '', role: 'ventas' });
+  const [newUser, setNewUser] = useState({ email: '', password: '', displayName: '', role: 'ventas', area: '' });
 
   async function loadUsers() {
     try {
@@ -32,7 +41,9 @@ export default function UsuariosPage() {
         const data = await res.json();
         throw new Error(data.error ?? `HTTP ${res.status}`);
       }
-      setUsers(await res.json());
+      const data = await res.json();
+      setUsers(data.users);
+      setAreas(data.areas);
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error al cargar usuarios');
@@ -47,19 +58,23 @@ export default function UsuariosPage() {
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (newUser.role === 'ventas' && !newUser.area) {
+      setError('Un usuario de ventas necesita un canal comercial asignado');
+      return;
+    }
     setCreating(true);
     try {
       const res = await fetch('/api/admin/users', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newUser),
+        body: JSON.stringify({ ...newUser, area: newUser.role === 'ventas' ? newUser.area : null }),
       });
       if (!res.ok) {
         const data = await res.json();
         throw new Error(data.error ?? `HTTP ${res.status}`);
       }
       setShowCreate(false);
-      setNewUser({ email: '', password: '', displayName: '', role: 'ventas' });
+      setNewUser({ email: '', password: '', displayName: '', role: 'ventas', area: '' });
       await loadUsers();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error al crear usuario');
@@ -163,7 +178,7 @@ export default function UsuariosPage() {
               </label>
               <select
                 value={newUser.role}
-                onChange={(e) => setNewUser({ ...newUser, role: e.target.value })}
+                onChange={(e) => setNewUser({ ...newUser, role: e.target.value, area: '' })}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
               >
                 {ASSIGNABLE_ROLES.map((role) => (
@@ -173,6 +188,27 @@ export default function UsuariosPage() {
                 ))}
               </select>
             </div>
+            {newUser.role === 'ventas' && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Canal comercial
+                </label>
+                <select
+                  required
+                  value={newUser.area}
+                  onChange={(e) => setNewUser({ ...newUser, area: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                >
+                  <option value="">Elegí un canal…</option>
+                  {areas.map((a) => (
+                    <option key={a.slug} value={a.slug}>{a.nombre}</option>
+                  ))}
+                </select>
+                <p className="text-xs text-gray-500 mt-1">
+                  Determina qué forecast puede cargar en /comercial/forecast.
+                </p>
+              </div>
+            )}
             <div className="col-span-2 flex justify-end gap-3">
               <button
                 type="button"
@@ -227,6 +263,11 @@ export default function UsuariosPage() {
                     <Shield className="w-3 h-3" />
                     {ROLE_LABELS[user.role as Role] ?? user.role}
                   </span>
+                  {user.area && (
+                    <span className="ml-1 text-xs text-gray-500">
+                      · {areas.find((a) => a.slug === user.area)?.nombre ?? user.area}
+                    </span>
+                  )}
                 </td>
                 <td className="py-3 px-4 text-gray-500">
                   {user.lastSignIn
