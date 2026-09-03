@@ -39,6 +39,7 @@ import {
   CAN_VIEW_GERENCIA,
   CAN_VIEW_POC,
   CAN_VIEW_FORECAST_COMERCIAL,
+  CAN_VIEW_STATUS,
   ROLE_LABELS,
   focusRoutes,
   Role,
@@ -68,6 +69,7 @@ interface NavGroup {
 const allNavGroups: NavGroup[] = [
   {
     section: null,
+    requiredRoles: CAN_VIEW_STATUS,
     items: [
       /*
         «Demostración de Valor» (/backtest) OCULTA del menú para todos los

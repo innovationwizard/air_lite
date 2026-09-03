@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/server';
-import { CAN_VIEW_OPERATIONAL } from '@/lib/auth/roles';
+import { CAN_VIEW_STATUS } from '@/lib/auth/roles';
 import { createServiceRoleClient } from '@/lib/supabase/server';
 
 export const dynamic = 'force-dynamic';
@@ -8,9 +8,8 @@ export const dynamic = 'force-dynamic';
 /**
  * GET /api/status — el gap analysis que alimenta `/status`.
  *
- * Devuelve los ítems renderizables y su plan. Lo abre CUALQUIER rol, incluidos
- * los confinados por `ROLLOUT_FOCUS`: la página es el reporte de estado del
- * proyecto y todos los que lo usan tienen derecho a leerla.
+ * Devuelve los ítems renderizables y su plan. Reservado a pm, gerencia y
+ * superuser (Jorge, 2026-09-03) — ver CAN_VIEW_STATUS.
  *
  * DOS FILTROS QUE SE APLICAN ACÁ Y NO EN EL CLIENTE, porque un filtro de
  * presentación se puede desactivar desde el navegador y estos no deben poder
@@ -28,7 +27,7 @@ export const dynamic = 'force-dynamic';
  * porque depende del toggle de alcance que el lector mueve en pantalla.
  */
 export async function GET() {
-  const auth = await requireAuth(CAN_VIEW_OPERATIONAL);
+  const auth = await requireAuth(CAN_VIEW_STATUS);
   if (auth instanceof Response) return auth;
 
   const db = createServiceRoleClient();

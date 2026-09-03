@@ -80,6 +80,16 @@ export const CAN_VIEW_OPERATIONAL: Role[] = [
  */
 export const CAN_EDIT_STATUS_PLAN: Role[] = ['superuser', 'project_manager'];
 
+/**
+ * Who may VIEW /status (the gap analysis). Reserved for the PM, gerencia, and
+ * superuser (Jorge, 2026-09-03) — every operational silo (compras, inventario,
+ * ventas, etc.) had been reading it too via CAN_VIEW_OPERATIONAL, which was
+ * never a deliberate grant to those roles specifically. `ceo` and
+ * `sales_manager`, though clones of `gerencia`, are excluded on purpose: see
+ * their ROLLOUT_FOCUS entries below.
+ */
+export const CAN_VIEW_STATUS: Role[] = ['superuser', 'gerencia', 'project_manager'];
+
 /** Quién LEE el forecast comercial consolidado. */
 export const CAN_VIEW_FORECAST_COMERCIAL: Role[] = [
   'superuser', 'admin', 'gerencia', 'compras', 'ventas', 'operaciones', 'ceo', 'sales_manager',
@@ -159,14 +169,12 @@ export const CAN_VIEW_POC: Role[] = [
  * landing page**; every entry is reachable.
  */
 export const ROLLOUT_FOCUS: Partial<Record<Role, string[]>> = {
-  // `/status` is APPENDED, never prepended: the first entry is the landing
-  // page, and confined users must still land on the page they work in.
-  compras: ['/compras/reabastecimiento-vivo', '/status', '/comercial/forecast'],
+  compras: ['/compras/reabastecimiento-vivo', '/comercial/forecast'],
   // A6.20 — los CUATRO modelos de Alexis, cada uno con su juego de reglas.
   // `reyma-vivo` sigue primero: es la landing y el modelo validado.
   inventario: ['/inventarios/reyma-vivo', '/inventarios/carvajal-vivo',
                '/inventarios/darnel-vivo', '/inventarios/asia-vivo',
-               '/inventarios/facturas', '/status'],
+               '/inventarios/facturas'],
   /**
    * `gerencia` (2026-09-01) — confined to `/status`, and that is not a
    * demotion: it is the first page this role has ever had a recurring reason
@@ -190,12 +198,13 @@ export const ROLLOUT_FOCUS: Partial<Record<Role, string[]>> = {
   // se decide el ajuste de compra del mes.
   gerencia: ['/status', '/comercial/forecast'],
   // `ceo` (Luis Roberto) y `sales_manager` (Raquel) — creados 2026-09-03 como
-  // clones de `gerencia` para el arranque del forecast comercial. Mismo
-  // confinamiento que `gerencia` a propósito: son exactamente las dos personas
-  // que este ciclo necesita mirando el consolidado. Ajustar cuando se afinen
-  // estos roles (palabras de Jorge: "clones... fine tune later").
-  ceo: ['/status', '/comercial/forecast'],
-  sales_manager: ['/status', '/comercial/forecast'],
+  // clones de `gerencia` para el arranque del forecast comercial. Excluidos de
+  // `/status` a propósito ese mismo día (Jorge: reservado a pm/gerencia/
+  // superuser) pese a ser clones de `gerencia` — así que `/comercial/forecast`,
+  // no `/status`, es su aterrizaje. Ajustar cuando se afinen estos roles
+  // (palabras de Jorge: "clones... fine tune later").
+  ceo: ['/comercial/forecast'],
+  sales_manager: ['/comercial/forecast'],
 };
 
 /** Routes a role is confined to, or `undefined` when it is not confined. */
@@ -248,8 +257,9 @@ export const PAGE_PERMISSIONS: Record<string, Role[]> = {
   '/superuser': CAN_VIEW_SYSTEM,
   '/admin': CAN_VIEW_ADMIN,
   '/configuracion': CAN_VIEW_ADMIN,
-  // The gap analysis is readable by everyone, including the confined roles.
-  '/status': CAN_VIEW_OPERATIONAL,
+  // Restricted 2026-09-03 (Jorge): pm, gerencia, superuser only — see
+  // CAN_VIEW_STATUS.
+  '/status': CAN_VIEW_STATUS,
   // Audited 2026-09-01: this had no entry, so the middleware admitted any
   // authenticated session and only the hidden sidebar link kept roles out.
   '/poc': CAN_VIEW_POC,

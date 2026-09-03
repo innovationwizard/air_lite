@@ -19,6 +19,7 @@ import {
   CAN_MANAGE_USERS,
   CAN_MODIFY_SETTINGS,
   CAN_MANAGE_SUPPLIER_GROUPS,
+  CAN_VIEW_STATUS,
 } from '@/lib/auth/roles';
 
 const NON_SUPERUSER = [
@@ -172,19 +173,12 @@ describe('ROLLOUT_FOCUS — confinamiento de varias rutas', () => {
     expect(rutas).toEqual([
       '/inventarios/reyma-vivo', '/inventarios/carvajal-vivo',
       '/inventarios/darnel-vivo', '/inventarios/asia-vivo',
-      '/inventarios/facturas', '/status',
+      '/inventarios/facturas',
     ]);
     expect(isWithinFocus('/inventarios/reyma-vivo', rutas!)).toBe(true);
     expect(isWithinFocus('/inventarios/facturas', rutas!)).toBe(true);
   });
 
-  /**
-   * 2026-09-01 — `/status` (el gap analysis) se AÑADE a cada confinamiento en
-   * lugar de quedar fuera: es el reporte de estado del proyecto y quienes lo
-   * usan tienen derecho a leerlo. Va SIEMPRE al final, nunca al principio,
-   * porque el primer elemento es la página de aterrizaje y un usuario confinado
-   * tiene que seguir cayendo en la pantalla donde trabaja.
-   */
   /**
    * `gerencia` se confinó a /status el 2026-09-01. Es el único rol cuyo foco
    * ES /status: las demás superficies que alcanzaba son demostraciones, no la
@@ -202,13 +196,18 @@ describe('ROLLOUT_FOCUS — confinamiento de varias rutas', () => {
     }
   });
 
-  it('/status es alcanzable por los roles confinados, sin ser su aterrizaje', () => {
-    for (const rol of ['compras', 'inventario']) {
+  /**
+   * Reversal (Jorge, 2026-09-03): `/status` used to be appended to every
+   * confinement — "whoever uses it has a right to read it". It doesn't
+   * anymore: the page is reserved for pm/gerencia/superuser, so it was
+   * removed from every OTHER role's ROLLOUT_FOCUS list (see CAN_VIEW_STATUS).
+   * `gerencia` keeps it — it's the one role this restriction still allows.
+   */
+  it('/status ya NO es alcanzable por los roles confinados que no sean gerencia', () => {
+    for (const rol of ['compras', 'inventario', 'ceo', 'sales_manager']) {
       const rutas = focusRoutes(rol)!;
-      expect(isWithinFocus('/status', rutas)).toBe(true);
-      expect(rutas).toContain('/status');
-      expect(rutas[0]).not.toBe('/status');
-      expect(getDefaultPage(rol)).toBe(rutas[0]);
+      expect(isWithinFocus('/status', rutas)).toBe(false);
+      expect(rutas).not.toContain('/status');
     }
   });
 
@@ -235,9 +234,9 @@ describe('ROLLOUT_FOCUS — confinamiento de varias rutas', () => {
     expect(isWithinFocus('/inventarios/facturas-de-otro', rutas)).toBe(false);
   });
 
-  it('compras sigue confinado a su página de trabajo, más el estado', () => {
+  it('compras sigue confinado a su página de trabajo, sin el estado', () => {
     expect(focusRoutes('compras'))
-      .toEqual(['/compras/reabastecimiento-vivo', '/status', '/comercial/forecast']);
+      .toEqual(['/compras/reabastecimiento-vivo', '/comercial/forecast']);
   });
 
   it('los roles sin entrada NO están confinados', () => {
@@ -315,6 +314,24 @@ describe('RBAC — cobertura de PAGE_PERMISSIONS', () => {
     for (const rol of ['compras', 'inventario', 'gerencia', 'admin', 'operaciones']) {
       expect(isAuthorized(rol, CAN_EDIT_STATUS_PLAN)).toBe(false);
     }
+  });
+
+  /**
+   * Jorge, 2026-09-03: /status debe verse ONLY por pm, gerencia y superuser.
+   * Antes cualquier rol operativo (compras incluido) lo leía vía
+   * CAN_VIEW_OPERATIONAL — no era una concesión deliberada a esos roles.
+   * `ceo` y `sales_manager` quedan fuera pese a ser clones de `gerencia`.
+   */
+  it('/status queda reservado a pm, gerencia y superuser', () => {
+    expect(PAGE_PERMISSIONS['/status']).toBe(CAN_VIEW_STATUS);
+    expect(CAN_VIEW_STATUS).toEqual(['superuser', 'gerencia', 'project_manager']);
+    for (const rol of [
+      'compras', 'ventas', 'inventario', 'financiero', 'testuser',
+      'operaciones', 'admin', 'ceo', 'sales_manager',
+    ]) {
+      expect(isAuthorized(rol, PAGE_PERMISSIONS['/status'])).toBe(false);
+    }
+    expect(isAuthorized('superuser', PAGE_PERMISSIONS['/status'])).toBe(true);
   });
 
   it('toda página autenticada cae bajo alguna entrada, salvo las conocidas', () => {

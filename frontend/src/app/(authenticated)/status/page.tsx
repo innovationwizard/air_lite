@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation';
 import { getAuthUser } from '@/lib/auth/server';
-import { isAuthorized, CAN_VIEW_OPERATIONAL, CAN_EDIT_STATUS_PLAN, getDefaultPage } from '@/lib/auth/roles';
+import { isAuthorized, CAN_VIEW_STATUS, CAN_EDIT_STATUS_PLAN, getDefaultPage } from '@/lib/auth/roles';
 import { StatusClient } from './StatusClient';
 
 export const dynamic = 'force-dynamic';
@@ -16,16 +16,15 @@ export const dynamic = 'force-dynamic';
  * Datos: docs/gap-analysis-corpus-aug31/{items,juicio}.tsv → scripts/sync_status.py
  * → status_items → GET /api/status → esta página.
  *
- * La abren TODOS los roles, incluidos los confinados por ROLLOUT_FOCUS: es el
- * reporte de estado del proyecto y quienes lo usan tienen derecho a leerlo.
- * `puedeEditarPlan` se resuelve en el servidor y baja como prop — la interfaz
- * de edición del plan no se dibuja para quien no puede escribirla, y la ruta
- * la vuelve a verificar de todos modos.
+ * Reservada a pm, gerencia y superuser (Jorge, 2026-09-03) — ver
+ * CAN_VIEW_STATUS. `puedeEditarPlan` se resuelve en el servidor y baja como
+ * prop — la interfaz de edición del plan no se dibuja para quien no puede
+ * escribirla, y la ruta la vuelve a verificar de todos modos.
  */
 export default async function StatusPage() {
   const user = await getAuthUser();
   if (!user) redirect('/login');
-  if (!isAuthorized(user.role, CAN_VIEW_OPERATIONAL)) redirect(getDefaultPage(user.role));
+  if (!isAuthorized(user.role, CAN_VIEW_STATUS)) redirect(getDefaultPage(user.role));
 
   return <StatusClient puedeEditarPlan={isAuthorized(user.role, CAN_EDIT_STATUS_PLAN)} />;
 }
