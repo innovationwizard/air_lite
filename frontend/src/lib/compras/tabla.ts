@@ -44,6 +44,9 @@ export type ClaveOrden =
   | 'exist' | 'patio' | 'doh' | 'trans' | 'pending' | 'adic'
   | 'p6' | 'p3' | 'mtd' | 'sug';
 
+/** Las columnas numéricas de `ClaveOrden` — las únicas que aceptan un filtro de rango. */
+export type ClaveOrdenNumerica = Exclude<ClaveOrden, 'cod' | 'desc' | 'prov'>;
+
 export type Direccion = 'asc' | 'desc';
 
 export interface Orden {
@@ -86,7 +89,7 @@ export function siguienteOrden(actual: Orden | null, clave: ClaveOrden): Orden {
  * Al ordenar se va SIEMPRE al final, suba o baje la columna: mezclarlo con los
  * ceros diría que sabemos algo que no sabemos.
  */
-function valorNumerico(f: FilaOrdenable, clave: ClaveOrden): number | null {
+export function valorNumerico(f: FilaOrdenable, clave: ClaveOrden): number | null {
   switch (clave) {
     case 'exist': return f.exist;
     case 'patio': return f.patio;
@@ -153,6 +156,13 @@ export function ordenar<T extends FilaOrdenable>(filas: readonly T[], orden: Ord
   });
 }
 
+export type OperadorRango = 'lte' | 'gte';
+
+export interface FiltroRango {
+  operador: OperadorRango;
+  valor: number;
+}
+
 export interface Filtros {
   /** Código o descripción, sin distinguir mayúsculas. */
   texto?: string;
@@ -162,6 +172,11 @@ export interface Filtros {
   soloEnAlza?: boolean;
   /** Odoo purchase_ok — deja fuera los productos marcados como no comprables. */
   soloComprables?: boolean;
+  /**
+   * Filtro ≤ / ≥ por columna numérica — el «autofiltro por número» que pidió
+   * Wilmer, uno por columna, combinados con Y con todo lo demás.
+   */
+  rangos?: Partial<Record<ClaveOrdenNumerica, FiltroRango>>;
 }
 
 /**
@@ -170,6 +185,7 @@ export interface Filtros {
  */
 export function filtrar<T extends FilaOrdenable>(filas: readonly T[], f: Filtros): T[] {
   const texto = (f.texto ?? '').trim().toLowerCase();
+  const rangos = Object.entries(f.rangos ?? {}) as [ClaveOrdenNumerica, FiltroRango][];
   return filas.filter((r) => {
     if (f.proveedor && r.prov !== f.proveedor) return false;
     if (texto
@@ -179,6 +195,13 @@ export function filtrar<T extends FilaOrdenable>(filas: readonly T[], f: Filtros
     if (f.soloCriticos && r.doh >= 3) return false;
     if (f.soloEnAlza && !r.flags.tendenciaCreciente) return false;
     if (f.soloComprables && !r.purchaseOk) return false;
+    for (const [clave, rango] of rangos) {
+      const v = valorNumerico(r, clave);
+      // «Sin dato» no es cero: no puede cumplir ni ≤ ni ≥ nada, así que
+      // un rango activo lo deja fuera (misma regla que ordenar, línea 85).
+      if (v === null) return false;
+      if (rango.operador === 'lte' ? v > rango.valor : v < rango.valor) return false;
+    }
     return true;
   });
 }

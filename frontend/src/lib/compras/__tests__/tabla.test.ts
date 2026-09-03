@@ -124,6 +124,40 @@ describe('filtrar', () => {
   });
 });
 
+describe('filtrar — rangos ≤/≥ por columna', () => {
+  const filas = [
+    fila({ cod: 'A', doh: 1, p3: 10, pending: null }),
+    fila({ cod: 'B', doh: 5, p3: 40, pending: 0 }),
+    fila({ cod: 'C', doh: 20, p3: 400, pending: 900 }),
+  ];
+
+  it('≤ deja solo lo menor o igual al valor', () => {
+    expect(filtrar(filas, { rangos: { doh: { operador: 'lte', valor: 5 } } }).map((r) => r.cod))
+      .toEqual(['A', 'B']);
+  });
+
+  it('≥ deja solo lo mayor o igual al valor', () => {
+    expect(filtrar(filas, { rangos: { doh: { operador: 'gte', valor: 5 } } }).map((r) => r.cod))
+      .toEqual(['B', 'C']);
+  });
+
+  it('varias columnas se combinan con Y', () => {
+    expect(filtrar(filas, {
+      rangos: {
+        doh: { operador: 'gte', valor: 2 },
+        p3: { operador: 'lte', valor: 100 },
+      },
+    }).map((r) => r.cod)).toEqual(['B']);
+  });
+
+  it('«sin dato» nunca cumple un rango, en ninguna dirección — no es cero', () => {
+    expect(filtrar(filas, { rangos: { pending: { operador: 'gte', valor: 0 } } }).map((r) => r.cod))
+      .toEqual(['B', 'C']);
+    expect(filtrar(filas, { rangos: { pending: { operador: 'lte', valor: 900 } } }).map((r) => r.cod))
+      .toEqual(['B', 'C']);
+  });
+});
+
 describe('vista', () => {
   it('filtra y DESPUÉS ordena — es lo que el export debe reproducir', () => {
     const filas = [
