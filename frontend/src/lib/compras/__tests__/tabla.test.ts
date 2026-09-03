@@ -9,6 +9,7 @@ function fila(over: Partial<FilaOrdenable> & { cod: string }): FilaOrdenable {
     desc: '', prov: '', exist: 0, patio: 0, doh: 0, trans: 0, pending: null,
     adic: 0, p6: 0, p3: 0, mtd: null, sug: 0,
     flags: { tendenciaCreciente: false },
+    purchaseOk: true,
     ...over,
   };
 }
@@ -96,6 +97,7 @@ describe('filtrar', () => {
     fila({ cod: '77201', desc: 'Vaso duroport', prov: 'Reyma', p3: 4, sug: 10, doh: 1 }),
     fila({ cod: '77202', desc: 'Bandeja negra', prov: 'Carvajal', p3: 40, sug: 0, doh: 20 }),
     fila({ cod: '77203', desc: 'Bolsa clara', prov: 'Reyma', p3: 400, sug: 7, doh: 2, flags: { tendenciaCreciente: true } }),
+    fila({ cod: '77204', desc: 'Tapa cristal', prov: 'Carvajal', p3: 5, sug: 0, doh: 15, purchaseOk: false }),
   ];
 
   it('umbral mínimo inclusivo sobre el promedio — su regla de las 10 cajas', () => {
@@ -118,6 +120,8 @@ describe('filtrar', () => {
     expect(filtrar(filas, { soloConSugerido: true }).map((r) => r.cod)).toEqual(['77201', '77203']);
     expect(filtrar(filas, { soloCriticos: true }).map((r) => r.cod)).toEqual(['77201', '77203']);
     expect(filtrar(filas, { soloEnAlza: true }).map((r) => r.cod)).toEqual(['77203']);
+    expect(filtrar(filas, { soloComprables: true }).map((r) => r.cod))
+      .toEqual(['77201', '77202', '77203']);
   });
 
   it('los filtros se combinan con Y, como el autofiltro de Excel', () => {
@@ -126,7 +130,7 @@ describe('filtrar', () => {
   });
 
   it('sin filtros devuelve todo', () => {
-    expect(filtrar(filas, {})).toHaveLength(3);
+    expect(filtrar(filas, {})).toHaveLength(4);
   });
 });
 

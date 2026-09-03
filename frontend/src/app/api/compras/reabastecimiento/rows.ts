@@ -77,7 +77,10 @@ interface InputRow {
   patio: number; transito: number;
   win: number; as_of: string;
 }
-interface ProductRef { id: number; sku: string | null; name: string; category: string | null }
+interface ProductRef {
+  id: number; sku: string | null; name: string; category: string | null;
+  purchase_ok: boolean;
+}
 interface SupplierLink { product_id: number; supplier_id: number }
 interface SupplierRef { id: number; name: string }
 /** qty === null = a CLEAR entry: the manual capture was removed (20260813000001). */
@@ -97,6 +100,8 @@ interface ComercialRow {
 export interface LiveRow {
   productId: number;
   cod: string; desc: string; prov: string; cat: string;
+  /** Odoo product.template "Can be Purchased" — drives the solo-comprables filter. */
+  purchaseOk: boolean;
   exist: number; existencias: number; reserved: number; patio: number;
   pending: number | null;
   trans: number; transOverridden: boolean;
@@ -138,7 +143,7 @@ export async function buildRows(
         fetchAll<InputRow>((a, b) =>
           service.from('reabastecimiento_inputs').select('*').eq('bodega', bodega).range(a, b)),
         fetchAll<ProductRef>((a, b) =>
-          service.from('products').select('id, sku, name, category').range(a, b)),
+          service.from('products').select('id, sku, name, category, purchase_ok').range(a, b)),
         fetchAll<SupplierLink>((a, b) =>
           service.from('product_suppliers').select('product_id, supplier_id').range(a, b)),
         fetchAll<SupplierRef>((a, b) =>
@@ -299,6 +304,7 @@ export async function buildRows(
         // Sin categoría cae en «Sin categoría» en vez de desaparecer — un
         // producto que no se puede agrupar igual hay que comprarlo.
         cat: (productById.get(r.product_id)?.category ?? '').trim() || 'Sin categoría',
+        purchaseOk: productById.get(r.product_id)?.purchase_ok ?? true,
         exist: round1(existNet),
         existencias: round1(r.existencias),
         reserved: round1(r.reserved),

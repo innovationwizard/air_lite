@@ -35,6 +35,7 @@ export interface FilaOrdenable {
   mtd: number | null;
   sug: number;
   flags: { tendenciaCreciente: boolean };
+  purchaseOk: boolean;
 }
 
 /**
@@ -165,6 +166,8 @@ export interface Filtros {
   soloConSugerido?: boolean;
   soloCriticos?: boolean;
   soloEnAlza?: boolean;
+  /** Odoo purchase_ok — deja fuera los productos marcados como no comprables. */
+  soloComprables?: boolean;
   /**
    * Umbral mínimo INCLUSIVO sobre una columna numérica — W17.
    *
@@ -200,6 +203,7 @@ export function filtrar<T extends FilaOrdenable>(filas: readonly T[], f: Filtros
     if (f.soloConSugerido && r.sug <= 0) return false;
     if (f.soloCriticos && r.doh >= 3) return false;
     if (f.soloEnAlza && !r.flags.tendenciaCreciente) return false;
+    if (f.soloComprables && !r.purchaseOk) return false;
     if (f.umbral && valorUmbral(r, f.umbral.clave) < f.umbral.min) return false;
     return true;
   });

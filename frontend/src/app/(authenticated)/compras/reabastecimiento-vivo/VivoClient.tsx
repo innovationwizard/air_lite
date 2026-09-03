@@ -123,6 +123,8 @@ const COL_TIP = {
 interface ApiRow {
   productId: number;
   cod: string; desc: string; prov: string; cat: string;
+  /** Odoo product.template "Can be Purchased" — drives el filtro «Solo comprables». */
+  purchaseOk: boolean;
   exist: number; existencias: number; reserved: number; patio: number;
   pending: number | null;
   trans: number; transOverridden: boolean;
@@ -186,6 +188,7 @@ export function VivoClient() {
   const [onlySug, setOnlySug] = useState(false);
   const [onlyCrit, setOnlyCrit] = useState(false);
   const [onlyAlza, setOnlyAlza] = useState(false);
+  const [onlyComprables, setOnlyComprables] = useState(false);
   // W16/W17 — null = el orden por defecto con el que la página siempre abrió.
   const [orden, setOrden] = useState<Orden | null>(null);
   const [umbralClave, setUmbralClave] = useState<ClaveUmbral>('p3');
@@ -350,13 +353,14 @@ export function VivoClient() {
         soloConSugerido: onlySug,
         soloCriticos: onlyCrit,
         soloEnAlza: onlyAlza,
+        soloComprables: onlyComprables,
         umbral: Number.isFinite(min) && umbralMin.trim() !== ''
           ? { clave: umbralClave, min }
           : undefined,
       },
       orden,
     );
-  }, [payload, q, prov, onlySug, onlyCrit, onlyAlza, orden, umbralClave, umbralMin]);
+  }, [payload, q, prov, onlySug, onlyCrit, onlyAlza, onlyComprables, orden, umbralClave, umbralMin]);
 
   const onSort = useCallback((k: ClaveOrden) => {
     setOrden((actual) => siguienteOrden(actual, k));
@@ -636,6 +640,11 @@ export function VivoClient() {
                      checked={onlyAlza} onChange={(e) => setOnlyAlza(e.target.checked)} />
               <TrendingUp size={13} strokeWidth={3} />
               Solo en alza ({alza.creciente})
+            </label>
+            <label className="text-xs text-gray-600 inline-flex items-center gap-1.5 cursor-pointer"
+                   title="Deja fuera los productos marcados en Odoo como no comprables (purchase_ok).">
+              <input type="checkbox" checked={onlyComprables}
+                     onChange={(e) => setOnlyComprables(e.target.checked)} /> Solo comprables
             </label>
             {/* W17 — su regla literal: «todo lo que tenga más de 10 cajas sí lo
                 compro… filtro todo lo menor a 10 cajas, lo excluyo». El mínimo

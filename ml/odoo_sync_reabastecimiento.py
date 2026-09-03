@@ -339,17 +339,21 @@ def plan_catalog_rows(odoo_products, by_sku, stored_oid_by_row):
                 'cost': p.get('standard_price') or None,
                 'list_price': p.get('list_price') or None,
                 'stock_uom': (p['uom_id'][1][:50] if p.get('uom_id') else None),
+                'purchase_ok': bool(p.get('purchase_ok', True)),
             })
     return by_odoo_id, oid_repairs, new_rows, no_sku
 
 
 def sync_catalog(execute, issues, dry_run):
-    """Insert-missing products/suppliers/product_suppliers. Never mutates existing
-    rows (the running app reads them); mismatches become issues.
+    """Insert-missing products/suppliers/product_suppliers. Existing rows are
+    left alone (the running app reads them; mismatches become issues) except
+    for two integration/live-state fields repaired in place: odoo_id (stale
+    build ids) and purchase_ok (Odoo's live "Can be Purchased" flag).
     Returns (odoo_pid -> supabase product id) map."""
     odoo_products = odoo_read_all(
         execute, 'product.product', [],
-        ['id', 'default_code', 'name', 'standard_price', 'list_price', 'uom_id', 'categ_id'])
+        ['id', 'default_code', 'name', 'standard_price', 'list_price', 'uom_id', 'categ_id',
+         'purchase_ok'])
     logger.info('Odoo products: %d', len(odoo_products))
 
     # Match by SKU (content) ONLY. Odoo database ids CHANGE on every build
@@ -361,7 +365,7 @@ def sync_catalog(execute, issues, dry_run):
     # When a SKU matches, the stored odoo_id is REPAIRED to the current build's
     # id (deliberate exception to "never mutate existing rows": odoo_id is an
     # integration key, not business data, and stale values are proven poison).
-    existing = sb_get_all('products?select=id,odoo_id,sku')
+    existing = sb_get_all('products?select=id,odoo_id,sku,purchase_ok')
     by_sku, dup_skus = {}, 0
     for p in existing:
         if p['sku']:
@@ -370,6 +374,7 @@ def sync_catalog(execute, issues, dry_run):
             else:
                 by_sku[p['sku']] = p['id']
     stored_oid_by_row = {p['id']: p['odoo_id'] for p in existing}
+    stored_purchase_ok_by_row = {p['id']: p['purchase_ok'] for p in existing}
     if dup_skus:
         issues.add('warning', 'product',
                    f'{dup_skus} duplicate SKUs already present in Supabase products '
@@ -405,6 +410,30 @@ def sync_catalog(execute, issues, dry_run):
                 sb_request('PATCH', f'products?id=eq.{row_id}', {'odoo_id': f'stale:{row_id}'})
             for row_id, oid in oid_repairs:
                 sb_request('PATCH', f'products?id=eq.{row_id}', {'odoo_id': oid})
+
+    # purchase_ok tracks Odoo's "Can be Purchased" checkbox and drives the
+    # solo-comprables filter on the live table — unlike name/category/cost
+    # (fixed once inserted, per this function's docstring), a product going
+    # non-purchasable is exactly the change that filter exists to surface, so
+    # staleness here would silently defeat it. Same targeted-PATCH mechanism
+    # as the odoo_id repair above: existing SKU-matched rows only, one PATCH
+    # per row that actually drifted.
+    purchase_ok_repairs = []
+    for p in odoo_products:
+        sku = p.get('default_code') or None
+        if not sku or sku not in by_sku:
+            continue
+        row_id = by_sku[sku]
+        odoo_val = bool(p.get('purchase_ok', True))
+        if stored_purchase_ok_by_row.get(row_id) != odoo_val:
+            purchase_ok_repairs.append((row_id, odoo_val))
+    if purchase_ok_repairs:
+        issues.add('info', 'product',
+                   f'{len(purchase_ok_repairs)} purchase_ok flags updated from Odoo')
+        if not dry_run:
+            for row_id, val in purchase_ok_repairs:
+                sb_request('PATCH', f'products?id=eq.{row_id}', {'purchase_ok': val})
+
     if new_rows:
         issues.add('info', 'product',
                    f'{len(new_rows)} genuinely new products (no SKU/odoo_id match) — inserted')
