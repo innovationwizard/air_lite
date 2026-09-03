@@ -118,6 +118,8 @@ export interface LiveRow {
   tendencia: Tendencia;
   divergencia: Divergencia;
   alerta: Alerta;
+  /** ABC (Wilmer, 2026-09-03) — ver classifyAbc más abajo. */
+  abc: 'A' | 'B' | 'C' | 'D';
   flags: {
     pendingUnknown: boolean; seasonalLowConfidence: boolean;
     seasonalExcluded: boolean; tendenciaCreciente: boolean;
@@ -354,10 +356,39 @@ export async function buildRows(
           sinReferenciaAnioAnterior: !tieneReferenciaAnioAnterior(r.h),
         },
         seasonalMotivo: SEASONAL_EXCLUDED[cod]?.motivo ?? null,
+        // Overwritten below by classifyAbc(); placeholder to satisfy LiveRow.
+        abc: 'D' as const,
       };
     });
 
+    classifyAbc(rows);
+
   return { rows, maxAsOf, monthStart, coberturaDias };
+}
+
+/**
+ * ABC (Wilmer, 2026-09-03) — clasificación por bodega sobre `p3` (Ord. 3m),
+ * la cantidad ordenada en los últimos 3 meses en la unidad de stock de Odoo
+ * de cada SKU (no siempre "caja" literal, pero es el proxy que ya existe en
+ * esta tabla). D es un piso ABSOLUTO, no un porcentaje: por debajo de 10 es D
+ * sin importar el ranking. Entre el resto, A/B/C son porcentaje ACUMULADO de
+ * p3 ordenando de mayor a menor — 50/30/15. Como 50+30+15 = 95 y no 100, la
+ * cola que sobra después de 95% NO se vuelve su propia categoría: se queda
+ * en C (documentado así porque no es obvio de dónde sale ese último tramo).
+ */
+function classifyAbc(rows: LiveRow[]): void {
+  const resto = rows.filter((r) => r.p3 >= 10);
+  resto.sort((a, b) => b.p3 - a.p3);
+  const total = resto.reduce((sum, r) => sum + r.p3, 0);
+  let acumulado = 0;
+  for (const r of resto) {
+    acumulado += r.p3;
+    const pct = total === 0 ? 0 : acumulado / total;
+    r.abc = pct <= 0.5 ? 'A' : pct <= 0.8 ? 'B' : 'C';
+  }
+  for (const r of rows) {
+    if (r.p3 < 10) r.abc = 'D';
+  }
 }
 
 export function round1(n: number): number {

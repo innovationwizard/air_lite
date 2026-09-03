@@ -2,14 +2,15 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  AlertTriangle, Boxes, ChevronDown, ChevronUp, ChevronsUpDown, CloudOff, PackageCheck,
+  AlertTriangle, Boxes, ChevronDown, ChevronUp, ChevronsUpDown, CloudOff, ListFilter, PackageCheck,
   Pencil, RefreshCw, Search, TrendingUp, X,
 } from 'lucide-react';
 import { MAX_MANUAL_QTY } from '@/lib/compras/qty';
 import { type Tendencia, type Alerta, SIN_REFERENCIA_ANIO_ANTERIOR } from '@/lib/compras/tendencia';
 import { tablaATsv } from '@/lib/compras/tabla';
 import {
-  type ClaveOrden, type Orden, siguienteOrden, vista,
+  type ClaveOrden, type ClaveOrdenNumerica, type FiltroRango, type OperadorRango,
+  type Orden, siguienteOrden, vista,
 } from '@/lib/compras/tabla';
 import { ExportCarvajal } from './ExportCarvajal';
 import {
@@ -30,6 +31,13 @@ const SEV_PILL: Record<Sev, string> = {
   low: 'bg-amber-100 text-amber-700',
   ok: 'bg-emerald-100 text-emerald-700',
   exc: 'bg-blue-100 text-blue-700',
+};
+
+const ABC_PILL: Record<ApiRow['abc'], string> = {
+  A: 'bg-emerald-100 text-emerald-700',
+  B: 'bg-blue-100 text-blue-700',
+  C: 'bg-amber-100 text-amber-700',
+  D: 'bg-gray-100 text-gray-500',
 };
 
 /**
@@ -63,6 +71,10 @@ const COL_TIP = {
     + 'corrección de la proyección. Vaciar la casilla quita la captura.',
   cod: 'Código del producto (SKU) — identidad estable desde SAE, igual que en Odoo.',
   desc: 'Descripción y proveedor del catálogo de Odoo.',
+  abc:
+    'Clasificación ABC de esta bodega, sobre Ord. 3m (Wilmer): '
+    + 'A = acumula el primer 50% del ordenado · B = siguiente 30% · C = siguiente 15% (y la cola). '
+    + 'D = menos de 10 unidades ordenadas en 3 meses, sin importar el ranking.',
   exist:
     'Existencias − reservado − pendiente de tomar reserva (captura manual). '
     + 'NO incluye patio ni tránsito.',
@@ -123,6 +135,8 @@ const COL_TIP = {
 interface ApiRow {
   productId: number;
   cod: string; desc: string; prov: string; cat: string;
+  /** ABC (Wilmer, 2026-09-03) — ver classifyAbc en rows.ts. */
+  abc: 'A' | 'B' | 'C' | 'D';
   /** Odoo product.template "Can be Purchased" — drives el filtro «Solo comprables». */
   purchaseOk: boolean;
   exist: number; existencias: number; reserved: number; patio: number;
@@ -191,6 +205,16 @@ export function VivoClient() {
   const [onlyComprables, setOnlyComprables] = useState(false);
   // W16/W17 — null = el orden por defecto con el que la página siempre abrió.
   const [orden, setOrden] = useState<Orden | null>(null);
+  // W18 — «que pueda hacer subconjuntos… solo los que estén en X número o menos».
+  // Uno por columna, combinados con Y (mismo criterio que el resto de filtros).
+  const [rangos, setRangos] = useState<Partial<Record<ClaveOrdenNumerica, FiltroRango>>>({});
+  const onRango = useCallback((k: ClaveOrdenNumerica, r: FiltroRango | null) => {
+    setRangos((prev) => {
+      const next = { ...prev };
+      if (r) next[k] = r; else delete next[k];
+      return next;
+    });
+  }, []);
 
   const load = useCallback(async (b: string, silent = false) => {
     if (!silent) setLoading(true);
@@ -346,9 +370,10 @@ export function VivoClient() {
       soloCriticos: onlyCrit,
       soloEnAlza: onlyAlza,
       soloComprables: onlyComprables,
+      rangos,
     },
     orden,
-  ), [payload, q, prov, onlySug, onlyCrit, onlyAlza, onlyComprables, orden]);
+  ), [payload, q, prov, onlySug, onlyCrit, onlyAlza, onlyComprables, rangos, orden]);
 
   const onSort = useCallback((k: ClaveOrden) => {
     setOrden((actual) => siguienteOrden(actual, k));
@@ -410,6 +435,11 @@ export function VivoClient() {
           ? 'bg-amber-50/70 hover:bg-amber-100/70 shadow-[inset_4px_0_0_0_rgb(245,158,11)]'
           : 'hover:bg-teal-50/50'}>
       <td className="px-3 py-2 border-b border-gray-100 text-left">{r.cod}</td>
+      <td className="px-3 py-2 border-b border-gray-100 text-center">
+        <span className={`inline-block w-6 text-center px-1.5 py-0.5 rounded-full font-semibold text-xs ${ABC_PILL[r.abc]}`}>
+          {r.abc}
+        </span>
+      </td>
       <td className="px-3 py-2 border-b border-gray-100 text-left">
         <div className="truncate max-w-[240px] text-gray-800">{r.desc}</div>
         <div className="text-gray-400 text-xs">{r.prov}</div>
@@ -668,17 +698,26 @@ export function VivoClient() {
                 <thead className="sticky top-0 bg-white z-10">
                   <tr className="text-[11px] uppercase tracking-wide text-gray-500">
                     <Th left tip={COL_TIP.cod} sortKey="cod" orden={orden} onSort={onSort}>Código</Th>
+                    <Th tip={COL_TIP.abc}>ABC</Th>
                     <Th left tip={COL_TIP.desc} sortKey="prov" orden={orden} onSort={onSort}>Descripción / Proveedor</Th>
-                    <Th tip={COL_TIP.exist} sortKey="exist" orden={orden} onSort={onSort}>Exist. neta</Th>
-                    <Th tip={COL_TIP.patio} sortKey="patio" orden={orden} onSort={onSort}>Patio</Th>
-                    <Th tip={COL_TIP.doh} sortKey="doh" orden={orden} onSort={onSort}>DOH</Th>
-                    <Th tip={COL_TIP.trans} sortKey="trans" orden={orden} onSort={onSort}><span className="inline-flex items-center gap-1">Tránsito <Pencil size={11} /></span></Th>
+                    <Th tip={COL_TIP.exist} sortKey="exist" orden={orden} onSort={onSort}
+                        filtroKey="exist" rango={rangos.exist} onRango={onRango}>Exist. neta</Th>
+                    <Th tip={COL_TIP.patio} sortKey="patio" orden={orden} onSort={onSort}
+                        filtroKey="patio" rango={rangos.patio} onRango={onRango}>Patio</Th>
+                    <Th tip={COL_TIP.doh} sortKey="doh" orden={orden} onSort={onSort}
+                        filtroKey="doh" rango={rangos.doh} onRango={onRango}>DOH</Th>
+                    <Th tip={COL_TIP.trans} sortKey="trans" orden={orden} onSort={onSort}
+                        filtroKey="trans" rango={rangos.trans} onRango={onRango}><span className="inline-flex items-center gap-1">Tránsito <Pencil size={11} /></span></Th>
                     <Th tip={COL_TIP.destino}><span className="inline-flex items-center gap-1">Destino final <Pencil size={11} /></span></Th>
-                    <Th tip={COL_TIP.pend} sortKey="pending" orden={orden} onSort={onSort}><span className="inline-flex items-center gap-1">Pend. reserva <Pencil size={11} /></span></Th>
-                    <Th tip={COL_TIP.adic} sortKey="adic" orden={orden} onSort={onSort}>Adic.</Th>
-                    <Th tip={COL_TIP.ord} sortKey="p6" orden={orden} onSort={onSort}>Ord. 6m</Th>
-                    <Th tip={COL_TIP.ord} sortKey="p3" orden={orden} onSort={onSort}>Ord. 3m</Th>
-                    <Th tip={COL_TIP.mes}>Mes en curso</Th>
+                    <Th tip={COL_TIP.pend} sortKey="pending" orden={orden} onSort={onSort}
+                        filtroKey="pending" rango={rangos.pending} onRango={onRango}><span className="inline-flex items-center gap-1">Pend. reserva <Pencil size={11} /></span></Th>
+                    <Th tip={COL_TIP.adic} sortKey="adic" orden={orden} onSort={onSort}
+                        filtroKey="adic" rango={rangos.adic} onRango={onRango}>Adic.</Th>
+                    <Th tip={COL_TIP.ord} sortKey="p6" orden={orden} onSort={onSort}
+                        filtroKey="p6" rango={rangos.p6} onRango={onRango}>Ord. 6m</Th>
+                    <Th tip={COL_TIP.ord} sortKey="p3" orden={orden} onSort={onSort}
+                        filtroKey="p3" rango={rangos.p3} onRango={onRango}>Ord. 3m</Th>
+                    <Th tip={COL_TIP.mes} filtroKey="mtd" rango={rangos.mtd} onRango={onRango}>Mes en curso</Th>
                     <Th tip={COL_TIP.tend}>Tendencia</Th>
                     {/* Q9 (Jorge, 2026-08-26) — facturación is off Wilmer's screen.
                         His reason, given twice: "yo trabajo con lo ordenado, no con
@@ -691,7 +730,8 @@ export function VivoClient() {
                     <Th tip={COL_TIP.fact}>Fact. 3m</Th>
                     <Th tip={COL_TIP.gap}>Δ</Th> */}
                     <Th tip={COL_TIP.sugBodega}>Pide bodega</Th>
-                    <Th tip={COL_TIP.sug} sortKey="sug" orden={orden} onSort={onSort}>Sugerido</Th>
+                    <Th tip={COL_TIP.sug} sortKey="sug" orden={orden} onSort={onSort}
+                        filtroKey="sug" rango={rangos.sug} onRango={onRango}>Sugerido</Th>
                   </tr>
                 </thead>
                 <tbody className="tabular-nums">
@@ -957,13 +997,19 @@ function TiendasPanel({ tiendas }: { tiendas: Tiendas }) {
  * Los que no la reciben (Mes en curso, Tendencia) siguen siendo rótulos: no
  * son una cifra simple sobre la que «mayor a menor» signifique algo.
  */
-function Th({ children, left, tip, sortKey, orden, onSort }: {
+function Th({
+  children, left, tip, sortKey, orden, onSort, filtroKey, rango, onRango,
+}: {
   children: React.ReactNode;
   left?: boolean;
   tip?: string;
   sortKey?: ClaveOrden;
   orden?: Orden | null;
   onSort?: (k: ClaveOrden) => void;
+  /** W18 — columna numérica que acepta un filtro ≤/≥, además de (u opcional a) ordenar. */
+  filtroKey?: ClaveOrdenNumerica;
+  rango?: FiltroRango;
+  onRango?: (k: ClaveOrdenNumerica, r: FiltroRango | null) => void;
 }) {
   const activa = Boolean(sortKey && orden && orden.clave === sortKey);
   const ordenable = Boolean(sortKey && onSort);
@@ -983,8 +1029,102 @@ function Th({ children, left, tip, sortKey, orden, onSort }: {
             ? (orden!.dir === 'asc' ? <ChevronUp size={12} strokeWidth={3} /> : <ChevronDown size={12} strokeWidth={3} />)
             : <ChevronsUpDown size={11} className="text-gray-300" />
         )}
+        {filtroKey && onRango && <RangoFiltro clave={filtroKey} rango={rango} onChange={onRango} />}
       </span>
     </th>
+  );
+}
+
+/**
+ * W18 — «poder hacer subconjuntos… solo los que estén en X número o menos».
+ *
+ * Un filtro ≤/≥ por columna, uno por columna, combinados con Y en `tabla.ts`.
+ * Vive en el encabezado (no en una barra aparte) para que quede junto al
+ * control de orden de la MISMA columna — es el mismo gesto de Excel.
+ */
+function RangoFiltro({
+  clave, rango, onChange,
+}: {
+  clave: ClaveOrdenNumerica;
+  rango?: FiltroRango;
+  onChange: (k: ClaveOrdenNumerica, r: FiltroRango | null) => void;
+}) {
+  const [abierto, setAbierto] = useState(false);
+  const [operador, setOperador] = useState<OperadorRango>(rango?.operador ?? 'lte');
+  const [valor, setValor] = useState(rango ? String(rango.valor) : '');
+  const activo = Boolean(rango);
+
+  const abrir = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setOperador(rango?.operador ?? 'lte');
+    setValor(rango ? String(rango.valor) : '');
+    setAbierto((v) => !v);
+  };
+
+  const aplicar = (e: React.FormEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const n = Number(valor);
+    if (valor.trim() === '' || Number.isNaN(n)) return;
+    onChange(clave, { operador, valor: n });
+    setAbierto(false);
+  };
+
+  const limpiar = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onChange(clave, null);
+    setValor('');
+    setAbierto(false);
+  };
+
+  return (
+    // eslint-disable-next-line jsx-a11y/no-static-element-interactions -- solo evita que el click abra/cierre el orden de la columna
+    <span className="relative inline-flex normal-case font-normal" onClick={(e) => e.stopPropagation()}>
+      <button
+        type="button"
+        onClick={abrir}
+        title={activo ? `Filtro activo: ${operador === 'lte' ? '≤' : '≥'} ${rango!.valor} — click para editar` : 'Filtrar esta columna'}
+        className={`p-0.5 rounded ${activo ? 'text-teal-700' : 'text-gray-300 hover:text-gray-500'}`}
+      >
+        <ListFilter size={11} />
+      </button>
+      {abierto && (
+        <>
+          {/* Fondo transparente para cerrar al hacer click fuera, mismo truco que otros popovers de la página. */}
+          <div className="fixed inset-0 z-20" onClick={(e) => { e.stopPropagation(); setAbierto(false); }} />
+          <form
+            onSubmit={aplicar}
+            onClick={(e) => e.stopPropagation()}
+            className="absolute right-0 top-full mt-1 z-30 flex items-center gap-1 rounded-lg border border-gray-200 bg-white p-2 shadow-lg"
+          >
+            <select
+              value={operador}
+              onChange={(e) => setOperador(e.target.value as OperadorRango)}
+              className="text-xs border border-gray-200 rounded px-1 py-1"
+            >
+              <option value="lte">≤</option>
+              <option value="gte">≥</option>
+            </select>
+            <input
+              type="number"
+              value={valor}
+              onChange={(e) => setValor(e.target.value)}
+              autoFocus
+              className="w-20 text-xs border border-gray-200 rounded px-1.5 py-1"
+              placeholder="valor"
+            />
+            <button type="submit" className="text-xs text-teal-700 font-semibold px-1.5 py-1 hover:bg-teal-50 rounded">
+              Aplicar
+            </button>
+            {activo && (
+              <button type="button" onClick={limpiar} title="Quitar filtro" className="text-gray-400 hover:text-gray-600 px-0.5">
+                <X size={12} />
+              </button>
+            )}
+          </form>
+        </>
+      )}
+    </span>
   );
 }
 
