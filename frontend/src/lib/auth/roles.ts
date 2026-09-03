@@ -48,6 +48,13 @@ export const CAN_RUN_BACKTEST: Role[] = ['superuser', 'admin', 'gerencia', 'ceo'
 /** Roles that can manage users */
 export const CAN_MANAGE_USERS: Role[] = ['superuser', 'admin'];
 
+/**
+ * Roles that can create/edit supplier groups (reabastecimiento-vivo filter).
+ * Wilmer-only by design (2026-09-03) — narrower than CAN_VIEW_COMPRAS on
+ * purpose, see PROVEEDORES_GROUPING_UX_DESIGN.md §4.
+ */
+export const CAN_MANAGE_SUPPLIER_GROUPS: Role[] = ['superuser', 'compras'];
+
 /** Roles that can modify app settings */
 export const CAN_MODIFY_SETTINGS: Role[] = ['superuser'];
 

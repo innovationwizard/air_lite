@@ -21,6 +21,8 @@ export interface FilaOrdenable {
   cod: string;
   desc: string;
   prov: string;
+  /** Grupo de proveedores (2026-09-04) — null si el proveedor no está agrupado. */
+  provGroupId: string | null;
   exist: number;
   patio: number;
   doh: number;
@@ -163,9 +165,18 @@ export interface FiltroRango {
   valor: number;
 }
 
+/**
+ * Grupos de proveedores (2026-09-04) — el valor seleccionado en el filtro es
+ * SIEMPRE un string (`proveedor` no cambia de tipo), pero uno que refiere a un
+ * grupo lleva este prefijo para distinguirse de un nombre crudo de proveedor.
+ * Vive acá, no en el componente, para que el prefijo se use una sola vez.
+ */
+export const grupoFiltroValor = (groupId: string): string => `group:${groupId}`;
+
 export interface Filtros {
   /** Código o descripción, sin distinguir mayúsculas. */
   texto?: string;
+  /** Nombre crudo de proveedor, o `grupoFiltroValor(id)` para filtrar por grupo. */
   proveedor?: string;
   soloConSugerido?: boolean;
   soloCriticos?: boolean;
@@ -187,7 +198,11 @@ export function filtrar<T extends FilaOrdenable>(filas: readonly T[], f: Filtros
   const texto = (f.texto ?? '').trim().toLowerCase();
   const rangos = Object.entries(f.rangos ?? {}) as [ClaveOrdenNumerica, FiltroRango][];
   return filas.filter((r) => {
-    if (f.proveedor && r.prov !== f.proveedor) return false;
+    if (f.proveedor) {
+      if (f.proveedor.startsWith('group:')) {
+        if (r.provGroupId !== f.proveedor.slice('group:'.length)) return false;
+      } else if (r.prov !== f.proveedor) return false;
+    }
     if (texto
         && !r.cod.toLowerCase().includes(texto)
         && !r.desc.toLowerCase().includes(texto)) return false;

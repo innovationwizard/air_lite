@@ -83,6 +83,8 @@ interface ProductRef {
 }
 interface SupplierLink { product_id: number; supplier_id: number }
 interface SupplierRef { id: number; name: string }
+interface SupplierGroupRef { id: string; display_name: string }
+interface SupplierGroupMemberRef { supplier_id: number; group_id: string }
 /** qty === null = a CLEAR entry: the manual capture was removed (20260813000001). */
 interface OverrideRow { product_id: number; qty: number | null; created_at: string }
 /** A6.15 — una entrada futura de tránsito: cuánto y cuándo. */
@@ -100,6 +102,8 @@ interface ComercialRow {
 export interface LiveRow {
   productId: number;
   cod: string; desc: string; prov: string; cat: string;
+  /** Grupo de proveedores (2026-09-04) — null si el proveedor no está agrupado. */
+  provGroupId: string | null;
   /** Odoo product.template "Can be Purchased" — drives the solo-comprables filter. */
   purchaseOk: boolean;
   exist: number; existencias: number; reserved: number; patio: number;
@@ -136,11 +140,14 @@ export interface LiveRow {
 export async function buildRows(
   service: SupabaseClient,
   bodega: string,
-): Promise<{ rows: LiveRow[]; maxAsOf: string; monthStart: string; coberturaDias: number }> {
+): Promise<{
+  rows: LiveRow[]; maxAsOf: string; monthStart: string; coberturaDias: number;
+  groups: { id: string; displayName: string }[];
+}> {
     const monthStart = `${new Date().toISOString().slice(0, 7)}-01`;
 
     const [inputs, products, links, suppliers, transitoOv, pendingOv, comercial, sugBodegaOv, detalleTr, cobertura,
-           destinoDecl] =
+           destinoDecl, supplierGroups, supplierGroupMembers] =
       await Promise.all([
         fetchAll<InputRow>((a, b) =>
           service.from('reabastecimiento_inputs').select('*').eq('bodega', bodega).range(a, b)),
@@ -182,6 +189,11 @@ export async function buildRows(
         fetchAll<DestinoRow>((a, b) =>
           service.from('transito_destino').select('product_id, destino, created_at')
             .order('created_at', { ascending: false }).range(a, b)),
+        // Grupos de proveedores (2026-09-04) — ver rows.ts §provGroupId abajo.
+        fetchAll<SupplierGroupRef>((a, b) =>
+          service.from('supplier_groups').select('id, display_name').range(a, b)),
+        fetchAll<SupplierGroupMemberRef>((a, b) =>
+          service.from('supplier_group_members').select('supplier_id, group_id').range(a, b)),
       ]);
 
     const coberturaDias = (cobertura?.data as { dias: number } | null)?.dias
@@ -189,12 +201,18 @@ export async function buildRows(
 
     const productById = new Map(products.map((p) => [p.id, p]));
     const supplierById = new Map(suppliers.map((s) => [s.id, s.name]));
+    // Grupos de proveedores (2026-09-04) — un proveedor pertenece a lo sumo a
+    // un grupo (supplier_id es PK de supplier_group_members).
+    const groupIdBySupplierId = new Map(supplierGroupMembers.map((m) => [m.supplier_id, m.group_id]));
     // First link per product = primary supplier (insertion order follows
     // supplierinfo sequence in the sync).
-    const supplierByProduct = new Map<number, string>();
+    const supplierByProduct = new Map<number, { name: string; groupId: string | null }>();
     for (const l of links) {
       if (!supplierByProduct.has(l.product_id)) {
-        supplierByProduct.set(l.product_id, supplierById.get(l.supplier_id) ?? '');
+        supplierByProduct.set(l.product_id, {
+          name: supplierById.get(l.supplier_id) ?? '',
+          groupId: groupIdBySupplierId.get(l.supplier_id) ?? null,
+        });
       }
     }
     // Latest-entry-wins merges (rows arrive ordered newest-first). A latest
@@ -281,7 +299,7 @@ export async function buildRows(
       const engineRow: ProductRow = {
         cod,
         desc: ref?.name ?? '',
-        prov: supplierByProduct.get(r.product_id) ?? '',
+        prov: supplierByProduct.get(r.product_id)?.name ?? '',
         exist: existNet,
         doh: 0,
         trans,
@@ -298,6 +316,7 @@ export async function buildRows(
         cod: engineRow.cod,
         desc: engineRow.desc,
         prov: engineRow.prov,
+        provGroupId: supplierByProduct.get(r.product_id)?.groupId ?? null,
         // A6.11 — agrupar por categoría. Sale de `products.category`, medido al
         // 100% de cobertura el 2026-09-01 (0 de 1,670 activos sin categoría,
         // 32 distintas). NO viaja dentro de la fila del motor: el motor calcula
@@ -363,7 +382,10 @@ export async function buildRows(
 
     classifyAbc(rows);
 
-  return { rows, maxAsOf, monthStart, coberturaDias };
+  return {
+    rows, maxAsOf, monthStart, coberturaDias,
+    groups: supplierGroups.map((g) => ({ id: g.id, displayName: g.display_name })),
+  };
 }
 
 /**

@@ -1,12 +1,12 @@
 import {
   compararPorDefecto, dirInicial, esTexto, filtrar, ordenar, siguienteOrden, vista,
-  tablaATsv,
+  tablaATsv, grupoFiltroValor,
   type FilaOrdenable,
 } from '../tabla';
 
 function fila(over: Partial<FilaOrdenable> & { cod: string }): FilaOrdenable {
   return {
-    desc: '', prov: '', exist: 0, patio: 0, doh: 0, trans: 0, pending: null,
+    desc: '', prov: '', provGroupId: null, exist: 0, patio: 0, doh: 0, trans: 0, pending: null,
     adic: 0, p6: 0, p3: 0, mtd: null, sug: 0,
     flags: { tendenciaCreciente: false },
     purchaseOk: true,
@@ -121,6 +121,34 @@ describe('filtrar', () => {
 
   it('sin filtros devuelve todo', () => {
     expect(filtrar(filas, {})).toHaveLength(4);
+  });
+});
+
+describe('filtrar — grupos de proveedores (2026-09-04)', () => {
+  const filas = [
+    fila({ cod: 'A', prov: 'Carvajal CA', provGroupId: 'g1' }),
+    fila({ cod: 'B', prov: 'Carvajal MX', provGroupId: 'g1' }),
+    fila({ cod: 'C', prov: 'Reyma', provGroupId: null }),
+    fila({ cod: 'D', prov: 'Darnel', provGroupId: 'g2' }),
+  ];
+
+  it('un filtro de grupo trae TODAS las filas de sus miembros, sin importar el nombre crudo', () => {
+    expect(filtrar(filas, { proveedor: grupoFiltroValor('g1') }).map((r) => r.cod))
+      .toEqual(['A', 'B']);
+  });
+
+  it('un filtro de nombre crudo sigue funcionando exactamente igual que antes', () => {
+    expect(filtrar(filas, { proveedor: 'Reyma' }).map((r) => r.cod)).toEqual(['C']);
+  });
+
+  it('una fila sin grupo nunca matchea un filtro de grupo, aunque su nombre "parezca" un prefijo de grupo', () => {
+    const conNombreRaro = [...filas, fila({ cod: 'E', prov: 'group:g1', provGroupId: null })];
+    expect(filtrar(conNombreRaro, { proveedor: grupoFiltroValor('g1') }).map((r) => r.cod))
+      .toEqual(['A', 'B']);
+  });
+
+  it('grupoFiltroValor antepone el prefijo que filtrar() despues quita', () => {
+    expect(grupoFiltroValor('abc-123')).toBe('group:abc-123');
   });
 });
 

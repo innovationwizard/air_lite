@@ -13,6 +13,10 @@ import {
   type Orden, siguienteOrden, vista,
 } from '@/lib/compras/tabla';
 import { ExportCarvajal } from './ExportCarvajal';
+import { ProveedorFiltro, type ProveedorGrupo } from './ProveedorFiltro';
+import { ProveedorGruposPanel } from './ProveedorGruposPanel';
+import { useUserRole } from '@/lib/auth/useUserRole';
+import { CAN_MANAGE_SUPPLIER_GROUPS, isAuthorized } from '@/lib/auth/roles';
 import {
   type ProductRow, type Sev, sugerido, doh as dohOf, sev, fmt,
 } from '../reabastecimiento/engine';
@@ -135,6 +139,8 @@ const COL_TIP = {
 interface ApiRow {
   productId: number;
   cod: string; desc: string; prov: string; cat: string;
+  /** Grupo de proveedores (2026-09-04) — null si el proveedor no está agrupado. */
+  provGroupId: string | null;
   /** ABC (Wilmer, 2026-09-03) — ver classifyAbc en rows.ts. */
   abc: 'A' | 'B' | 'C' | 'D';
   /** Odoo product.template "Can be Purchased" — drives el filtro «Solo comprables». */
@@ -180,7 +186,8 @@ interface Tiendas {
   productos: number;
 }
 interface ApiPayload {
-  bodega: string; bodegas: string[]; rows: ApiRow[]; tiendas?: Tiendas; meta: ApiMeta;
+  bodega: string; bodegas: string[]; rows: ApiRow[]; groups: ProveedorGrupo[];
+  tiendas?: Tiendas; meta: ApiMeta;
 }
 
 function engineRowOf(r: ApiRow, exist: number, trans: number): ProductRow {
@@ -208,6 +215,10 @@ export function VivoClient() {
   // W18 — «que pueda hacer subconjuntos… solo los que estén en X número o menos».
   // Uno por columna, combinados con Y (mismo criterio que el resto de filtros).
   const [rangos, setRangos] = useState<Partial<Record<ClaveOrdenNumerica, FiltroRango>>>({});
+  // Grupos de proveedores (2026-09-04) — panel de gestión, Wilmer-only.
+  const [gruposAbierto, setGruposAbierto] = useState(false);
+  const { profile } = useUserRole();
+  const puedeGestionarGrupos = isAuthorized(profile?.role, CAN_MANAGE_SUPPLIER_GROUPS);
   const onRango = useCallback((k: ClaveOrdenNumerica, r: FiltroRango | null) => {
     setRangos((prev) => {
       const next = { ...prev };
@@ -350,8 +361,21 @@ export function VivoClient() {
     [payload],
   );
 
+  // Grupos de proveedores (2026-09-04) — solo los que tienen al menos una fila
+  // visible en ESTA bodega, para no ensuciar el filtro con grupos vacíos acá.
+  const gruposEnBodega = useMemo(() => {
+    const idsPresentes = new Set(
+      (payload?.rows ?? []).map((r) => r.provGroupId).filter((id): id is string => id !== null),
+    );
+    return (payload?.groups ?? []).filter((g) => idsPresentes.has(g.id));
+  }, [payload]);
+
+  // Nombres crudos SIN grupo — mismo cálculo que antes, menos los que ahora
+  // están agrupados (esos se ven como su grupo, no por su nombre suelto).
   const provList = useMemo(
-    () => [...new Set((payload?.rows ?? []).map((r) => r.prov).filter(Boolean))].sort(),
+    () => [...new Set(
+      (payload?.rows ?? []).filter((r) => r.provGroupId === null).map((r) => r.prov).filter(Boolean),
+    )].sort(),
     [payload],
   );
 
@@ -628,14 +652,13 @@ export function VivoClient() {
                 className="w-full pl-8 pr-2 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-600"
               />
             </div>
-            <select
+            <ProveedorFiltro
               value={prov}
-              onChange={(e) => setProv(e.target.value)}
-              className="text-sm border border-gray-200 rounded-lg px-2 py-2 max-w-[180px]"
-            >
-              <option value="">Todos los proveedores</option>
-              {provList.map((p) => <option key={p} value={p}>{p}</option>)}
-            </select>
+              onChange={setProv}
+              grupos={gruposEnBodega}
+              nombresSueltos={provList}
+              onGestionar={puedeGestionarGrupos ? () => setGruposAbierto(true) : undefined}
+            />
             <label className="text-xs text-gray-600 inline-flex items-center gap-1.5 cursor-pointer">
               <input type="checkbox" checked={onlySug} onChange={(e) => setOnlySug(e.target.checked)} /> Solo con sugerido
             </label>
@@ -819,6 +842,9 @@ export function VivoClient() {
           </div>
         </div>
       </div>
+      {gruposAbierto && (
+        <ProveedorGruposPanel onClose={() => { setGruposAbierto(false); load(bodega, true); }} />
+      )}
     </div>
   );
 }

@@ -18,6 +18,7 @@ import {
   CAN_VIEW_INVENTARIOS,
   CAN_MANAGE_USERS,
   CAN_MODIFY_SETTINGS,
+  CAN_MANAGE_SUPPLIER_GROUPS,
 } from '@/lib/auth/roles';
 
 const NON_SUPERUSER = [
@@ -56,6 +57,13 @@ describe('role-matrix invariants (guard against accidental privilege widening)',
     expect([...CAN_MANAGE_USERS].sort()).toEqual(['admin', 'superuser']);
   });
 
+  it('CAN_MANAGE_SUPPLIER_GROUPS is exactly superuser/compras', () => {
+    // Wilmer-only by design — narrower than CAN_VIEW_COMPRAS. If this ever
+    // widens to admin/gerencia the way admin/usuarios did, this test is the
+    // thing that should make that a deliberate edit, not a silent drift.
+    expect([...CAN_MANAGE_SUPPLIER_GROUPS].sort()).toEqual(['compras', 'superuser']);
+  });
+
   it('CAN_MODIFY_SETTINGS is superuser-only', () => {
     expect([...CAN_MODIFY_SETTINGS]).toEqual(['superuser']);
   });
@@ -81,6 +89,14 @@ describe('cross-privilege negative tests (least privilege)', () => {
     expect(isAuthorized('compras', PAGE_PERMISSIONS['/gerencia'])).toBe(false);
     expect(isAuthorized('compras', PAGE_PERMISSIONS['/admin'])).toBe(false);
     expect(isAuthorized('compras', PAGE_PERMISSIONS['/superuser'])).toBe(false);
+  });
+
+  it('only compras/superuser can manage supplier groups', () => {
+    for (const rol of ['gerencia', 'admin', 'inventario', 'ventas']) {
+      expect(isAuthorized(rol, CAN_MANAGE_SUPPLIER_GROUPS)).toBe(false);
+    }
+    expect(isAuthorized('compras', CAN_MANAGE_SUPPLIER_GROUPS)).toBe(true);
+    expect(isAuthorized('superuser', CAN_MANAGE_SUPPLIER_GROUPS)).toBe(true);
   });
 
   it('only superuser can view the superuser dashboard', () => {
