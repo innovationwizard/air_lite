@@ -22,7 +22,7 @@ import {
 import {
   type DestinoDeclarado, destinoAfectaFila, transitoSegunDestino, ultimaPorProducto,
 } from '@/lib/compras/destino';
-import { GENERAL_BODEGA, fetchAll } from './lib';
+import { GENERAL_BODEGA, fetchAll, round1 } from './lib';
 
 /**
  * SEASONAL EXCEPTIONS — per-SKU, by explicit decision, NOT a rule.
@@ -411,8 +411,4 @@ function classifyAbc(rows: LiveRow[]): void {
   for (const r of rows) {
     if (r.p3 < 10) r.abc = 'D';
   }
-}
-
-export function round1(n: number): number {
-  return Math.round(n * 10) / 10;
 }

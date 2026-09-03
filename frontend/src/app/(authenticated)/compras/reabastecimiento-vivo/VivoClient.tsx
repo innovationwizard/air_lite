@@ -12,7 +12,9 @@ import {
   type ClaveOrden, type ClaveOrdenNumerica, type FiltroRango, type OperadorRango,
   type Orden, siguienteOrden, vista,
 } from '@/lib/compras/tabla';
+import { computeKpis, computeAlza, computeTopProveedores } from '@/lib/compras/statusMetrics';
 import { ExportCarvajal } from './ExportCarvajal';
+import { SnapshotButton } from './SnapshotButton';
 import { ProveedorFiltro, type ProveedorGrupo } from './ProveedorFiltro';
 import { ProveedorGruposPanel } from './ProveedorGruposPanel';
 import { useUserRole } from '@/lib/auth/useUserRole';
@@ -403,39 +405,12 @@ export function VivoClient() {
     setOrden((actual) => siguienteOrden(actual, k));
   }, []);
 
-  // Counted over the WHOLE bodega, not the filtered list: the point of the
-  // number is to say how much is rising before any filter narrows the view.
-  const alza = useMemo(() => {
-    const rows = payload?.rows ?? [];
-    return {
-      creciente: rows.filter((r) => r.flags.tendenciaCreciente).length,
-      noEvaluable: rows.filter((r) => r.tendencia.estado === 'no-evaluable').length,
-      total: rows.length,
-    };
-  }, [payload]);
-
-  const kpis = useMemo(() => {
-    const need = list.filter((r) => r.sug > 0);
-    return {
-      total: list.length,
-      need: need.length,
-      totSug: need.reduce((a, r) => a + r.sug, 0),
-      crit: list.filter((r) => r.doh < 3).length,
-    };
-  }, [list]);
-
-  const topProv = useMemo(() => {
-    const by: Record<string, { sug: number; crit: number }> = {};
-    for (const r of payload?.rows ?? []) {
-      if (!r.prov) continue;
-      by[r.prov] = by[r.prov] || { sug: 0, crit: 0 };
-      by[r.prov].sug += r.sug;
-      if (r.doh < 3 && r.sug > 0) by[r.prov].crit += 1;
-    }
-    const arr = Object.entries(by).map(([p, v]) => ({ p, ...v }))
-      .sort((a, b) => b.sug - a.sug).slice(0, 8);
-    return { arr, max: Math.max(1, ...arr.map((a) => a.sug)) };
-  }, [payload]);
+  // computeKpis/computeAlza/computeTopProveedores live in lib/compras/statusMetrics
+  // so the "proof of status" snapshot route can compute the identical numbers
+  // server-side — one function, two callers, never allowed to drift apart.
+  const alza = useMemo(() => computeAlza(payload?.rows ?? []), [payload]);
+  const kpis = useMemo(() => computeKpis(list), [list]);
+  const topProv = useMemo(() => computeTopProveedores(payload?.rows ?? []), [payload]);
 
   const sync = payload?.meta.lastSync ?? null;
   const noData = !loading && !error && (payload?.rows.length ?? 0) === 0;
@@ -679,9 +654,19 @@ export function VivoClient() {
               <input type="checkbox" checked={onlyComprables}
                      onChange={(e) => setOnlyComprables(e.target.checked)} /> Solo comprables
             </label>
-            <div className="ml-auto">
+            <div className="ml-auto flex items-center gap-2">
               <CopiarTabla filas={list} bodega={bodega} />
               <ExportCarvajal productIds={list.map((r) => r.productId)} bodega={bodega} />
+              <SnapshotButton
+                bodega={bodega}
+                filtros={{
+                  texto: q, proveedor: prov, soloConSugerido: onlySug, soloCriticos: onlyCrit,
+                  soloEnAlza: onlyAlza, soloComprables: onlyComprables, rangos,
+                }}
+                orden={orden}
+                visibleCount={list.length}
+                canViewAllSnapshots={profile?.role === 'superuser'}
+              />
             </div>
           </div>
 

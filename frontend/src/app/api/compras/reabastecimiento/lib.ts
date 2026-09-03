@@ -32,6 +32,51 @@ export async function knownBodegas(service: SupabaseClient): Promise<string[]> {
   return [...set];
 }
 
+/** G4 — retail perimeter, deliberately never merged into a purchasing bodega. */
+interface TiendaRow { product_id: number; tienda: string; f6: number; f3: number }
+
+export interface Tiendas {
+  porTienda: { tienda: string; f6: number; f3: number }[];
+  total: { f6: number; f3: number };
+  productos: number;
+}
+
+export function round1(n: number): number {
+  return Math.round(n * 10) / 10;
+}
+
+/**
+ * Shared by GET /api/compras/reabastecimiento and the proof-of-status
+ * snapshot route — both need the exact same tiendas panel the page renders.
+ *
+ * In July 2026 this block was 501,014 units, ~0% of them traceable to a sale
+ * order: it is the whole reason Wilmer's and Raquel's totals differ, so it is
+ * shown, labelled, and never folded into a purchasing bodega.
+ */
+export async function buildTiendas(service: SupabaseClient): Promise<Tiendas> {
+  const tiendaRows = await fetchAll<TiendaRow>((a, b) =>
+    service.from('invoiced_tiendas').select('product_id, tienda, f6, f3').range(a, b));
+
+  const porTiendaMap = new Map<string, { f6: number; f3: number }>();
+  for (const t of tiendaRows) {
+    const acc = porTiendaMap.get(t.tienda) ?? { f6: 0, f3: 0 };
+    acc.f6 += t.f6;
+    acc.f3 += t.f3;
+    porTiendaMap.set(t.tienda, acc);
+  }
+  const porTienda = [...porTiendaMap.entries()]
+    .map(([tienda, v]) => ({ tienda, f6: round1(v.f6), f3: round1(v.f3) }))
+    .sort((a, b) => b.f6 - a.f6);
+  return {
+    porTienda,
+    total: {
+      f6: round1(porTienda.reduce((s, t) => s + t.f6, 0)),
+      f3: round1(porTienda.reduce((s, t) => s + t.f3, 0)),
+    },
+    productos: porTiendaMap.size ? new Set(tiendaRows.map((t) => t.product_id)).size : 0,
+  };
+}
+
 export function badRequest(message: string): Response {
   return new Response(JSON.stringify({ error: message }), {
     status: 400,

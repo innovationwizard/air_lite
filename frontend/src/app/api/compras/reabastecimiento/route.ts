@@ -2,8 +2,8 @@ import { NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/server';
 import { CAN_VIEW_COMPRAS } from '@/lib/auth/roles';
 import { createServiceRoleClient } from '@/lib/supabase/server';
-import { GENERAL_BODEGA, fetchAll, knownBodegas } from './lib';
-import { buildRows, round1 } from './rows';
+import { GENERAL_BODEGA, buildTiendas, knownBodegas } from './lib';
+import { buildRows } from './rows';
 
 export const dynamic = 'force-dynamic';
 
@@ -28,9 +28,6 @@ export const dynamic = 'force-dynamic';
  * migration 20260724000003) + in-handler requireAuth(CAN_VIEW_COMPRAS).
  */
 
-/** G4 — retail perimeter, deliberately never merged into a purchasing bodega. */
-interface TiendaRow { product_id: number; tienda: string; f6: number; f3: number }
-
 export async function GET(request: Request) {
   const auth = await requireAuth(CAN_VIEW_COMPRAS);
   if (auth instanceof Response) return auth;
@@ -49,37 +46,14 @@ export async function GET(request: Request) {
     }
 
     // Rows come from the SHARED builder the xlsx export also uses — see rows.ts.
-    const [{ rows, maxAsOf, monthStart, coberturaDias, groups }, tiendaRows, lastSync] = await Promise.all([
+    // tiendas comes from the SHARED lib.ts builder — the snapshot route uses it too.
+    const [{ rows, maxAsOf, monthStart, coberturaDias, groups }, tiendas, lastSync] = await Promise.all([
       buildRows(service, bodega),
-      fetchAll<TiendaRow>((a, b) =>
-        service.from('invoiced_tiendas').select('product_id, tienda, f6, f3').range(a, b)),
+      buildTiendas(service),
       service.from('sync_runs').select('id, status, started_at, finished_at, counts')
         .eq('kind', 'reabastecimiento').order('started_at', { ascending: false })
         .limit(1).maybeSingle(),
     ]);
-
-    // G4 — the retail perimeter, aggregated per journal and kept apart from
-    // every purchasing bodega. In July 2026 this block was 501,014 units, ~0%
-    // of them traceable to a sale order: it is the whole reason Wilmer's and
-    // Raquel's totals differ, so it is shown, labelled, and never folded in.
-    const porTiendaMap = new Map<string, { f6: number; f3: number }>();
-    for (const t of tiendaRows) {
-      const acc = porTiendaMap.get(t.tienda) ?? { f6: 0, f3: 0 };
-      acc.f6 += t.f6;
-      acc.f3 += t.f3;
-      porTiendaMap.set(t.tienda, acc);
-    }
-    const porTienda = [...porTiendaMap.entries()]
-      .map(([tienda, v]) => ({ tienda, f6: round1(v.f6), f3: round1(v.f3) }))
-      .sort((a, b) => b.f6 - a.f6);
-    const tiendas = {
-      porTienda,
-      total: {
-        f6: round1(porTienda.reduce((s, t) => s + t.f6, 0)),
-        f3: round1(porTienda.reduce((s, t) => s + t.f3, 0)),
-      },
-      productos: porTiendaMap.size ? new Set(tiendaRows.map((t) => t.product_id)).size : 0,
-    };
 
     return NextResponse.json({
       bodega,
