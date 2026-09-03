@@ -4,9 +4,6 @@
  * POR QUÉ EXISTE ESTE MÓDULO Y NO VIVE DENTRO DEL COMPONENTE: es el método de
  * trabajo de Wilmer, no un detalle de presentación. Verbatim (2026-08-26):
  *
- *   «lo que yo hago en mi Excel es que filtro los de menor a mayor y luego me
- *    voy al promedio de ventas y todo lo que tenga más de 10 cajas sí lo
- *    compro… filtro todo lo menor a 10 cajas, lo excluyo»
  *   «quiero ordenar de lo que más vendemos… pero no la puedo ordenar»
  *
  * Es la secuencia ordenar → filtrar → decidir que hoy lo obliga a bajar a
@@ -156,9 +153,6 @@ export function ordenar<T extends FilaOrdenable>(filas: readonly T[], orden: Ord
   });
 }
 
-/** Columnas sobre las que se puede poner un mínimo. */
-export type ClaveUmbral = 'p6' | 'p3' | 'sug' | 'exist';
-
 export interface Filtros {
   /** Código o descripción, sin distinguir mayúsculas. */
   texto?: string;
@@ -168,25 +162,6 @@ export interface Filtros {
   soloEnAlza?: boolean;
   /** Odoo purchase_ok — deja fuera los productos marcados como no comprables. */
   soloComprables?: boolean;
-  /**
-   * Umbral mínimo INCLUSIVO sobre una columna numérica — W17.
-   *
-   * ⚠️ La unidad es la de la columna en pantalla, que es la UoM de stock del
-   * producto. Wilmer habla de «10 cajas»; que su caja sea esa unidad NO está
-   * confirmado (Q28), y el bug de UoM del 2026-08-20 es el precedente de por
-   * qué no se asume. Por eso el filtro se define sobre el valor que él ve, que
-   * es lo único que hoy podemos afirmar sin inventar una conversión.
-   */
-  umbral?: { clave: ClaveUmbral; min: number };
-}
-
-function valorUmbral(f: FilaOrdenable, clave: ClaveUmbral): number {
-  switch (clave) {
-    case 'p6': return f.p6;
-    case 'p3': return f.p3;
-    case 'sug': return f.sug;
-    case 'exist': return f.exist;
-  }
 }
 
 /**
@@ -204,7 +179,6 @@ export function filtrar<T extends FilaOrdenable>(filas: readonly T[], f: Filtros
     if (f.soloCriticos && r.doh >= 3) return false;
     if (f.soloEnAlza && !r.flags.tendenciaCreciente) return false;
     if (f.soloComprables && !r.purchaseOk) return false;
-    if (f.umbral && valorUmbral(r, f.umbral.clave) < f.umbral.min) return false;
     return true;
   });
 }
@@ -280,67 +254,4 @@ export function tablaATsv<T>(filas: readonly T[], columnas: readonly ColumnaCopi
   const cabecera = columnas.map((c) => celda(c.encabezado)).join('\t');
   const cuerpo = filas.map((f) => columnas.map((c) => celda(c.valor(f))).join('\t'));
   return [cabecera, ...cuerpo].join('\n');
-}
-
-/* ═══════════════════════════════════════════════════════════════════════════
- * AGRUPAR POR CATEGORÍA — A6.11
- * ═══════════════════════════════════════════════════════════════════════════
- *
- * Pedido cuatro veces entre el 05-ago y el 26-ago, junto con el orden por
- * columna y los filtros (esos dos ya se entregaron). *«hay muchos filtros que
- * no tenés»* (David) · *«no la puedo ordenar»* (Wilmer).
- *
- * PARA QUÉ SIRVE, que no es cosmético: el comprador negocia y despacha POR
- * CATEGORÍA —vasos, bandejas, bolsas— porque así se arman los furgones y así
- * se habla con el proveedor. Ver el total sugerido de una categoría de un
- * vistazo es la diferencia entre decidir sobre una tabla y decidir sobre una
- * suma que se hizo aparte.
- *
- * EL ORDEN DENTRO DE CADA GRUPO NO SE TOCA. Las filas llegan ya ordenadas y
- * filtradas; agrupar sólo las reparte en cajones conservando su orden relativo.
- * Si agrupar reordenara, el orden que el usuario eligió en el encabezado
- * dejaría de significar algo en cuanto activara el agrupado.
- *
- * LOS GRUPOS SE ORDENAN POR SU SUBTOTAL DE SUGERIDO, descendente: la categoría
- * donde hay más que comprar va primero. Es la misma lógica que el orden por
- * defecto de la tabla, que pone la urgencia en la primera pantalla.
- */
-
-export interface GrupoCategoria<T> {
-  categoria: string;
-  filas: T[];
-  /** Suma del Sugerido del grupo — lo que se negocia con el proveedor. */
-  subtotalSug: number;
-  /** Cuántas filas del grupo están en rojo, para no tener que abrirlo. */
-  criticas: number;
-}
-
-/**
- * Reparte filas ya ordenadas en grupos por categoría.
- *
- * `sug` y `critica` se leen por función para no atar este módulo a la forma
- * exacta de la fila de la API — el mismo motivo por el que `ordenar` y
- * `filtrar` trabajan sobre `FilaOrdenable` y no sobre el tipo de la página.
- */
-export function agruparPorCategoria<T>(
-  filas: readonly T[],
-  categoria: (f: T) => string,
-  sug: (f: T) => number,
-  critica: (f: T) => boolean,
-): GrupoCategoria<T>[] {
-  const porCat = new Map<string, T[]>();
-  for (const f of filas) {
-    const k = (categoria(f) || '').trim() || 'Sin categoría';
-    const lista = porCat.get(k);
-    if (lista) lista.push(f);
-    else porCat.set(k, [f]);
-  }
-  return [...porCat.entries()]
-    .map(([cat, fs]) => ({
-      categoria: cat,
-      filas: fs,
-      subtotalSug: fs.reduce((a, f) => a + (sug(f) || 0), 0),
-      criticas: fs.filter(critica).length,
-    }))
-    .sort((a, b) => b.subtotalSug - a.subtotalSug || a.categoria.localeCompare(b.categoria));
 }

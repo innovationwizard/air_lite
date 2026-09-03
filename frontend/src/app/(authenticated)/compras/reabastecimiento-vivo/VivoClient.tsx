@@ -1,15 +1,15 @@
 'use client';
 
-import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   AlertTriangle, Boxes, ChevronDown, ChevronUp, ChevronsUpDown, CloudOff, PackageCheck,
   Pencil, RefreshCw, Search, TrendingUp, X,
 } from 'lucide-react';
 import { MAX_MANUAL_QTY } from '@/lib/compras/qty';
 import { type Tendencia, type Alerta, SIN_REFERENCIA_ANIO_ANTERIOR } from '@/lib/compras/tendencia';
-import { tablaATsv, agruparPorCategoria } from '@/lib/compras/tabla';
+import { tablaATsv } from '@/lib/compras/tabla';
 import {
-  type ClaveOrden, type ClaveUmbral, type Orden, siguienteOrden, vista,
+  type ClaveOrden, type Orden, siguienteOrden, vista,
 } from '@/lib/compras/tabla';
 import { ExportCarvajal } from './ExportCarvajal';
 import {
@@ -191,12 +191,6 @@ export function VivoClient() {
   const [onlyComprables, setOnlyComprables] = useState(false);
   // W16/W17 — null = el orden por defecto con el que la página siempre abrió.
   const [orden, setOrden] = useState<Orden | null>(null);
-  const [umbralClave, setUmbralClave] = useState<ClaveUmbral>('p3');
-  const [umbralMin, setUmbralMin] = useState<string>('');
-  // A6.11 — agrupar por categoría. Apagado por defecto: la tabla plana es la
-  // vista con la que él trabaja hoy, y el agrupado es una lente, no un cambio
-  // de modo.
-  const [agrupado, setAgrupado] = useState(false);
 
   const load = useCallback(async (b: string, silent = false) => {
     if (!silent) setLoading(true);
@@ -343,36 +337,22 @@ export function VivoClient() {
    * (activos primero, urgencia por DOH) se conserva: dejó de ser el único y
    * pasó a ser con el que abre.
    */
-  const list = useMemo(() => {
-    const min = parseFloat(umbralMin);
-    return vista(
-      payload?.rows ?? [],
-      {
-        texto: q,
-        proveedor: prov,
-        soloConSugerido: onlySug,
-        soloCriticos: onlyCrit,
-        soloEnAlza: onlyAlza,
-        soloComprables: onlyComprables,
-        umbral: Number.isFinite(min) && umbralMin.trim() !== ''
-          ? { clave: umbralClave, min }
-          : undefined,
-      },
-      orden,
-    );
-  }, [payload, q, prov, onlySug, onlyCrit, onlyAlza, onlyComprables, orden, umbralClave, umbralMin]);
+  const list = useMemo(() => vista(
+    payload?.rows ?? [],
+    {
+      texto: q,
+      proveedor: prov,
+      soloConSugerido: onlySug,
+      soloCriticos: onlyCrit,
+      soloEnAlza: onlyAlza,
+      soloComprables: onlyComprables,
+    },
+    orden,
+  ), [payload, q, prov, onlySug, onlyCrit, onlyAlza, onlyComprables, orden]);
 
   const onSort = useCallback((k: ClaveOrden) => {
     setOrden((actual) => siguienteOrden(actual, k));
   }, []);
-
-  // Los grupos salen de la MISMA lista visible: agrupar es una lente sobre lo
-  // que ya está ordenado y filtrado, nunca una segunda selección de filas.
-  const grupos = useMemo(
-    () => agruparPorCategoria(list, (r) => r.cat, (r) => r.sug,
-                              (r) => sev(r.doh) === 'crit'),
-    [list],
-  );
 
   // Counted over the WHOLE bodega, not the filtered list: the point of the
   // number is to say how much is rising before any filter narrows the view.
@@ -646,49 +626,7 @@ export function VivoClient() {
               <input type="checkbox" checked={onlyComprables}
                      onChange={(e) => setOnlyComprables(e.target.checked)} /> Solo comprables
             </label>
-            {/* W17 — su regla literal: «todo lo que tenga más de 10 cajas sí lo
-                compro… filtro todo lo menor a 10 cajas, lo excluyo». El mínimo
-                se aplica sobre el valor que se ve en la columna. */}
-            <label className="text-xs text-gray-600 inline-flex items-center gap-1.5"
-                   title="Deja fuera las filas por debajo del mínimo. La unidad es la de la columna en pantalla.">
-              Mínimo
-              <select
-                value={umbralClave}
-                onChange={(e) => setUmbralClave(e.target.value as ClaveUmbral)}
-                aria-label="Columna del mínimo"
-                className="text-xs border border-gray-200 rounded-lg px-1.5 py-1.5"
-              >
-                <option value="p3">Ord. 3m</option>
-                <option value="p6">Ord. 6m</option>
-                <option value="sug">Sugerido</option>
-                <option value="exist">Exist. neta</option>
-              </select>
-              <input
-                type="number"
-                min={0}
-                value={umbralMin}
-                onChange={(e) => setUmbralMin(e.target.value)}
-                placeholder="—"
-                aria-label="Valor mínimo"
-                className="w-[68px] text-right tabular-nums px-1.5 py-1 border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-600"
-              />
-              {umbralMin.trim() !== '' && (
-                <button type="button" onClick={() => setUmbralMin('')}
-                        aria-label="Quitar el mínimo" title="Quitar el mínimo"
-                        className="text-gray-400 hover:text-red-600 transition">
-                  <X size={13} />
-                </button>
-              )}
-            </label>
             <div className="ml-auto">
-              {/* Takes the list exactly as filtered and sorted on screen — that
-                  order becomes the sheet's Prioridad column. */}
-              <label className="inline-flex items-center gap-1.5 text-sm text-gray-700
-                                cursor-pointer select-none">
-                <input type="checkbox" checked={agrupado}
-                       onChange={(e) => setAgrupado(e.target.checked)} />
-                Agrupar por categoría
-              </label>
               <CopiarTabla filas={list} bodega={bodega} />
               <ExportCarvajal productIds={list.map((r) => r.productId)} bodega={bodega} />
             </div>
@@ -757,24 +695,7 @@ export function VivoClient() {
                   </tr>
                 </thead>
                 <tbody className="tabular-nums">
-                  {agrupado && grupos.map((g) => (
-                    <Fragment key={g.categoria}>
-                      <tr className="bg-gray-100/80">
-                        <td colSpan={99}
-                            className="px-3 py-1.5 text-left text-xs font-semibold
-                                       text-gray-700 border-y border-gray-200">
-                          {g.categoria}
-                          <span className="ml-2 font-normal text-gray-500">
-                            {g.filas.length} {g.filas.length === 1 ? 'código' : 'códigos'}
-                            {' · sugerido '}{fmt(g.subtotalSug)}
-                            {g.criticas > 0 && ` · ${g.criticas} en crítico`}
-                          </span>
-                        </td>
-                      </tr>
-                      {g.filas.map((r) => renderFila(r))}
-                    </Fragment>
-                  ))}
-                  {!agrupado && list.slice(0, 400).map((r) => renderFila(r))}
+                  {list.slice(0, 400).map((r) => renderFila(r))}
                 </tbody>
               </table>
             </div>
@@ -842,7 +763,7 @@ export function VivoClient() {
               El botón ✕ junto a una captura manual la quita (tránsito vuelve al sincronizado;
               pendiente vuelve a ¿?), y vaciar la casilla hace lo mismo.
               Captura máxima: {fmt(MAX_MANUAL_QTY)} unidades.
-              Los encabezados con flechas ordenan; «Mínimo» deja fuera lo que esté por debajo del valor.
+              Los encabezados con flechas ordenan.
             </p>
             {/* W15-A — la sonda se anuncia como sonda. Si él no sabe que le
                 estamos preguntando algo, no vamos a obtener la respuesta. */}
