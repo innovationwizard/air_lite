@@ -14,6 +14,19 @@
 -- Pattern mirrors transito_overrides (20260724000002). UUIDv7 PK per
 -- _THE_RULES. RLS matches the 2026-04-23 backfill pattern. Applied via the
 -- Supabase SQL editor; this file is the source-of-truth record. Idempotent.
+--
+-- ⚠️ UPDATE 2026-09-03 (Jorge, live Odoo probe): "no system stores it" holds
+-- for a persisted FIELD, but the number is live-derivable — stock.move,
+-- outgoing to a customer location, state='confirmed', per product x
+-- warehouse. Confirmed against Wilmer's own Odoo "Reporte de Pronóstico" for
+-- 77205001/San José: 60 units (SO-P-76811, SO-P-77114) that his own screen
+-- shows as "Existencias en tránsito", never as a reserved delivery. That
+-- liveness is exactly why THIS table stays wrong as a long-term source:
+-- re-querying the same SKU x warehouse ~20 minutes apart on production
+-- returned a completely different set of active moves (40 vs 275). The value
+-- has to be fetched from Odoo at request time — never hand-typed here, never
+-- captured by a periodic sync column either. This table remains the interim
+-- manual path until the live fetch replaces it; do not extend it further.
 
 CREATE TABLE IF NOT EXISTS pending_reserve_overrides (
   id          UUID PRIMARY KEY DEFAULT uuidv7(),

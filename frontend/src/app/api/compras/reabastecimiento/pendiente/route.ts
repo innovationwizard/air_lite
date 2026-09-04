@@ -14,6 +14,19 @@ export const dynamic = 'force-dynamic';
  * is stored in NO system — Wilmer keys it inline when it exists):
  *   { productId, bodega, qty, note? }
  *
+ * ⚠️ UPDATE 2026-09-03: the "no system source" premise is narrowed, not
+ * reversed — no Odoo FIELD stores this number, but it IS live-derivable:
+ * `stock.move` (outgoing, `location_dest_id.usage='customer'`, per bodega's
+ * warehouse) in `state='confirmed'` — confirmed demand with zero reservation.
+ * Validated live against Wilmer's own Odoo "Reporte de Pronóstico" screen for
+ * 77205001/San José (60 units, SO-P-76811 + SO-P-77114, both invisible to him
+ * as "reservado"). It is NOT a value to sync or store either way: re-querying
+ * the identical SKU×warehouse ~20 min apart on production returned a
+ * completely different move population (40 vs 275 active moves) — it must be
+ * fetched live from Odoo at request time, never hand-typed, never snapshotted
+ * by a periodic sync. This manual-entry endpoint is the interim path until
+ * that live fetch replaces it.
+ *
  * qty semantics:
  *   number  — pending amount; 0 means EXPLICITLY "nothing pending" (distinct
  *             from no entry at all, which the GET reports as pending: null →
