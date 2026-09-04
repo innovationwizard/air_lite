@@ -613,7 +613,7 @@ export function VivoClient() {
              tip="Productos con DOH < 3 días (banda crítica del semáforo, tras filtros)." />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_290px] gap-4 items-start">
+      <div className="space-y-4">
         <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
           <div className="flex flex-wrap gap-2 items-center p-3 border-b border-gray-100">
             <div className="relative flex-1 min-w-[160px]">
@@ -765,63 +765,34 @@ export function VivoClient() {
           {/* {payload?.tiendas ? <TiendasPanel tiendas={payload.tiendas} /> : null} */}
         </div>
 
-        <div className="space-y-4">
-          <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
-            <h2
-              title="Suma de unidades sugeridas por proveedor (top 8, sin filtros). Barra roja = el proveedor tiene productos en quiebre (DOH < 3) que requieren compra."
-              className="text-xs uppercase tracking-wide text-gray-500 font-semibold px-4 py-3 border-b border-gray-100 cursor-help"
-            >
-              Top afectaciones por proveedor
-            </h2>
-            <ul>
-              {topProv.arr.map((a) => (
-                <li key={a.p} className="px-4 py-2.5 border-b border-gray-100 last:border-0">
-                  <div className="flex justify-between gap-2 text-[13px]">
-                    <span className="truncate text-gray-800">{a.p}</span>
-                    <b className="tabular-nums">{fmt(a.sug)}</b>
-                  </div>
-                  <div
-                    className="h-1.5 rounded mt-1.5"
-                    style={{
-                      width: `${((a.sug / topProv.max) * 100).toFixed(0)}%`,
-                      background: a.crit > 0 ? '#c0392b' : '#0e7c86',
-                    }}
-                  />
-                  <div className="text-xs text-gray-400 mt-0.5">{a.crit} en quiebre</div>
-                </li>
-              ))}
-              {topProv.arr.length === 0 && (
-                <li className="px-4 py-3 text-xs text-gray-400">Sin datos aún.</li>
-              )}
-            </ul>
-          </div>
-
-          <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-4">
-            <h2 className="text-xs uppercase tracking-wide text-gray-500 font-semibold mb-2 flex items-center gap-1">
-              <AlertTriangle size={13} /> Cómo se calcula
-            </h2>
-            <p className="text-xs text-gray-500 leading-relaxed">
-              Mismo motor verificado del Excel (99.85% de paridad). Exist. neta = existencias − reservado −
-              pendiente de tomar reserva (captura manual — <b>¿?</b> significa sin dato, no cero).
-              El patio se muestra aparte y no entra al cálculo, igual que en el Excel.
-              Tránsito editable: tu valor manual reemplaza al sincronizado (p. ej. el mensual de Carvajal).
-              El botón ✕ junto a una captura manual la quita (tránsito vuelve al sincronizado;
-              pendiente vuelve a ¿?), y vaciar la casilla hace lo mismo.
-              Captura máxima: {fmt(MAX_MANUAL_QTY)} unidades.
-              Los encabezados con flechas ordenan.
-            </p>
-            {/* W15-A — la sonda se anuncia como sonda. Si él no sabe que le
-                estamos preguntando algo, no vamos a obtener la respuesta. */}
-            <p className="mt-2 text-[11px] text-indigo-900 bg-indigo-50 border border-indigo-200 rounded-lg px-3 py-2">
-              <b>«Destino final» es provisional y queremos tu opinión.</b> Hoy el tránsito llega sin
-              separar por bodega, así que se ve el mismo en las tres y eso te tapa el Sugerido.
-              Mientras lo arreglamos de raíz, esta columna te deja decir dónde se queda de verdad:
-              lo que declarés sale de las otras bodegas y su Sugerido sube. Las filas afectadas
-              quedan marcadas con <b className="text-indigo-600">~</b>.
-              {' '}<b>Ya sabemos que se queda corta</b> — un furgón que descarga en San José, Zacapa
-              y Petén no cabe en un solo destino. Contanos qué te falta y con eso diseñamos lo definitivo.
-            </p>
-          </div>
+        <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden max-w-md">
+          <h2
+            title="Suma de unidades sugeridas por proveedor (top 8, sin filtros). Barra roja = el proveedor tiene productos en quiebre (DOH < 3) que requieren compra."
+            className="text-xs uppercase tracking-wide text-gray-500 font-semibold px-4 py-3 border-b border-gray-100 cursor-help"
+          >
+            Top afectaciones por proveedor
+          </h2>
+          <ul>
+            {topProv.arr.map((a) => (
+              <li key={a.p} className="px-4 py-2.5 border-b border-gray-100 last:border-0">
+                <div className="flex justify-between gap-2 text-[13px]">
+                  <span className="truncate text-gray-800">{a.p}</span>
+                  <b className="tabular-nums">{fmt(a.sug)}</b>
+                </div>
+                <div
+                  className="h-1.5 rounded mt-1.5"
+                  style={{
+                    width: `${((a.sug / topProv.max) * 100).toFixed(0)}%`,
+                    background: a.crit > 0 ? '#c0392b' : '#0e7c86',
+                  }}
+                />
+                <div className="text-xs text-gray-400 mt-0.5">{a.crit} en quiebre</div>
+              </li>
+            ))}
+            {topProv.arr.length === 0 && (
+              <li className="px-4 py-3 text-xs text-gray-400">Sin datos aún.</li>
+            )}
+          </ul>
         </div>
       </div>
       {gruposAbierto && (

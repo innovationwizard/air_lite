@@ -418,7 +418,12 @@ const allNavGroups: NavGroup[] = [
   },
 ];
 
-export function Sidebar() {
+interface SidebarProps {
+  open: boolean;
+  onClose: () => void;
+}
+
+export function Sidebar({ open, onClose }: SidebarProps) {
   const pathname = usePathname();
   const { profile } = useUserRole();
   const userRole = profile?.role;
@@ -436,7 +441,21 @@ export function Sidebar() {
     .filter((group) => group.items.length > 0);
 
   return (
-    <aside className="flex flex-col w-72 bg-white border-r border-gray-200">
+    <>
+      {open && (
+        <div
+          className="fixed inset-0 z-30 bg-black/30"
+          onClick={onClose}
+          aria-hidden="true"
+        />
+      )}
+      <aside
+        className={cn(
+          'fixed inset-y-0 left-0 z-40 flex w-72 flex-col bg-white border-r border-gray-200',
+          'transition-transform duration-200 ease-in-out',
+          open ? 'translate-x-0' : '-translate-x-full',
+        )}
+      >
       <div className="flex items-center gap-3 px-5 py-4 border-b border-gray-100">
         <Image src="/box.svg" alt="AI Refill" width={32} height={32} />
         <span className="font-semibold text-gray-900 text-sm">AI Refill</span>
@@ -509,6 +528,7 @@ export function Sidebar() {
           </p>
         </div>
       )}
-    </aside>
+      </aside>
+    </>
   );
 }
