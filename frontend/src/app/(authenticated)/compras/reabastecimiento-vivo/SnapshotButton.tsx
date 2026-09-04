@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { AlertTriangle, Download, FileCheck2, History, Loader2, X } from 'lucide-react';
 import type { Filtros, Orden } from '@/lib/compras/tabla';
 import type { SnapshotPayload } from '@/lib/pdf/reabastecimientoStatusPdf';
+import { BODEGA_LABEL } from '@/lib/compras/bodega';
 
 /**
  * "Emitir prueba de estado" — proof of status for posterior audits.
@@ -240,7 +241,7 @@ function SnapshotHistoryPanel({ canViewAll, onClose }: { canViewAll: boolean; on
             <li key={r.id} className="flex items-center justify-between gap-2 rounded border border-gray-100 px-2 py-1.5 text-xs">
               <div className="min-w-0">
                 <div className="truncate font-medium text-gray-700">
-                  {r.bodega} · {new Date(r.created_at).toLocaleString('es-GT', { timeZone: 'America/Guatemala' })}
+                  {BODEGA_LABEL[r.bodega] ?? r.bodega} · {new Date(r.created_at).toLocaleString('es-GT', { timeZone: 'America/Guatemala' })}
                 </div>
                 <div className="truncate text-gray-500">{r.total_filas} filas · {r.autor}</div>
               </div>

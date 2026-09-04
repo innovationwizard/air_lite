@@ -14,6 +14,7 @@
  * render to judge, not a guess).
  */
 import type { Filtros, Orden } from '@/lib/compras/tabla';
+import { BODEGA_LABEL } from '@/lib/compras/bodega';
 
 // ─────────────────────────────────────────────────────────────────────────
 // Types — the full frozen payload, as returned by POST or GET .../snapshot/[id]
@@ -119,7 +120,8 @@ function slug(s: string): string {
  */
 export function reabastecimientoStatusFilename(snapshot: SnapshotPayload): string {
   const autor = snapshot.autor.split('(')[0].trim() || snapshot.autor;
-  return `${filenameTimestamp(snapshot.createdAt)}_ReabastecimientoVivo_${slug(snapshot.bodega)}_${slug(autor)}.pdf`;
+  const bodega = BODEGA_LABEL[snapshot.bodega] ?? snapshot.bodega;
+  return `${filenameTimestamp(snapshot.createdAt)}_ReabastecimientoVivo_${slug(bodega)}_${slug(autor)}.pdf`;
 }
 
 // ─────────────────────────────────────────────────────────────────────────

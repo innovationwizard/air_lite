@@ -33,6 +33,7 @@
  */
 import { Document, Page, Text, View, StyleSheet, pdf } from '@react-pdf/renderer';
 import { displayTimestamp, describeFiltros, reabastecimientoStatusFilename, type SnapshotFila, type SnapshotPayload } from './reabastecimientoStatusPdf.helpers';
+import { BODEGA_LABEL } from '@/lib/compras/bodega';
 
 export * from './reabastecimientoStatusPdf.helpers';
 
@@ -79,7 +80,7 @@ function n(v: number | null | undefined, digits = 0): string {
 function FixedHeader({ snapshot }: { snapshot: SnapshotPayload }) {
   return (
     <View style={styles.fixedHeader} fixed>
-      <Text style={styles.title}>Reabastecimiento en vivo — prueba de estado ({snapshot.bodega})</Text>
+      <Text style={styles.title}>Reabastecimiento en vivo — prueba de estado ({BODEGA_LABEL[snapshot.bodega] ?? snapshot.bodega})</Text>
       <Text style={styles.metaLine}>
         Generado por {snapshot.autor} · {displayTimestamp(snapshot.createdAt)} · {snapshot.totalFilas} filas
       </Text>
@@ -229,7 +230,7 @@ function ReabastecimientoStatusDocument({ snapshot }: { snapshot: SnapshotPayloa
     <Document
       title={reabastecimientoStatusFilename(snapshot)}
       author={snapshot.autor}
-      subject={`Prueba de estado — Reabastecimiento en vivo — ${snapshot.bodega}`}
+      subject={`Prueba de estado — Reabastecimiento en vivo — ${BODEGA_LABEL[snapshot.bodega] ?? snapshot.bodega}`}
     >
       <Page size="A4" orientation="landscape" style={styles.page}>
         <FixedHeader snapshot={snapshot} />

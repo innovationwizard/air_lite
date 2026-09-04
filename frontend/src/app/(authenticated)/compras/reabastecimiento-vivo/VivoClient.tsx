@@ -13,6 +13,7 @@ import {
   type Orden, siguienteOrden, vista,
 } from '@/lib/compras/tabla';
 import { computeKpis, computeAlza, computeTopProveedores } from '@/lib/compras/statusMetrics';
+import { BODEGA_LABEL, ordenarBodegas } from '@/lib/compras/bodega';
 import { ExportCarvajal } from './ExportCarvajal';
 import { SnapshotButton } from './SnapshotButton';
 import { ProveedorFiltro, type ProveedorGrupo } from './ProveedorFiltro';
@@ -359,7 +360,7 @@ export function VivoClient() {
 
   /** Bodegas físicas — General es la suma, no un lugar donde algo se quede. */
   const destinos = useMemo(
-    () => (payload?.bodegas ?? []).filter((b) => b !== 'General'),
+    () => ordenarBodegas((payload?.bodegas ?? []).filter((b) => b !== 'General')),
     [payload],
   );
 
@@ -550,7 +551,7 @@ export function VivoClient() {
         </div>
         <div className="flex-1" />
         <div className="inline-flex rounded-lg bg-gray-100 p-1">
-          {(payload?.bodegas ?? ['General']).map((b) => (
+          {ordenarBodegas(payload?.bodegas ?? ['General']).map((b) => (
             <button
               key={b}
               onClick={() => setBodega(b)}
@@ -559,7 +560,7 @@ export function VivoClient() {
                 bodega === b ? 'bg-teal-700 text-white font-semibold' : 'text-gray-600 hover:text-gray-900'
               }`}
             >
-              {b}
+              {BODEGA_LABEL[b] ?? b}
             </button>
           ))}
         </div>
@@ -1165,7 +1166,7 @@ function DestinoSelect({ value, opciones, label, onChange }: {
       }`}
     >
       <option value="">— sin declarar —</option>
-      {opciones.map((b) => <option key={b} value={b}>{b}</option>)}
+      {opciones.map((b) => <option key={b} value={b}>{BODEGA_LABEL[b] ?? b}</option>)}
     </select>
   );
 }
