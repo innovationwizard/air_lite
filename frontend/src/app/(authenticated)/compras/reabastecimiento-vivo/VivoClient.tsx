@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  AlertTriangle, Boxes, ChevronDown, ChevronUp, ChevronsUpDown, CloudOff, ListFilter, PackageCheck,
+  AlertTriangle, Boxes, ChevronDown, ChevronUp, ChevronsUpDown, CloudOff, ListFilter, Loader2, PackageCheck,
   Pencil, RefreshCw, Search, TrendingUp, X,
 } from 'lucide-react';
 import { MAX_MANUAL_QTY } from '@/lib/compras/qty';
@@ -14,6 +14,7 @@ import {
 } from '@/lib/compras/tabla';
 import { computeKpis, computeAlza, computeTopProveedores } from '@/lib/compras/statusMetrics';
 import { BODEGA_LABEL, ordenarBodegas } from '@/lib/compras/bodega';
+import { COBERTURA_OPCIONES } from '@/lib/compras/cobertura';
 import { ExportCarvajal } from './ExportCarvajal';
 import { SnapshotButton } from './SnapshotButton';
 import { ProveedorFiltro, type ProveedorGrupo } from './ProveedorFiltro';
@@ -358,6 +359,28 @@ export function VivoClient() {
     }
   }, [bodega, load]);
 
+  const [coberturaGuardando, setCoberturaGuardando] = useState(false);
+  const commitCobertura = useCallback(async (dias: number) => {
+    setSaveError(null);
+    setCoberturaGuardando(true);
+    try {
+      const res = await fetch('/api/compras/reabastecimiento/cobertura', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ bodega, dias }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error ?? `HTTP ${res.status}`);
+      }
+      await load(bodega, true);
+    } catch (e) {
+      setSaveError(`No se guardó el horizonte de ${bodega}: ${e instanceof Error ? e.message : e}`);
+    } finally {
+      setCoberturaGuardando(false);
+    }
+  }, [bodega, load]);
+
   /** Bodegas físicas — General es la suma, no un lugar donde algo se quede. */
   const destinos = useMemo(
     () => ordenarBodegas((payload?.bodegas ?? []).filter((b) => b !== 'General')),
@@ -679,14 +702,20 @@ export function VivoClient() {
           ) : null}
 
           {payload?.meta ? (
-            <div className="mx-3 mb-3 inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-1.5 text-xs text-gray-700">
-              <span className="font-semibold">Sugerido a {payload.meta.coberturaDias} días</span>
-              <span className="text-gray-400">·</span>
-              <span className="text-gray-500">
-                {payload.meta.coberturaDias === 30
-                  ? 'horizonte por defecto'
-                  : `${bodega} se resurte desde San José, no del proveedor`}
-              </span>
+            <div className="mx-3 mb-3 inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-1.5 text-xs text-gray-700"
+                 title={`Cuántos días de demanda cubre el Sugerido en ${bodega}. Cada bodega tiene el suyo.`}>
+              <span className="font-semibold">Sugerido a</span>
+              <select
+                value={payload.meta.coberturaDias}
+                disabled={coberturaGuardando}
+                onChange={(e) => void commitCobertura(Number(e.target.value))}
+                className="rounded border border-gray-300 bg-white px-1.5 py-0.5 text-xs font-semibold text-gray-700
+                           focus:outline-none focus:ring-2 focus:ring-teal-600 disabled:opacity-50"
+              >
+                {COBERTURA_OPCIONES.map((d) => <option key={d} value={d}>{d}</option>)}
+              </select>
+              <span className="text-gray-500">días</span>
+              {coberturaGuardando && <Loader2 size={12} className="animate-spin text-gray-400" />}
             </div>
           ) : null}
 

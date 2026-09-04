@@ -17,6 +17,7 @@ import {
   Activity,
   Truck,
   History,
+  UserCog,
   // ClipboardList,   // unused while Órdenes Abiertas section is hidden (2026-05-27)
   FileCheck,
   FileUp,
@@ -35,6 +36,7 @@ import {
   CAN_VIEW_SYSTEM,
   // CAN_VIEW_OA,    // unused while Órdenes Abiertas section is hidden (2026-05-27)
   CAN_VIEW_COMPRAS,
+  CAN_MANAGE_SUPPLIER_GROUPS,
   CAN_VIEW_INVENTARIOS,
   CAN_VIEW_OPERACIONES,
   CAN_VIEW_GERENCIA,
@@ -59,6 +61,8 @@ interface NavItem {
   icon: React.ComponentType<{ className?: string }>;
   subtitle: string | null;
   disabled?: boolean;
+  /** Narrower than the section's requiredRoles, for an item not every role in the section can use. */
+  requiredRoles?: Role[];
 }
 
 interface NavGroup {
@@ -169,6 +173,13 @@ const allNavGroups: NavGroup[] = [
         href: '/compras/reabastecimiento-vivo/historial',
         icon: History,
         subtitle: 'Pruebas de estado emitidas',
+      },
+      {
+        name: 'Grupos de proveedores',
+        href: '/compras/reabastecimiento-vivo/proveedores',
+        icon: UserCog,
+        subtitle: 'Agrupar proveedores para filtrar y comprar',
+        requiredRoles: CAN_MANAGE_SUPPLIER_GROUPS,
       },
       {
         name: 'Forecast de Compras',
@@ -435,6 +446,10 @@ export function Sidebar({ open, onClose }: SidebarProps) {
       if (group.requiredRoles && !isAuthorized(userRole, group.requiredRoles)) return false;
       return true;
     })
+    .map((group) => ({
+      ...group,
+      items: group.items.filter((item) => item.requiredRoles ? isAuthorized(userRole, item.requiredRoles) : true),
+    }))
     .map((group) => (focus
       ? { ...group, items: group.items.filter((item) => focus.includes(item.href)) }
       : group))

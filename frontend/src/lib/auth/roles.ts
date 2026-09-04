@@ -169,7 +169,10 @@ export const CAN_VIEW_POC: Role[] = [
  * landing page**; every entry is reachable.
  */
 export const ROLLOUT_FOCUS: Partial<Record<Role, string[]>> = {
-  compras: ['/compras/reabastecimiento-vivo', '/compras/reabastecimiento-vivo/historial', '/comercial/forecast'],
+  compras: [
+    '/compras/reabastecimiento-vivo', '/compras/reabastecimiento-vivo/historial',
+    '/compras/reabastecimiento-vivo/proveedores', '/comercial/forecast',
+  ],
   // A6.20 — los CUATRO modelos de Alexis, cada uno con su juego de reglas.
   // `reyma-vivo` sigue primero: es la landing y el modelo validado.
   inventario: ['/inventarios/reyma-vivo', '/inventarios/carvajal-vivo',
@@ -246,6 +249,11 @@ export const PAGE_PERMISSIONS: Record<string, Role[]> = {
   '/compras': CAN_VIEW_COMPRAS,
   '/compras/reabastecimiento': CAN_VIEW_COMPRAS,
   '/compras/reabastecimiento-vivo': CAN_VIEW_COMPRAS,
+  // Narrower than the parent page (CAN_VIEW_COMPRAS) — most-specific-prefix-wins
+  // in the middleware, so this correctly excludes ventas/inventario/financiero/
+  // etc., who could view reabastecimiento-vivo but were never meant to manage
+  // supplier groups.
+  '/compras/reabastecimiento-vivo/proveedores': CAN_MANAGE_SUPPLIER_GROUPS,
   '/inventarios/reyma': CAN_VIEW_INVENTARIOS,
   '/inventarios/reyma-vivo': CAN_VIEW_INVENTARIOS,
   '/inventarios/carvajal-vivo': CAN_VIEW_INVENTARIOS,

@@ -236,7 +236,8 @@ describe('ROLLOUT_FOCUS — confinamiento de varias rutas', () => {
 
   it('compras sigue confinado a su página de trabajo, sin el estado', () => {
     expect(focusRoutes('compras')).toEqual([
-      '/compras/reabastecimiento-vivo', '/compras/reabastecimiento-vivo/historial', '/comercial/forecast',
+      '/compras/reabastecimiento-vivo', '/compras/reabastecimiento-vivo/historial',
+      '/compras/reabastecimiento-vivo/proveedores', '/comercial/forecast',
     ]);
   });
 
