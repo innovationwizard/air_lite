@@ -304,10 +304,10 @@ export function ExportCarvajal({ productIds, bodega }: { productIds: number[]; b
         type="button"
         onClick={() => setOpen(true)}
         disabled={productIds.length === 0}
-        className="inline-flex items-center gap-1.5 rounded-lg border border-teal-600 bg-teal-600 px-3 py-2 text-xs font-semibold text-white hover:bg-teal-700 disabled:cursor-not-allowed disabled:border-gray-200 disabled:bg-gray-200 disabled:text-gray-400"
+        className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg border border-teal-600 bg-teal-600 px-3 py-2 text-xs text-white hover:bg-teal-700 disabled:cursor-not-allowed disabled:border-gray-200 disabled:bg-gray-200 disabled:text-gray-400"
         title="Descargar el plan en el formato que le mandás al proveedor"
       >
-        <Download size={13} /> Exportar xlsx
+        <Download size={13} /> Exportar
       </button>
 
       {open ? (

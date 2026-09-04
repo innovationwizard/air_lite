@@ -16,6 +16,7 @@ import {
   Users,
   Activity,
   Truck,
+  History,
   // ClipboardList,   // unused while Órdenes Abiertas section is hidden (2026-05-27)
   FileCheck,
   FileUp,
@@ -162,6 +163,12 @@ const allNavGroups: NavGroup[] = [
         href: '/compras/reabastecimiento-vivo',
         icon: Activity,
         subtitle: 'Datos Odoo en vivo + captura en línea',
+      },
+      {
+        name: 'Historial de snapshots',
+        href: '/compras/reabastecimiento-vivo/historial',
+        icon: History,
+        subtitle: 'Pruebas de estado emitidas',
       },
       {
         name: 'Forecast de Compras',

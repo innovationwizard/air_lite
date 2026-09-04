@@ -169,7 +169,7 @@ export const CAN_VIEW_POC: Role[] = [
  * landing page**; every entry is reachable.
  */
 export const ROLLOUT_FOCUS: Partial<Record<Role, string[]>> = {
-  compras: ['/compras/reabastecimiento-vivo', '/comercial/forecast'],
+  compras: ['/compras/reabastecimiento-vivo', '/compras/reabastecimiento-vivo/historial', '/comercial/forecast'],
   // A6.20 — los CUATRO modelos de Alexis, cada uno con su juego de reglas.
   // `reyma-vivo` sigue primero: es la landing y el modelo validado.
   inventario: ['/inventarios/reyma-vivo', '/inventarios/carvajal-vivo',

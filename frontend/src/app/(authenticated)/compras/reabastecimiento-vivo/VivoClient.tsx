@@ -545,9 +545,6 @@ export function VivoClient() {
       <div className="flex flex-wrap items-center gap-3 mb-4">
         <div>
           <h1 className="text-xl font-bold text-gray-900">Reabastecimiento en Vivo</h1>
-          <p className="text-sm text-gray-500">
-            Datos Odoo sincronizados — mismo motor verificado del Excel, con captura en línea
-          </p>
         </div>
         <div className="flex-1" />
         <div className="inline-flex rounded-lg bg-gray-100 p-1">
@@ -666,7 +663,6 @@ export function VivoClient() {
                 }}
                 orden={orden}
                 visibleCount={list.length}
-                canViewAllSnapshots={profile?.role === 'superuser'}
               />
             </div>
           </div>
@@ -1305,8 +1301,8 @@ function CopiarTabla({ filas, bodega }: { filas: ApiRow[]; bodega: string }) {
       <button
         onClick={copiar}
         disabled={filas.length === 0}
-        className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm
-                   text-gray-700 hover:bg-gray-50 disabled:opacity-40"
+        className="whitespace-nowrap rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs
+                   text-gray-600 hover:bg-gray-50 disabled:opacity-40"
         title={`Copiar las ${filas.length} filas visibles de ${bodega} para pegarlas en Odoo`}
       >
         Copiar
