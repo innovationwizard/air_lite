@@ -80,6 +80,13 @@ interface InputRow {
 interface ProductRef {
   id: number; sku: string | null; name: string; category: string | null;
   purchase_ok: boolean;
+  /**
+   * m³ por unidad, de `product.volume` de Odoo. NULL = nunca se midió — y se
+   * propaga como null hasta el archivo, jamás como 0: un 0 diría que el
+   * producto no ocupa espacio en el furgón. Medido el 2026-09-07: 1,115 de
+   * 1,333 productos de esta página lo tienen (83.6%).
+   */
+  volume_m3: number | string | null;
 }
 interface SupplierLink { product_id: number; supplier_id: number }
 interface SupplierRef { id: number; name: string }
@@ -124,6 +131,8 @@ export interface LiveRow {
   alerta: Alerta;
   /** ABC (Wilmer, 2026-09-03) — ver classifyAbc más abajo. */
   abc: 'A' | 'B' | 'C' | 'D';
+  /** m³ por unidad. null = sin medir; nunca 0 por omisión. Ver ProductRef. */
+  volM3: number | null;
   flags: {
     pendingUnknown: boolean; seasonalLowConfidence: boolean;
     seasonalExcluded: boolean; tendenciaCreciente: boolean;
@@ -134,6 +143,18 @@ export interface LiveRow {
     sinReferenciaAnioAnterior: boolean;
   };
   seasonalMotivo: string | null;
+}
+
+/**
+ * `products.volume_m3` es NUMERIC y PostgREST lo entrega como string. Sólo un
+ * número finito y POSITIVO cuenta como medida: 0, vacío, null y cualquier cosa
+ * no numérica son «sin medir», y viajan como null hasta la columna m³ del
+ * archivo, que queda vacía en vez de mentir con un cero.
+ */
+export function volumenM3(raw: number | string | null | undefined): number | null {
+  if (raw === null || raw === undefined || raw === '') return null;
+  const n = typeof raw === 'number' ? raw : Number(raw);
+  return Number.isFinite(n) && n > 0 ? n : null;
 }
 
 /** Everything the page and the export both need for one bodega. */
@@ -152,7 +173,7 @@ export async function buildRows(
         fetchAll<InputRow>((a, b) =>
           service.from('reabastecimiento_inputs').select('*').eq('bodega', bodega).range(a, b)),
         fetchAll<ProductRef>((a, b) =>
-          service.from('products').select('id, sku, name, category, purchase_ok').range(a, b)),
+          service.from('products').select('id, sku, name, category, purchase_ok, volume_m3').range(a, b)),
         fetchAll<SupplierLink>((a, b) =>
           service.from('product_suppliers').select('product_id, supplier_id').range(a, b)),
         fetchAll<SupplierRef>((a, b) =>
@@ -326,6 +347,9 @@ export async function buildRows(
         // producto que no se puede agrupar igual hay que comprarlo.
         cat: (productById.get(r.product_id)?.category ?? '').trim() || 'Sin categoría',
         purchaseOk: productById.get(r.product_id)?.purchase_ok ?? true,
+        // NUMERIC llega como string desde PostgREST; un Number('') sería 0 y
+        // eso es justo lo que no puede pasar acá.
+        volM3: volumenM3(productById.get(r.product_id)?.volume_m3),
         exist: round1(existNet),
         existencias: round1(r.existencias),
         reserved: round1(r.reserved),

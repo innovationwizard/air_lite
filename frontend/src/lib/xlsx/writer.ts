@@ -35,8 +35,17 @@ export interface SheetColumn {
   header: string;
   /** Column width in Excel character units. */
   width: number;
-  /** 'number' renders with a #,##0 thousands separator; 'text' is a string. */
-  type: 'text' | 'number';
+  /**
+   * How the cell is written and formatted:
+   *   'text'     — an inline string, left as typed.
+   *   'number'   — #,##0 (thousands separator, no decimals).
+   *   'decimal1' — #,##0.0  · DOH is 2.3 days, and #,##0 would SHOW it as 2.
+   *   'decimal4' — #,##0.0000 · a unit cubicaje is 0.0042 m³; fewer decimals
+   *                round it to zero and the m³ column silently becomes blanks.
+   * Every numeric type stores a real number, never a pre-formatted string —
+   * the file has to stay sortable and summable in Excel.
+   */
+  type: 'text' | 'number' | 'decimal1' | 'decimal4';
 }
 
 export interface SheetSpec {
@@ -45,6 +54,13 @@ export interface SheetSpec {
   columns: SheetColumn[];
   /** One array per row, aligned to `columns`. null renders an EMPTY cell. */
   rows: CellValue[][];
+  /**
+   * Excel autofilter over the whole range. Default TRUE — filtering in Excel is
+   * the whole point of the file (Wilmer: *"filtro los de menor a mayor…"*).
+   * Set false for a sheet that is prose rather than a table, where a filter
+   * dropdown on a label column is just noise.
+   */
+  autoFilter?: boolean;
 }
 
 // ── XML helpers ──────────────────────────────────────────────────────────────
@@ -84,15 +100,32 @@ export function safeSheetName(name: string): string {
 const STYLE_DEFAULT = 0;
 const STYLE_HEADER = 1;
 const STYLE_NUMBER = 2;
+const STYLE_DECIMAL1 = 3;
+const STYLE_DECIMAL4 = 4;
 
-function cellXml(col: number, row: number, value: CellValue, style: number, type: 'text' | 'number'): string {
+/** Column type → cell style index in `stylesXml`. */
+const STYLE_BY_TYPE: Record<SheetColumn['type'], number> = {
+  text: STYLE_DEFAULT,
+  number: STYLE_NUMBER,
+  decimal1: STYLE_DECIMAL1,
+  decimal4: STYLE_DECIMAL4,
+};
+
+/** Everything that is not 'text' is written as a numeric cell. */
+function esNumerica(type: SheetColumn['type']): boolean {
+  return type !== 'text';
+}
+
+function cellXml(
+  col: number, row: number, value: CellValue, style: number, type: SheetColumn['type'],
+): string {
   const ref = cellRef(col, row);
   const s = style === STYLE_DEFAULT ? '' : ` s="${style}"`;
   // null is an EMPTY cell, not a zero. The Carvajal sheet leaves a bodega blank
   // when it gets nothing, and a 0 there would read as "ordered zero" instead of
   // "not on this shipment".
   if (value === null || value === '') return `<c r="${ref}"${s}/>`;
-  if (type === 'number' && typeof value === 'number') {
+  if (esNumerica(type) && typeof value === 'number') {
     if (!Number.isFinite(value)) return `<c r="${ref}"${s}/>`;
     return `<c r="${ref}"${s}><v>${value}</v></c>`;
   }
@@ -117,7 +150,7 @@ export function sheetXml(spec: SheetSpec): string {
     .map((r, ri) => {
       const cells = spec.columns
         .map((c, ci) => {
-          const style = c.type === 'number' ? STYLE_NUMBER : STYLE_DEFAULT;
+          const style = STYLE_BY_TYPE[c.type] ?? STYLE_DEFAULT;
           return cellXml(ci + 1, ri + 2, r[ci] ?? null, style, c.type);
         })
         .join('');
@@ -131,7 +164,7 @@ export function sheetXml(spec: SheetSpec): string {
     + `<sheetFormatPr defaultRowHeight="15"/>`
     + `<cols>${cols}</cols>`
     + `<sheetData>${header}${body}</sheetData>`
-    + `<autoFilter ref="${dim}"/>`
+    + (spec.autoFilter === false ? '' : `<autoFilter ref="${dim}"/>`)
     + `</worksheet>`;
 }
 
@@ -139,7 +172,11 @@ export function sheetXml(spec: SheetSpec): string {
 function stylesXml(): string {
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>`
     + `<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">`
-    + `<numFmts count="1"><numFmt numFmtId="164" formatCode="#,##0"/></numFmts>`
+    + `<numFmts count="3">`
+    + `<numFmt numFmtId="164" formatCode="#,##0"/>`
+    + `<numFmt numFmtId="165" formatCode="#,##0.0"/>`
+    + `<numFmt numFmtId="166" formatCode="#,##0.0000"/>`
+    + `</numFmts>`
     + `<fonts count="2">`
     + `<font><sz val="11"/><name val="Aptos Narrow"/></font>`
     + `<font><b/><sz val="11"/><name val="Aptos Narrow"/></font>`
@@ -151,10 +188,12 @@ function stylesXml(): string {
     + `</fills>`
     + `<borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>`
     + `<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>`
-    + `<cellXfs count="3">`
+    + `<cellXfs count="5">`
     + `<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>`
     + `<xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1"/>`
     + `<xf numFmtId="164" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/>`
+    + `<xf numFmtId="165" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/>`
+    + `<xf numFmtId="166" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/>`
     + `</cellXfs>`
     // Without this, readers report "workbook contains no default style" — the
     // file still opens, but a file that makes a reader complain is not done.
@@ -243,8 +282,63 @@ export function zip(files: { name: string; content: string }[]): Uint8Array {
 
 // ── Public entry point ───────────────────────────────────────────────────────
 
-export function buildXlsx(spec: SheetSpec): Uint8Array {
-  const name = safeSheetName(spec.name);
+/**
+ * Excel refuses to open a workbook with two sheets of the same name, and
+ * `safeSheetName` can collapse two different names into one because it
+ * truncates at 31 characters. Later duplicates get a numeric suffix rather
+ * than being allowed to produce a file that does not open.
+ */
+function uniqueSheetNames(specs: readonly SheetSpec[]): string[] {
+  const used = new Set<string>();
+  return specs.map((s) => {
+    const base = safeSheetName(s.name);
+    // Excel's own comparison is case-insensitive: "Origen" and "origen" clash.
+    if (!used.has(base.toLowerCase())) {
+      used.add(base.toLowerCase());
+      return base;
+    }
+    for (let n = 2; ; n += 1) {
+      const suffix = ` (${n})`;
+      const candidate = base.slice(0, 31 - suffix.length) + suffix;
+      if (!used.has(candidate.toLowerCase())) {
+        used.add(candidate.toLowerCase());
+        return candidate;
+      }
+    }
+  });
+}
+
+/**
+ * A workbook of one or more worksheets, in the order given.
+ *
+ * MULTI-SHEET SINCE 2026-09-07, and for one reason: the Sugerido export ships
+ * the table Wilmer works on PLUS a sheet that says where every number came
+ * from. The provenance could not go above the table — a header block would
+ * break the autofilter and the copy-paste into Odoo that the file exists for,
+ * and merged cells are banned for the same reason. So it gets its own sheet.
+ */
+export function buildWorkbook(specs: readonly SheetSpec[]): Uint8Array {
+  if (specs.length === 0) throw new Error('un workbook necesita al menos una hoja');
+  const names = uniqueSheetNames(specs);
+  // Styles take the relationship id AFTER the sheets, so it moves with the
+  // sheet count. Hard-coding rId2 was correct only while there was one sheet.
+  const stylesRel = `rId${specs.length + 1}`;
+
+  const sheetParts = specs.map((_, i) =>
+    `<Override PartName="/xl/worksheets/sheet${i + 1}.xml" `
+    + `ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`,
+  ).join('');
+
+  const sheetTags = names.map((n, i) =>
+    `<sheet name="${esc(n)}" sheetId="${i + 1}" r:id="rId${i + 1}"/>`,
+  ).join('');
+
+  const sheetRels = names.map((_, i) =>
+    `<Relationship Id="rId${i + 1}" `
+    + `Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" `
+    + `Target="worksheets/sheet${i + 1}.xml"/>`,
+  ).join('');
+
   return zip([
     {
       name: '[Content_Types].xml',
@@ -253,7 +347,7 @@ export function buildXlsx(spec: SheetSpec): Uint8Array {
         + `<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>`
         + `<Default Extension="xml" ContentType="application/xml"/>`
         + `<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>`
-        + `<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`
+        + sheetParts
         + `<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>`
         + `</Types>`,
     },
@@ -269,18 +363,26 @@ export function buildXlsx(spec: SheetSpec): Uint8Array {
       content: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>`
         + `<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" `
         + `xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">`
-        + `<sheets><sheet name="${esc(name)}" sheetId="1" r:id="rId1"/></sheets>`
+        + `<sheets>${sheetTags}</sheets>`
         + `</workbook>`,
     },
     {
       name: 'xl/_rels/workbook.xml.rels',
       content: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>`
         + `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">`
-        + `<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>`
-        + `<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>`
+        + sheetRels
+        + `<Relationship Id="${stylesRel}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>`
         + `</Relationships>`,
     },
     { name: 'xl/styles.xml', content: stylesXml() },
-    { name: 'xl/worksheets/sheet1.xml', content: sheetXml({ ...spec, name }) },
+    ...specs.map((spec, i) => ({
+      name: `xl/worksheets/sheet${i + 1}.xml`,
+      content: sheetXml({ ...spec, name: names[i] }),
+    })),
   ]);
+}
+
+/** One worksheet — the common case, and what every existing caller uses. */
+export function buildXlsx(spec: SheetSpec): Uint8Array {
+  return buildWorkbook([spec]);
 }

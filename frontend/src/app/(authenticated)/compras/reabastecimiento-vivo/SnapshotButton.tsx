@@ -17,7 +17,7 @@ import type { SnapshotPayload } from '@/lib/pdf/reabastecimientoStatusPdf';
  *
  * D-8: if the freeze POST fails, NOTHING downloads. This is the one place
  * this feature deliberately does not follow the Carvajal export's
- * "never block the download" posture (ExportCarvajal.tsx) — there the
+ * "never block the download" posture (ExportarExcel.tsx) — there the
  * download is the deliverable and the log is secondary; here the frozen
  * server record IS the deliverable, and a PDF without one would silently
  * look identical to a real proof while not being backed by anything.

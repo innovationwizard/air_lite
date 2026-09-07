@@ -1,4 +1,7 @@
-import { buildXlsx, cellRef, crc32, esc, safeSheetName, sheetXml, zip } from '../writer';
+import {
+  type SheetColumn, type SheetSpec,
+  buildWorkbook, buildXlsx, cellRef, crc32, esc, safeSheetName, sheetXml, zip,
+} from '../writer';
 
 describe('esc', () => {
   it('escapes all five XML metacharacters', () => {
@@ -123,5 +126,96 @@ describe('buildXlsx', () => {
 
   it('declares a default cell style — readers warn without it', () => {
     expect(new TextDecoder().decode(bytes)).toContain('<cellStyles count="1"');
+  });
+});
+
+/* ─────────────────────────────────────────────────────────────────────────────
+ * Multi-hoja y formatos decimales (2026-09-07) — lo que el export del Sugerido
+ * necesita: una hoja de trabajo más una de procedencia, y números que no se
+ * redondeen al escribirse.
+ * ───────────────────────────────────────────────────────────────────────────── */
+
+const HOJA = (name: string): SheetSpec => ({
+  name,
+  columns: [{ header: 'Código', width: 12, type: 'text' }],
+  rows: [['77205049']],
+});
+
+const texto = (bytes: Uint8Array) => new TextDecoder().decode(bytes);
+
+describe('buildWorkbook', () => {
+  it('rechaza un libro sin hojas en vez de escribir un archivo que no abre', () => {
+    expect(() => buildWorkbook([])).toThrow(/al menos una hoja/);
+  });
+
+  it('escribe una parte por hoja', () => {
+    const s = texto(buildWorkbook([HOJA('Sugerido'), HOJA('Origen')]));
+    expect(s).toContain('xl/worksheets/sheet1.xml');
+    expect(s).toContain('xl/worksheets/sheet2.xml');
+    expect(s).toContain('<Override PartName="/xl/worksheets/sheet2.xml"');
+  });
+
+  it('nombra las hojas en el orden dado', () => {
+    const s = texto(buildWorkbook([HOJA('Sugerido'), HOJA('Origen')]));
+    expect(s.indexOf('name="Sugerido" sheetId="1"')).toBeGreaterThan(-1);
+    expect(s.indexOf('name="Origen" sheetId="2"')).toBeGreaterThan(-1);
+  });
+
+  it('mueve la relación de estilos DETRÁS de las hojas — rId2 sólo servía con una', () => {
+    const s = texto(buildWorkbook([HOJA('A'), HOJA('B')]));
+    expect(s).toContain('Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles"');
+    expect(s).toContain('Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet"');
+  });
+
+  it('desambigua nombres repetidos — Excel no abre un libro con dos hojas iguales', () => {
+    const s = texto(buildWorkbook([HOJA('Origen'), HOJA('Origen'), HOJA('origen')]));
+    expect(s).toContain('name="Origen" sheetId="1"');
+    expect(s).toContain('name="Origen (2)" sheetId="2"');
+    expect(s).toContain('name="origen (3)" sheetId="3"');
+  });
+
+  it('buildXlsx sigue produciendo exactamente un libro de una hoja', () => {
+    expect(buildXlsx(HOJA('Hoja1'))).toEqual(buildWorkbook([HOJA('Hoja1')]));
+  });
+});
+
+describe('formatos numéricos', () => {
+  const conTipo = (type: SheetColumn['type'], v: number) => sheetXml({
+    name: 'H', columns: [{ header: 'X', width: 8, type }], rows: [[v]],
+  });
+
+  it('decimal1 conserva el decimal que #,##0 escondería', () => {
+    expect(conTipo('decimal1', 2.3)).toContain('<v>2.3</v>');
+  });
+
+  it('decimal4 conserva un cubicaje unitario que si no se redondea a cero', () => {
+    expect(conTipo('decimal4', 0.0042)).toContain('<v>0.0042</v>');
+  });
+
+  it('cada tipo numérico usa su propio estilo', () => {
+    expect(conTipo('number', 1)).toContain('s="2"');
+    expect(conTipo('decimal1', 1)).toContain('s="3"');
+    expect(conTipo('decimal4', 1)).toContain('s="4"');
+  });
+
+  it('los estilos que declara existen en la hoja de estilos', () => {
+    const s = texto(buildXlsx(HOJA('H')));
+    expect(s).toContain('<cellXfs count="5">');
+    expect(s).toContain('formatCode="#,##0.0"');
+    expect(s).toContain('formatCode="#,##0.0000"');
+  });
+
+  it('un decimal no finito sigue saliendo como celda vacía', () => {
+    expect(conTipo('decimal1', Number.NaN)).toContain('<c r="A2" s="3"/>');
+  });
+});
+
+describe('autoFilter', () => {
+  it('va puesto por defecto — filtrar en Excel es para lo que existe el archivo', () => {
+    expect(sheetXml(HOJA('H'))).toContain('<autoFilter');
+  });
+
+  it('se puede quitar para una hoja que es prosa', () => {
+    expect(sheetXml({ ...HOJA('H'), autoFilter: false })).not.toContain('<autoFilter');
   });
 });

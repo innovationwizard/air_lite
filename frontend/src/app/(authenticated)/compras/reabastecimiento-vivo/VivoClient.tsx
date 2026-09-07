@@ -15,13 +15,14 @@ import {
 import { computeKpis, computeAlza, computeTopProveedores } from '@/lib/compras/statusMetrics';
 import { BODEGA_LABEL, ordenarBodegas } from '@/lib/compras/bodega';
 import { COBERTURA_OPCIONES } from '@/lib/compras/cobertura';
-import { ExportCarvajal } from './ExportCarvajal';
+import { ExportarExcel } from './ExportarExcel';
 import { SnapshotButton } from './SnapshotButton';
 import { ProveedorFiltro, type ProveedorGrupo } from './ProveedorFiltro';
 import { ProveedorGruposPanel } from './ProveedorGruposPanel';
 import { useUserRole } from '@/lib/auth/useUserRole';
 import { CAN_MANAGE_SUPPLIER_GROUPS, isAuthorized } from '@/lib/auth/roles';
 import {
+  COBERTURA_DEFAULT_DIAS,
   type ProductRow, type Sev, sugerido, doh as dohOf, sev, fmt,
 } from '../reabastecimiento/engine';
 
@@ -33,6 +34,13 @@ import {
  * instant feedback, POST the entry (append-only), then silently refetch so the
  * server stays the source of truth.
  */
+
+/**
+ * Cuántas filas pinta la tabla. Es un tope de RENDER, no un filtro: el export
+ * se lleva todas las del filtro y lo dice, porque Excel es justamente a donde
+ * él va cuando el trabajo no cabe en una pantalla.
+ */
+const MAX_FILAS_RENDER = 400;
 
 const SEV_PILL: Record<Sev, string> = {
   crit: 'bg-red-100 text-red-700',
@@ -147,6 +155,8 @@ interface ApiRow {
   provGroupId: string | null;
   /** ABC (Wilmer, 2026-09-03) — ver classifyAbc en rows.ts. */
   abc: 'A' | 'B' | 'C' | 'D';
+  /** m³ por unidad. null = sin medir — nunca 0, ver volumenM3 en rows.ts. */
+  volM3: number | null;
   /** Odoo product.template "Can be Purchased" — drives el filtro «Solo comprables». */
   purchaseOk: boolean;
   exist: number; existencias: number; reserved: number; patio: number;
@@ -429,6 +439,22 @@ export function VivoClient() {
     setOrden((actual) => siguienteOrden(actual, k));
   }, []);
 
+  /**
+   * El proveedor tal como se lee en el filtro — el mismo cálculo que
+   * `ProveedorFiltro.etiquetaActual`, porque el archivo tiene que decir lo que
+   * la pantalla dice. Un grupo se resuelve a su nombre; sin filtro va VACÍO a
+   * propósito (ver `proveedorParaMostrar`), para que el nombre del archivo no
+   * invente un proveedor llamado «Todos».
+   */
+  const proveedorLabel = useMemo(() => {
+    if (!prov) return '';
+    if (prov.startsWith('group:')) {
+      const id = prov.slice('group:'.length);
+      return gruposEnBodega.find((g) => g.id === id)?.displayName ?? 'Grupo eliminado';
+    }
+    return prov;
+  }, [prov, gruposEnBodega]);
+
   // computeKpis/computeAlza/computeTopProveedores live in lib/compras/statusMetrics
   // so the "proof of status" snapshot route can compute the identical numbers
   // server-side — one function, two callers, never allowed to drift apart.
@@ -677,7 +703,34 @@ export function VivoClient() {
             </label>
             <div className="ml-auto flex items-center gap-2">
               <CopiarTabla filas={list} bodega={bodega} />
-              <ExportCarvajal productIds={list.map((r) => r.productId)} bodega={bodega} />
+              {/*
+                * WYSIWYG por construcción: recibe `list` — el MISMO arreglo que
+                * la tabla de abajo pinta, ya filtrado y ordenado por `vista()`.
+                * No se le pasa un id para que vuelva a buscar los datos: ese
+                * viaje de ida y vuelta era el que devolvía otra bodega y
+                * códigos de otro proveedor (D1–D3 del 26-ago).
+                */}
+              <ExportarExcel
+                filas={list}
+                contexto={{
+                  bodega,
+                  bodegaLabel: BODEGA_LABEL[bodega] ?? bodega,
+                  bodegaDetalle: BODEGA_TIP[bodega],
+                  proveedorLabel,
+                  filtros: {
+                    texto: q, proveedor: prov, soloConSugerido: onlySug, soloCriticos: onlyCrit,
+                    soloEnAlza: onlyAlza, soloComprables: onlyComprables, rangos,
+                  },
+                  orden,
+                  coberturaDias: payload?.meta.coberturaDias ?? COBERTURA_DEFAULT_DIAS,
+                  datosAl: sync?.counts?.data_horizon ?? payload?.meta.asOf ?? null,
+                  totalSinFiltros: payload?.rows.length ?? 0,
+                  // Es el mismo número en toda la tabla (días transcurridos del
+                  // mes), así que va al encabezado y no a una columna.
+                  mtdDias: list.find((r) => r.mtdDias !== null)?.mtdDias ?? null,
+                }}
+                filasEnPantalla={MAX_FILAS_RENDER}
+              />
               <SnapshotButton
                 bodega={bodega}
                 filtros={{
@@ -769,14 +822,14 @@ export function VivoClient() {
                   </tr>
                 </thead>
                 <tbody className="tabular-nums">
-                  {list.slice(0, 400).map((r) => renderFila(r))}
+                  {list.slice(0, MAX_FILAS_RENDER).map((r) => renderFila(r))}
                 </tbody>
               </table>
             </div>
           )}
           <div className="text-xs text-gray-500 px-3 py-2.5 border-t border-gray-100">
-            Mostrando <b>{Math.min(400, list.length)}</b> de <b>{list.length}</b> productos
-            {list.length > 400 ? ' (primeros 400 — refiná con filtros)' : ''} · bodega <b>{bodega}</b>
+            Mostrando <b>{Math.min(MAX_FILAS_RENDER, list.length)}</b> de <b>{list.length}</b> productos
+            {list.length > MAX_FILAS_RENDER ? ` (primeros ${MAX_FILAS_RENDER} — refiná con filtros)` : ''} · bodega <b>{bodega}</b>
             {' '}· <span className="inline-flex items-center gap-1 font-semibold text-amber-700"><TrendingUp size={12} strokeWidth={3} />ALZA</span>
             {' '}= dos alzas seguidas (3 meses completos subiendo) — aviso, no cambia el Sugerido
             {' '}· <span className="text-amber-600">*</span> = estacional con confianza baja

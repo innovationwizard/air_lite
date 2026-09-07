@@ -8,8 +8,9 @@
  * client payload. See the migration's header comment and
  * docs/compras/PROOF_OF_STATUS_IMPLEMENTATION_PLAN_2026-09-03.md §1/§4.
  *
- * Same "return an error STRING, never throw, never a silent default"
- * convention as lib/compras/draft.ts.
+ * Convención de validación: devolver un STRING de error, nunca lanzar y nunca
+ * caer en un default silencioso. (La compartía con lib/compras/draft.ts, que
+ * se eliminó el 2026-09-07 junto con las rutas /export.)
  */
 import type { ClaveOrden, ClaveOrdenNumerica, Filtros, FiltroRango, Orden, OperadorRango } from './tabla';
 
