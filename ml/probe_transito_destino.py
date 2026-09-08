@@ -12,11 +12,18 @@ CONTEXTO MEDIDO EL 2026-08-27, no supuesto:
 
 LO QUE ESTA SONDA CONTESTA, antes de escribir una línea de la corrección:
 
-  P0.1 — ¿Se puede atribuir cada orden de compra a la bodega que la recibe?
-         Vía `purchase.order.picking_type_id` → `stock.picking.type.warehouse_id`.
-         Reporta cuántas resuelven, a qué almacenes, cuántas quedan sin resolver,
-         y CÓMO SE REPARTE la cantidad pendiente entre bodegas. Ese reparto es la
-         primera medición real de cuánto se distorsiona hoy cada vista.
+  P0.1 — ⚠️ SUPERADA EL 2026-09-08 por `ml/probe_sucursal_po.py`. NO saques
+         conclusiones de la salida de esta sonda sin leer aquélla primero.
+         Esta mide `picking_type_id` → `warehouse_id`, que dice DÓNDE DESCARGA
+         el camión, no DE QUIÉN ES la orden — por eso encontró «4ZAC 0 · 3PET 0»
+         (ni una OC entrante para Zacapa ni Petén) con el 88% en 1CET. La
+         sucursal dueña vive en `purchase.order.location_id` (comodel
+         `branch.location`), y leyéndola Petén tiene 2,575 y Zacapa 3,387. El
+         sync ya se corrigió; esto queda como registro de la medición vieja.
+
+         (original) ¿Se puede atribuir cada orden de compra a la bodega que la
+         recibe? Reporta cuántas resuelven, a qué almacenes, cuántas quedan sin
+         resolver, y CÓMO SE REPARTE la cantidad pendiente entre bodegas.
 
   P0.2 — ¿Existen los traslados internos de «la cadenita» (San José → Zacapa →
          Petén) como stock.picking en vuelo? ¿Cuántos, con cuántos productos, y

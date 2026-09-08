@@ -109,6 +109,42 @@ CD_JOURNAL_TO_WH = {
     'facturas cd peten': '3PET',
 }
 
+# ── Sucursal de la orden de compra → almacén de compras (P0.1) ───────────────
+# RESPONDIDA por Jorge el 2026-09-03 y MEDIDA contra producción el 2026-09-08
+# (`ml/probe_sucursal_po.py`): la orden lleva su sucursal en
+# `purchase.order.location_id` — comodel `branch.location`, etiqueta «Sucursal» —
+# y el nombre repite el mismo dato en el correlativo (`PO-PZ-0007` es de Zacapa).
+# Cada sucursal trae su `po_prefix` configurado en Odoo; las 9 filas y sus
+# prefijos se leyeron de ahí, no se transcribieron a mano.
+#
+# POR QUÉ ESTO REEMPLAZA A `picking_type_id`, que es lo que usaba W15-B hasta
+# hoy: ese campo dice DÓNDE DESCARGA el camión, no DE QUIÉN ES la orden. Por eso
+# la medición del 2026-08-27 encontró **4ZAC 0 · 3PET 0** — ni una sola orden
+# entrante para Zacapa ni para Petén — mientras el 88% caía en 1CET: no es que
+# no compren, es que casi todo se recibe en el CD Central. `location_id` fue el
+# campo correcto desde el principio; se estaba leyendo el equivocado.
+#
+# LAS TIENDAS SON SAN JOSÉ (Jorge, 2026-09-03): «they all source from San José
+# as they do not have warehouse space». No llevan existencias propias, así que su
+# OC es demanda de San José y no una bodega nueva.
+#
+# `PO-PZ11-` (Centro de Distribución Zona 11) NO está acá A PROPÓSITO: es un CD,
+# no una tienda, así que el razonamiento de las tiendas no le aplica y Jorge no
+# lo ha decidido. Sin fila acá cae en la cubeta reportada — que es exactamente
+# donde ya estaba (su almacén 2Z11 tampoco está en bodega_map), así que dejarlo
+# abierto no mueve ningún número. Medido 2026-09-08: 2,947 unidades pendientes.
+SUCURSAL_PREFIX_TO_WH = {
+    'PO-P-': '1CET',        # Centro de Distribución Central (San José VN)
+    'PO-PE-': '3PET',       # Centro de Distribución Peten
+    'PO-PZ-': '4ZAC',       # Centro de Distribución Zacapa
+    'PO-PT11-': '1CET',     # Tienda Zona 11      ─┐
+    'PO-PT9-': '1CET',      # Tienda Zona 9        │ sin bodega propia:
+    'PO-PT17-': '1CET',     # Tienda Zona 17       │ se surten de San José
+    'PO-PTTorre-': '1CET',  # Tienda La Torre      │
+    'PO-PT6-': '1CET',      # Tienda MIxco        ─┘ (ojo: su so_prefix es
+                            #                        SO-T6Mix-, el de OC no)
+}
+
 SUPABASE_BATCH = 500
 
 
@@ -985,22 +1021,100 @@ def attribute_transit(lines, wh_by_order, bodega_codes,
                     ln['order_id'][0] if ln.get('order_id') else None),
             })
         else:
-            # Sin fila en bodega_map: subcontratación, Zona 11, tiendas o
-            # desconocido. Se le pone nombre al hueco en vez de adivinarlo.
-            fuera_de_alcance[code or '(sin picking_type)'] += pending
+            # Sucursal sin bodega asignada (hoy el CD Zona 11) o sin sucursal
+            # legible. Se le pone nombre al hueco en vez de adivinarlo.
+            fuera_de_alcance[code or '(sin sucursal)'] += pending
         if code not in GENERAL_EXCLUDED_WH:
             transit[GENERAL_BODEGA][opid] += pending
         counted += 1
     return transit, fuera_de_alcance, counted, detalle
 
 
+def sucursal_prefixes(execute, issues=None):
+    """{branch.location id: po_prefix}. La sucursal es un modelo propio de esta
+    instancia (`branch.location`) y cada fila trae su prefijo de OC configurado,
+    así que el prefijo se LEE de Odoo en vez de transcribirse.
+
+    Si el modelo no se puede leer, no se cae el sync: se avisa y la atribución
+    queda en manos del correlativo del nombre, que el 2026-09-08 se midió
+    idéntico al campo en las 52 órdenes vivas (cruce 1:1, sin una discrepancia).
+    """
+    try:
+        rows = odoo_read_all(execute, 'branch.location', [], ['po_prefix'])
+    except Exception as e:                                        # noqa: BLE001
+        if issues:
+            issues.add('warning', 'transit',
+                       f'no se pudo leer branch.location ({str(e)[:120]}) — la sucursal '
+                       f'se resolverá sólo por el correlativo del nombre')
+        return {}
+    return {r['id']: (r.get('po_prefix') or None) for r in rows}
+
+
+def prefijo_de_orden(name):
+    """`PO-PZ11-0007` -> `PO-PZ11-`; el correlativo sin su número.
+
+    Corta en el último segmento que empieza con dígito, de modo que el prefijo
+    sale COMPLETO y la búsqueda es exacta: `PO-PZ11-` no puede confundirse con
+    `PO-PZ-` ni con `PO-P-`, que es justo el error que un `startswith` cometería.
+    """
+    if not name:
+        return None
+    partes = name.split('-')
+    for i in range(len(partes) - 1, 0, -1):
+        if partes[i] and partes[i][0].isdigit():
+            return '-'.join(partes[:i]) + '-'
+    return None
+
+
+def resolve_sucursal_warehouses(orders, prefix_by_branch):
+    """Orden -> código de almacén de compras, por SUCURSAL. Puro, para poder
+    probarlo (mismo criterio que `attribute_transit`).
+
+    Devuelve `(wh_by_order, stats)`. El código sale de `location_id` («Sucursal»)
+    y, si viniera vacío, del correlativo del nombre. Una sucursal real pero sin
+    fila en `SUCURSAL_PREFIX_TO_WH` — hoy sólo el CD Zona 11 — se devuelve como
+    la etiqueta `sucursal:<nombre>` en vez de None: así cae en la cubeta que
+    `attribute_transit` REPORTA, con nombre, en lugar de convertirse en un hueco
+    anónimo o, peor, en un reparto adivinado.
+    """
+    wh_by_order = {}
+    stats = {'por_campo': 0, 'por_nombre': 0, 'sin_sucursal': 0,
+             'fuera_de_mapa': defaultdict(int), 'discrepancia_nombre': 0}
+    for o in orders:
+        loc = o.get('location_id')
+        etiqueta = loc[1] if loc and len(loc) > 1 else None
+        prefijo_campo = prefix_by_branch.get(loc[0]) if loc else None
+        prefijo_nombre = prefijo_de_orden(o.get('name'))
+        if prefijo_campo and prefijo_nombre and prefijo_campo != prefijo_nombre:
+            # El campo manda (Jorge: leerlo primero), pero un desacuerdo es una
+            # señal de captura, no ruido: se cuenta y se reporta.
+            stats['discrepancia_nombre'] += 1
+        prefijo = prefijo_campo or prefijo_nombre
+        if prefijo_campo:
+            stats['por_campo'] += 1
+        elif prefijo_nombre:
+            stats['por_nombre'] += 1
+        code = SUCURSAL_PREFIX_TO_WH.get(prefijo) if prefijo else None
+        if code is None:
+            if etiqueta or prefijo:
+                code = f'sucursal:{etiqueta or prefijo}'
+                stats['fuera_de_mapa'][code] += 1
+            else:
+                stats['sin_sucursal'] += 1
+        wh_by_order[o['id']] = code
+    return wh_by_order, stats
+
+
 def warehouse_by_picking_type(execute):
     """{picking_type_id: warehouse_code}. Resolves a PO to the warehouse that
-    RECEIVES it, which is the only destination Odoo actually holds.
+    RECEIVES it — the FIRST STOP, not the destination.
+
+    ⚠️ YA NO ATRIBUYE EL TRÁNSITO (P0.1, 2026-09-03). Se conserva porque su
+    diferencia contra la sucursal es informativa y se reporta: es la medida de
+    cuánto se recibe en un almacén distinto al de la sucursal dueña de la orden.
 
     MEASURED 2026-08-27 against production: 39 future-dated orders, 186 pending
-    lines, and `picking_type_id` resolved for 100% of them — 0 unresolvable.
-    The attribution below is therefore not best-effort; it is complete."""
+    lines, and `picking_type_id` resolved for 100% of them — 0 unresolvable."""
     types = odoo_read_all(execute, 'stock.picking.type', [], ['warehouse_id'])
     warehouses = odoo_read_all(execute, 'stock.warehouse', [], ['code'])
     code_by_wh = {w['id']: w.get('code') for w in warehouses}
@@ -1040,9 +1154,37 @@ def map_detalle_rows(transito_detalle, product_map, sync_id):
 def sync_transit(execute, issues, bodega_codes):
     """Per-BODEGA transit: confirmed PO lines with pending qty
     (product_qty - qty_received > 0) on orders expected TODAY OR LATER,
-    attributed to the warehouse that receives them.
+    attributed to the SUCURSAL that owns the order.
 
-    ⚠️ W15-B — WHAT THIS FIXES, and it was worse than reported.
+    ⚠️ ATRIBUCIÓN CORREGIDA 2026-09-08 (P0.1) — se leía el campo equivocado.
+
+    Hasta hoy esto atribuía por `picking_type_id -> warehouse_id`, que dice
+    dónde DESCARGA el camión. La sucursal dueña de la orden vive en
+    `purchase.order.location_id` (comodel `branch.location`, etiqueta
+    «Sucursal»), y el correlativo del nombre la repite. Jorge lo señaló el
+    2026-09-03; medido contra producción el 2026-09-08 con
+    `ml/probe_sucursal_po.py`, sobre 52 órdenes vivas y 175,154 uds pendientes:
+
+        POR ALMACÉN (lo que se hacía)      POR SUCURSAL (lo que se hace)
+        1CET   154,745  88.3%              CD Central     166,245
+        SUB     15,077   8.6%              CD Zacapa        3,387
+        2Z11     4,282   2.4%              CD Zona 11       2,947  ← sin mapear
+        4ZAC       550   0.3%              CD Peten         2,575
+        SUBPA      500   0.3%
+
+    Lo que se movió y por qué importa: **Petén pasa de 0 a 2,575 y Zacapa de
+    550 a 3,387**, casi todo desde `SUB` (Envaica) — mercadería subcontratada
+    que se recibe en el subcontratista pero que es de ellos. El bucket fuera de
+    alcance baja de 19,859 a 2,947 (sólo el CD Zona 11). `location_id` vino
+    lleno en 52/52 órdenes y el correlativo coincidió con él 1:1, sin una sola
+    discrepancia, así que el respaldo por nombre es fiel.
+
+    ⚠️ ESTO BAJA EL SUGERIDO donde antes no había tránsito: el motor acredita
+    `exist + trans` contra el forecast, y Zacapa/Petén ahora ven tránsito propio
+    donde veían cero. Es la corrección, no un efecto secundario — pero es un
+    número que Wilmer ya vio, así que se reporta en `sync_issues`.
+
+    ⚠️ W15-B — WHAT THE PER-BODEGA SPLIT FIXED, and it was worse than reported.
 
     Until 2026-08-27 this function returned `{product_id: qty}` with no bodega
     dimension at all, and `assemble_inputs()` wrote that ONE number into EVERY
@@ -1071,14 +1213,15 @@ def sync_transit(execute, issues, bodega_codes):
          scope** (subcontracting, Zona 11, a tienda). It belongs to NO
          purchasing bodega, and it was inflating all three.
 
-    ATTRIBUTION RULE — final destination only (Jorge, Q26/Q2, 2026-08-27):
-    a pending quantity belongs to exactly ONE bodega, the warehouse that
-    receives it. The three bodegas partition the total instead of each holding
-    a copy of it, so summing them is now meaningful.
+    ATTRIBUTION RULE — final destination only (Jorge, Q26/Q2, 2026-08-27;
+    campo corregido 2026-09-03): a pending quantity belongs to exactly ONE
+    bodega, la de la SUCURSAL que puso la orden. The three bodegas partition
+    the total instead of each holding a copy of it, so summing them is now
+    meaningful.
 
-    Warehouses with no `bodega_map` row are NOT distributed and NOT dropped:
-    they go to a reported bucket, because silently folding them into a bodega
-    is how the current defect started.
+    Sucursales with no row in `SUCURSAL_PREFIX_TO_WH` — hoy sólo el CD Zona 11 —
+    are NOT distributed and NOT dropped: they go to a reported bucket, because
+    silently folding them into a bodega is how the current defect started.
 
     'General' keeps a roll-up, but of the same perimeter its stock already uses
     (every warehouse except GENERAL_EXCLUDED_WH) — not the raw global total.
@@ -1107,21 +1250,25 @@ def sync_transit(execute, issues, bodega_codes):
     today0 = datetime.now(timezone.utc).strftime('%Y-%m-%d 00:00:00')
     orders = odoo_read_all(execute, 'purchase.order',
                            [['state', 'in', ['purchase', 'done']]],
-                           ['name', 'date_planned', 'picking_type_id'])
+                           ['name', 'date_planned', 'picking_type_id', 'location_id'])
     future = [o for o in orders if (o.get('date_planned') or '') >= today0]
     future_ids = [o['id'] for o in future]
     past_ids = [o['id'] for o in orders if (o.get('date_planned') or '') < today0]
 
-    # Order -> receiving warehouse code. Measured 100% resolvable 2026-08-27.
+    # Orden -> almacén de la SUCURSAL dueña. Medido 100% resoluble 2026-09-08.
+    wh_by_order, attr = resolve_sucursal_warehouses(
+        future, sucursal_prefixes(execute, issues))
+    sin_sucursal = attr['sin_sucursal']
+
+    # El primer tramo, sólo para CONTRASTAR. No atribuye nada: su diferencia
+    # contra la sucursal es la medida de cuánto se recibe en un almacén ajeno al
+    # dueño de la orden, y ese número explica por qué los totales por bodega se
+    # movieron el día que esto cambió.
     pt_wh = warehouse_by_picking_type(execute)
-    wh_by_order = {}
-    sin_picking_type = 0
-    for o in future:
-        pt = o['picking_type_id'][0] if o.get('picking_type_id') else None
-        code = pt_wh.get(pt) if pt else None
-        if code is None:
-            sin_picking_type += 1
-        wh_by_order[o['id']] = code
+    distinto_al_primer_tramo = sum(
+        1 for o in future
+        if (pt_wh.get(o['picking_type_id'][0]) if o.get('picking_type_id') else None)
+        != wh_by_order.get(o['id']))
 
     lines = odoo_read_all(execute, 'purchase.order.line',
                           [['order_id', 'in', future_ids]],
@@ -1149,19 +1296,31 @@ def sync_transit(execute, issues, bodega_codes):
                f'states purchase+done (rule fixed 2026-08-06 after Wilmer falsified transit=0): '
                f'{counted} lines counted; {past_excluded} pending lines on past-dated orders excluded '
                f'(incl. the no-auto-cancel pile back to 2024-10 — cleanup with David). '
-               f'W15-B: atribuido por bodega destino (picking_type -> almacén) — {por_bodega}')
-    if sin_picking_type:
+               f'Atribuido por SUCURSAL de la orden (location_id, con el correlativo del '
+               f'nombre de respaldo) — {por_bodega}')
+    issues.add('info', 'transit',
+               f'sucursal resuelta por campo location_id en {attr["por_campo"]} órdenes y por '
+               f'correlativo en {attr["por_nombre"]}; {distinto_al_primer_tramo} órdenes se '
+               f'RECIBEN en un almacén distinto al de su sucursal (antes del 2026-09-08 esas '
+               f'se atribuían al almacén que las recibe, no a su dueño — de ahí que Zacapa y '
+               f'Petén pasaran de ~0 a tener tránsito propio)')
+    if attr['discrepancia_nombre']:
         issues.add('warning', 'transit',
-                   f'{sin_picking_type} órdenes futuras sin picking_type resoluble — '
+                   f'{attr["discrepancia_nombre"]} órdenes donde el correlativo del nombre NO '
+                   f'coincide con su campo Sucursal — mandó el campo. Medido 2026-09-08: 0 de 52')
+    if sin_sucursal:
+        issues.add('warning', 'transit',
+                   f'{sin_sucursal} órdenes futuras sin sucursal ni correlativo legible — '
                    f'su pendiente NO se atribuyó a ninguna bodega')
     if fuera_de_alcance:
         detalle = ', '.join(f'{k}={v:,.0f}' for k, v in
                             sorted(fuera_de_alcance.items(), key=lambda kv: -kv[1]))
         total_fuera = sum(fuera_de_alcance.values())
         issues.add('info', 'transit',
-                   f'tránsito hacia almacenes SIN fila en bodega_map: {total_fuera:,.0f} unidades '
-                   f'({detalle}). NO se reparte entre las bodegas de compra — antes del 2026-08-27 '
-                   f'este volumen inflaba las tres por igual (subcontratación, Zona 11, tiendas)')
+                   f'tránsito de sucursales SIN bodega asignada: {total_fuera:,.0f} unidades '
+                   f'({detalle}). NO se reparte entre las bodegas de compra. Hoy es sólo el CD '
+                   f'Zona 11, que sigue esperando decisión de Jorge (no es tienda, así que no '
+                   f'le aplica la regla de que las tiendas son San José)')
 
     # Data-horizon staleness: newest purchase order date vs now.
     latest_po = execute('purchase.order', 'search_read', [],
@@ -1186,15 +1345,16 @@ def sync_transit(execute, issues, bodega_codes):
                    f'{len(draft_lines)} future-dated DRAFT PO lines found (cotización '
                    f'candidate, INCLUDE_DRAFT_TRANSIT={INCLUDE_DRAFT_TRANSIT})')
         if INCLUDE_DRAFT_TRANSIT:
-            # Draft lines carry no confirmed receiving warehouse, so under the
-            # final-destination rule they cannot be attributed. They would have
-            # to be resolved the same way (order -> picking_type) before this
-            # flag is ever turned on; until then, turning it on with the old
-            # global behaviour would silently reintroduce the replication bug.
+            # Estas líneas se leen sin su orden, así que acá no hay sucursal que
+            # mirar y bajo la regla de destino final no se pueden atribuir.
+            # Encenderlas con el comportamiento global viejo reintroduciría el
+            # defecto de replicación en silencio. Resolverlas por `location_id`
+            # de su orden — lo mismo que hace el tránsito confirmado — antes de
+            # habilitar el flag.
             issues.add('warning', 'transit',
                        'INCLUDE_DRAFT_TRANSIT=True pero las líneas borrador no se '
                        'pueden atribuir a una bodega destino — se OMITEN (W15-B). '
-                       'Resolverlas por picking_type antes de habilitar el flag.')
+                       'Resolverlas por la sucursal de su orden antes de habilitar el flag.')
     logger.info('transit: %s',
                 ', '.join(f'{b}={len(v)} productos' for b, v in sorted(transit.items())) or 'vacío')
     return {b: dict(v) for b, v in transit.items()}, transito_detalle

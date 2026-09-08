@@ -19,7 +19,8 @@ LA REGLA (Jorge, Q26/Q2, 2026-08-27): sólo destino final — una cantidad
 pendiente pertenece a EXACTAMENTE UNA bodega, la que la recibe.
 """
 from odoo_sync_reabastecimiento import (
-    GENERAL_BODEGA, attribute_transit, map_detalle_rows)
+    GENERAL_BODEGA, attribute_transit, map_detalle_rows, prefijo_de_orden,
+    resolve_sucursal_warehouses)
 
 # Mapeo vigente (W11, migración 20260821000002).
 BODEGAS = {'San Jose VN': ['1CET'], 'Petén': ['3PET'], 'Zacapa': ['4ZAC']}
@@ -65,11 +66,11 @@ def test_almacen_fuera_de_alcance_se_reporta_y_no_se_reparte():
     assert fuera == {'SUB': 9305, '2Z11': 6361, 'T7Z11': 20}
 
 
-def test_sin_picking_type_no_se_adivina():
+def test_sin_sucursal_no_se_adivina():
     """Ninguna cantidad se «asigna por defecto» a San José."""
     transit, fuera, _, *_ = attribute_transit([linea(1, 100, 700)], {1: None}, BODEGAS)
     assert not transit['San Jose VN']
-    assert fuera == {'(sin picking_type)': 700}
+    assert fuera == {'(sin sucursal)': 700}
 
 
 def test_general_es_roll_up_del_mismo_perimetro_que_su_stock():
@@ -200,3 +201,110 @@ def test_la_fecha_se_recorta_a_dia_y_el_vacio_queda_en_none():
 def test_un_producto_fuera_del_catalogo_se_descarta_sin_romper():
     detalle = [{'bodega': 'Petén', 'opid': 999, 'fecha': None, 'qty': 1, 'orden': None}]
     assert map_detalle_rows(detalle, {'100': 77}, 's') == []
+
+
+# ─── P0.1 — la sucursal de la orden es el destino, no su primer tramo ────────
+#
+# EL DEFECTO QUE ESTO CIERRA, medido en producción el 2026-09-08: la atribución
+# usaba `picking_type_id`, que dice dónde DESCARGA el camión. Por eso el
+# 2026-08-27 se midió **4ZAC 0 · 3PET 0** con el 88% en 1CET. Leyendo la
+# sucursal dueña (`purchase.order.location_id`, comodel `branch.location`),
+# Petén pasa de 0 a 2,575 y Zacapa de 550 a 3,387 sobre 175,154 pendientes.
+#
+# Los 9 prefijos salen de Odoo (`branch.location.po_prefix`), no de una
+# transcripción: `PO-PE-` Petén · `PO-PZ-` Zacapa · `PO-P-` Central · `PO-PT*-`
+# tiendas (San José, no tienen bodega) · `PO-PZ11-` CD Zona 11 (sin decidir).
+
+# Los prefijos reales, leídos de producción el 2026-09-08.
+PREFIJOS = {2: 'PO-P-', 1: 'PO-PE-', 3: 'PO-PZ-', 9: 'PO-PZ11-',
+            4: 'PO-PT11-', 5: 'PO-PT9-', 6: 'PO-PT17-', 7: 'PO-PTTorre-',
+            10: 'PO-PT6-'}
+
+
+def orden(oid, name, branch=None):
+    o = {'id': oid, 'name': name}
+    if branch is not None:
+        o['location_id'] = [branch, f'sucursal-{branch}']
+    return o
+
+
+def test_la_sucursal_manda_sobre_el_almacen_que_recibe():
+    """El caso que lo motiva: una OC de Petén que descarga en el CD Central
+    sigue siendo tránsito de Petén."""
+    wh, stats = resolve_sucursal_warehouses([orden(1, 'PO-PE-0001', 1)], PREFIJOS)
+    assert wh[1] == '3PET'
+    assert stats['por_campo'] == 1 and stats['por_nombre'] == 0
+
+
+def test_el_correlativo_del_nombre_es_el_respaldo():
+    """Sin `location_id`, el nombre lleva el mismo dato — medido 1:1 en las 52
+    órdenes vivas del 2026-09-08."""
+    wh, stats = resolve_sucursal_warehouses([orden(1, 'PO-PZ-0007')], PREFIJOS)
+    assert wh[1] == '4ZAC'
+    assert stats['por_nombre'] == 1 and stats['por_campo'] == 0
+
+
+def test_pz11_no_se_confunde_con_pz_ni_con_p():
+    """Un `startswith` mandaría `PO-PZ11-0007` a Zacapa (o a Central). El
+    prefijo se corta completo y la búsqueda es exacta."""
+    assert prefijo_de_orden('PO-PZ11-0007') == 'PO-PZ11-'
+    assert prefijo_de_orden('PO-PZ-0007') == 'PO-PZ-'
+    assert prefijo_de_orden('PO-P-2960') == 'PO-P-'
+    assert prefijo_de_orden('PO-PTTorre-12') == 'PO-PTTorre-'
+
+
+def test_sin_numero_no_inventa_prefijo():
+    assert prefijo_de_orden('PO-P-') is None
+    assert prefijo_de_orden('') is None
+    assert prefijo_de_orden(None) is None
+
+
+def test_las_tiendas_son_san_jose():
+    """Jorge 2026-09-03: «they all source from San José as they do not have
+    warehouse space». Las cinco, incluida Mixco, cuyo prefijo de OC es PO-PT6-
+    aunque su prefijo de venta sea SO-T6Mix-."""
+    ordenes = [orden(1, 'PO-PT11-1', 4), orden(2, 'PO-PT9-1', 5),
+               orden(3, 'PO-PT17-1', 6), orden(4, 'PO-PTTorre-1', 7),
+               orden(5, 'PO-PT6-1', 10)]
+    wh, _ = resolve_sucursal_warehouses(ordenes, PREFIJOS)
+    assert set(wh.values()) == {'1CET'}
+
+
+def test_el_cd_zona_11_queda_reportado_y_no_se_reparte():
+    """No es tienda: la regla de las tiendas no le aplica y Jorge no lo ha
+    decidido. Sale con nombre para que caiga en la cubeta que se reporta —
+    2,947 unidades medidas el 2026-09-08."""
+    wh, stats = resolve_sucursal_warehouses(
+        [{'id': 1, 'name': 'PO-PZ11-0007',
+          'location_id': [9, 'Centro de Distribución Zona 11']}], PREFIJOS)
+    assert wh[1] == 'sucursal:Centro de Distribución Zona 11'
+    assert stats['fuera_de_mapa']['sucursal:Centro de Distribución Zona 11'] == 1
+
+    # Y el reparto lo deja fuera de las bodegas de compra, con su nombre.
+    transit, fuera, _, _ = attribute_transit([linea(1, 100, 2947)], wh, BODEGAS)
+    for bodega in BODEGAS:
+        assert not transit[bodega]
+    assert fuera == {'sucursal:Centro de Distribución Zona 11': 2947}
+
+
+def test_una_orden_sin_sucursal_ni_correlativo_no_se_adivina():
+    wh, stats = resolve_sucursal_warehouses([{'id': 1, 'name': 'RANDOM'}], PREFIJOS)
+    assert wh[1] is None
+    assert stats['sin_sucursal'] == 1
+
+
+def test_el_campo_gana_al_nombre_y_la_discrepancia_se_cuenta():
+    """El campo manda (Jorge: leerlo primero), pero un desacuerdo es señal de
+    captura y no puede pasar callado. Medido 2026-09-08: 0 de 52."""
+    wh, stats = resolve_sucursal_warehouses([orden(1, 'PO-P-0001', 3)], PREFIJOS)
+    assert wh[1] == '4ZAC'                    # la sucursal 3 es Zacapa
+    assert stats['discrepancia_nombre'] == 1
+
+
+def test_sin_catalogo_de_sucursales_el_nombre_sostiene_la_atribucion():
+    """Si `branch.location` no se pudiera leer, el sync no se cae: el
+    correlativo sigue resolviendo, que es por qué el respaldo existe."""
+    ordenes = [orden(1, 'PO-PE-1', 1), orden(2, 'PO-PZ-2', 3), orden(3, 'PO-P-3', 2)]
+    wh, stats = resolve_sucursal_warehouses(ordenes, {})
+    assert [wh[1], wh[2], wh[3]] == ['3PET', '4ZAC', '1CET']
+    assert stats['por_nombre'] == 3
