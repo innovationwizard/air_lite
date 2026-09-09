@@ -61,6 +61,17 @@ def cargar_mapas() -> Mapas:
         if p['clave']:
             por_clave[p['clave']].add(p['codigo'])
 
+    # Cruce resuelto por Alexis en /inventarios/facturas/pendientes
+    # (20260909000001): append-only, última fila por clave manda — mismo
+    # merge que `ml/api.py:_mapas_reyma()`, para que la CLI (backfill/red de
+    # seguridad) vea exactamente lo mismo que la página.
+    vistas = set()
+    for c in rest('reyma_clave_map?select=clave,codigo,created_at&order=created_at.desc'):
+        if c['clave'] in vistas:
+            continue
+        vistas.add(c['clave'])
+        por_clave[c['clave']] = {c['codigo']}
+
     # Tablita de Alexis: rollos por bulto. Append-only, la última fila por
     # código manda (viene ordenada por created_at DESC).
     rollos = {}

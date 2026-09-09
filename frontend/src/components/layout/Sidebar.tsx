@@ -22,6 +22,7 @@ import {
   FileCheck,
   FileUp,
   Gauge,
+  PackageSearch,
   // Container,       // unused while Órdenes Abiertas section is hidden (2026-05-27)
   // AlertOctagon,    // unused while Órdenes Abiertas section is hidden (2026-05-27)
   // FileText,        // unused while Órdenes Abiertas section is hidden (2026-05-27)
@@ -37,7 +38,7 @@ import {
   // CAN_VIEW_OA,    // unused while Órdenes Abiertas section is hidden (2026-05-27)
   CAN_VIEW_COMPRAS,
   CAN_MANAGE_SUPPLIER_GROUPS,
-  CAN_VIEW_INVENTARIOS,
+  CAN_VIEW_COMPRAS_INTERNACIONALES,
   CAN_VIEW_OPERACIONES,
   CAN_VIEW_GERENCIA,
   CAN_VIEW_POC,
@@ -49,7 +50,7 @@ import {
 } from '@/lib/auth/roles';
 
 /** Roles that can see the legacy Riesgos Empresariales grouping — excludes silo roles that now have dedicated sections */
-const CAN_VIEW_RISKS: Role[] = ['superuser', 'admin', 'gerencia', 'ventas', 'inventario', 'financiero'];
+const CAN_VIEW_RISKS: Role[] = ['superuser', 'admin', 'gerencia', 'ventas', 'compras_internacionales', 'financiero'];
 
 /** Roles that can see the legacy Prueba de Concepto grouping — compras sees these items in its own silo section */
 // CAN_VIEW_POC lives in roles.ts and the middleware enforces it too — it was
@@ -197,44 +198,50 @@ const allNavGroups: NavGroup[] = [
     ],
   },
   {
-    section: 'Inventarios',
-    requiredRoles: CAN_VIEW_INVENTARIOS,
+    section: 'Compras Internacionales',
+    requiredRoles: CAN_VIEW_COMPRAS_INTERNACIONALES,
     items: [
       {
         name: 'Modelo Reyma',
-        href: '/inventarios/reyma',
+        href: '/compras-internacionales/reyma',
         icon: Boxes,
         subtitle: 'Réplica del libro — Julio 2026',
       },
       {
         name: 'Modelo Reyma en Vivo',
-        href: '/inventarios/reyma-vivo',
+        href: '/compras-internacionales/reyma-vivo',
         icon: Activity,
         subtitle: 'Datos Odoo en vivo + proyección editable',
       },
       {
         name: 'Modelo Carvajal',
-        href: '/inventarios/carvajal-vivo',
+        href: '/compras-internacionales/carvajal-vivo',
         icon: Boxes,
         subtitle: 'Mismas reglas, otros números',
       },
       {
         name: 'Modelo Darnel',
-        href: '/inventarios/darnel-vivo',
+        href: '/compras-internacionales/darnel-vivo',
         icon: Boxes,
         subtitle: 'Punto de reorden + alcance máximo',
       },
       {
         name: 'Modelo Asia',
-        href: '/inventarios/asia-vivo',
+        href: '/compras-internacionales/asia-vivo',
         icon: Boxes,
         subtitle: 'Mismo motor que Darnel',
       },
       {
         name: 'Cargar Facturas',
-        href: '/inventarios/facturas',
+        href: '/compras-internacionales/facturas',
         icon: FileUp,
         subtitle: 'Facturas de REYMA + ETA del furgón',
+      },
+      {
+        name: 'Facturas pendientes',
+        href: '/compras-internacionales/facturas/pendientes',
+        icon: PackageSearch,
+        subtitle: 'Claves nuevas de REYMA sin código todavía',
       },
     ],
   },

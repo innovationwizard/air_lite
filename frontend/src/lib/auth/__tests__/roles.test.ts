@@ -15,7 +15,7 @@ import {
   CAN_VIEW_POC,
   CAN_EDIT_STATUS_PLAN,
   CAN_VIEW_GERENCIA,
-  CAN_VIEW_INVENTARIOS,
+  CAN_VIEW_COMPRAS_INTERNACIONALES,
   CAN_MANAGE_USERS,
   CAN_MODIFY_SETTINGS,
   CAN_MANAGE_SUPPLIER_GROUPS,
@@ -24,7 +24,7 @@ import {
 
 const NON_SUPERUSER = [
   'admin', 'gerencia', 'compras', 'ventas',
-  'inventario', 'financiero', 'testuser', 'operaciones',
+  'compras_internacionales', 'financiero', 'testuser', 'operaciones',
 ];
 
 describe('isAuthorized', () => {
@@ -77,13 +77,13 @@ describe('role-matrix invariants (guard against accidental privilege widening)',
 });
 
 describe('cross-privilege negative tests (least privilege)', () => {
-  it('inventario reaches its silo but not compras/gerencia/admin', () => {
-    expect(isAuthorized('inventario', PAGE_PERMISSIONS['/inventarios/reyma'])).toBe(true);
-    expect(isAuthorized('inventario', PAGE_PERMISSIONS['/compras'])).toBe(false);
-    expect(isAuthorized('inventario', PAGE_PERMISSIONS['/gerencia'])).toBe(false);
-    expect(isAuthorized('inventario', PAGE_PERMISSIONS['/admin'])).toBe(false);
-    expect(isAuthorized('ventas', PAGE_PERMISSIONS['/inventarios/reyma'])).toBe(false);
-    expect(isAuthorized('compras', PAGE_PERMISSIONS['/inventarios/reyma'])).toBe(false);
+  it('compras_internacionales reaches its silo but not compras/gerencia/admin', () => {
+    expect(isAuthorized('compras_internacionales', PAGE_PERMISSIONS['/compras-internacionales/reyma'])).toBe(true);
+    expect(isAuthorized('compras_internacionales', PAGE_PERMISSIONS['/compras'])).toBe(false);
+    expect(isAuthorized('compras_internacionales', PAGE_PERMISSIONS['/gerencia'])).toBe(false);
+    expect(isAuthorized('compras_internacionales', PAGE_PERMISSIONS['/admin'])).toBe(false);
+    expect(isAuthorized('ventas', PAGE_PERMISSIONS['/compras-internacionales/reyma'])).toBe(false);
+    expect(isAuthorized('compras', PAGE_PERMISSIONS['/compras-internacionales/reyma'])).toBe(false);
   });
 
   it('compras cannot reach gerencia, admin, or superuser pages', () => {
@@ -93,7 +93,7 @@ describe('cross-privilege negative tests (least privilege)', () => {
   });
 
   it('only compras/superuser can manage supplier groups', () => {
-    for (const rol of ['gerencia', 'admin', 'inventario', 'ventas']) {
+    for (const rol of ['gerencia', 'admin', 'compras_internacionales', 'ventas']) {
       expect(isAuthorized(rol, CAN_MANAGE_SUPPLIER_GROUPS)).toBe(false);
     }
     expect(isAuthorized('compras', CAN_MANAGE_SUPPLIER_GROUPS)).toBe(true);
@@ -125,22 +125,22 @@ describe('getDefaultPage', () => {
     expect(getDefaultPage('admin')).toBe('/backtest');
   });
 
-  it('rollout focus (TEMPORARY, 2026-08-11): compras/inventario land on the FIRST focus route', () => {
+  it('rollout focus (TEMPORARY, 2026-08-11): compras/compras_internacionales land on the FIRST focus route', () => {
     expect(getDefaultPage('compras')).toBe('/compras/reabastecimiento-vivo');
-    expect(getDefaultPage('inventario')).toBe('/inventarios/reyma-vivo');
+    expect(getDefaultPage('compras_internacionales')).toBe('/compras-internacionales/reyma-vivo');
   });
 
   it('a multi-route focus still lands on the first entry, not the last', () => {
     // Regresión de la elección de diseño: la lista es "a qué puede llegar",
     // el aterrizaje sigue siendo UNO. Si esto se invierte, Alexis entra a
     // cargar facturas en vez de a su modelo.
-    expect(getDefaultPage('inventario', { inventario: ['/a', '/b', '/c'] })).toBe('/a');
+    expect(getDefaultPage('compras_internacionales', { compras_internacionales: ['/a', '/b', '/c'] })).toBe('/a');
   });
 
   it('an empty focus list is treated as NOT confined', () => {
     // Vaciar la lista es como borrar la entrada — el camino post-rollout.
-    expect(focusRoutes('inventario', { inventario: [] })).toBeUndefined();
-    expect(getDefaultPage('inventario', { inventario: [] })).toBe('/inventarios/reyma');
+    expect(focusRoutes('compras_internacionales', { compras_internacionales: [] })).toBeUndefined();
+    expect(getDefaultPage('compras_internacionales', { compras_internacionales: [] })).toBe('/compras-internacionales/reyma');
   });
 
   it('without the focus map, roles revert to their silo landing page', () => {
@@ -148,17 +148,17 @@ describe('getDefaultPage', () => {
     // prueba inyectando {} para que el camino post-rollout no quede sin cubrir
     // (ni sin verificar) mientras dure el confinamiento temporal.
     expect(getDefaultPage('compras', {})).toBe('/compras');
-    expect(getDefaultPage('inventario', {})).toBe('/inventarios/reyma');
+    expect(getDefaultPage('compras_internacionales', {})).toBe('/compras-internacionales/reyma');
     expect(getDefaultPage('superuser', {})).toBe('/superuser');
   });
 });
 
 /**
  * A12 (2026-08-25) — el confinamiento de despliegue es POR ROL pero abarca
- * VARIAS páginas. Con una sola ruta por rol, `/inventarios/facturas` quedaba
- * inalcanzable justamente para la persona para quien se construyó (Alexis,
- * rol `inventario`) y perfectamente visible para superuser — un bug que sólo
- * se ve probando con su rol. Estas pruebas son la red.
+ * VARIAS páginas. Con una sola ruta por rol, `/compras-internacionales/facturas`
+ * quedaba inalcanzable justamente para la persona para quien se construyó
+ * (Alexis, rol `compras_internacionales`) y perfectamente visible para
+ * superuser — un bug que sólo se ve probando con su rol. Estas pruebas son la red.
  */
 describe('ROLLOUT_FOCUS — confinamiento de varias rutas', () => {
   /**
@@ -167,16 +167,16 @@ describe('ROLLOUT_FOCUS — confinamiento de varias rutas', () => {
    * `reyma-vivo` porque el primer elemento es la página de aterrizaje y Reyma
    * sigue siendo el modelo validado.
    */
-  it('inventario alcanza sus modelos en vivo Y la carga de facturas', () => {
-    const rutas = focusRoutes('inventario');
+  it('compras_internacionales alcanza sus modelos en vivo Y la carga de facturas', () => {
+    const rutas = focusRoutes('compras_internacionales');
     // A6.20 — los CUATRO modelos de Alexis, cada uno con su juego de reglas.
     expect(rutas).toEqual([
-      '/inventarios/reyma-vivo', '/inventarios/carvajal-vivo',
-      '/inventarios/darnel-vivo', '/inventarios/asia-vivo',
-      '/inventarios/facturas',
+      '/compras-internacionales/reyma-vivo', '/compras-internacionales/carvajal-vivo',
+      '/compras-internacionales/darnel-vivo', '/compras-internacionales/asia-vivo',
+      '/compras-internacionales/facturas',
     ]);
-    expect(isWithinFocus('/inventarios/reyma-vivo', rutas!)).toBe(true);
-    expect(isWithinFocus('/inventarios/facturas', rutas!)).toBe(true);
+    expect(isWithinFocus('/compras-internacionales/reyma-vivo', rutas!)).toBe(true);
+    expect(isWithinFocus('/compras-internacionales/facturas', rutas!)).toBe(true);
   });
 
   /**
@@ -204,7 +204,7 @@ describe('ROLLOUT_FOCUS — confinamiento de varias rutas', () => {
    * `gerencia` keeps it — it's the one role this restriction still allows.
    */
   it('/status ya NO es alcanzable por los roles confinados que no sean gerencia', () => {
-    for (const rol of ['compras', 'inventario', 'ceo', 'sales_manager']) {
+    for (const rol of ['compras', 'compras_internacionales', 'ceo', 'sales_manager']) {
       const rutas = focusRoutes(rol)!;
       expect(isWithinFocus('/status', rutas)).toBe(false);
       expect(rutas).not.toContain('/status');
@@ -212,9 +212,9 @@ describe('ROLLOUT_FOCUS — confinamiento de varias rutas', () => {
   });
 
   it('y NADA más — el confinamiento sigue cerrado', () => {
-    const rutas = focusRoutes('inventario')!;
+    const rutas = focusRoutes('compras_internacionales')!;
     for (const fuera of [
-      '/inventarios/reyma',        // el prefijo de reyma-vivo: NO debe pasar
+      '/compras-internacionales/reyma',        // el prefijo de reyma-vivo: NO debe pasar
       '/backtest',
       '/statusquo',                // hermano por prefijo de /status: NO pasa
       '/compras/reabastecimiento-vivo',
@@ -228,10 +228,10 @@ describe('ROLLOUT_FOCUS — confinamiento de varias rutas', () => {
   });
 
   it('las sub-rutas de una página confinada viajan con ella', () => {
-    const rutas = focusRoutes('inventario')!;
-    expect(isWithinFocus('/inventarios/facturas/historial', rutas)).toBe(true);
+    const rutas = focusRoutes('compras_internacionales')!;
+    expect(isWithinFocus('/compras-internacionales/facturas/historial', rutas)).toBe(true);
     // Pero un hermano con el mismo prefijo de texto NO es una sub-ruta.
-    expect(isWithinFocus('/inventarios/facturas-de-otro', rutas)).toBe(false);
+    expect(isWithinFocus('/compras-internacionales/facturas-de-otro', rutas)).toBe(false);
   });
 
   it('compras sigue confinado a su página de trabajo, sin el estado', () => {
@@ -264,14 +264,14 @@ describe('ROLLOUT_FOCUS — confinamiento de varias rutas', () => {
     }
   });
 
-  it('la página de carga de facturas es del silo de inventarios', () => {
-    expect(PAGE_PERMISSIONS['/inventarios/facturas']).toBe(CAN_VIEW_INVENTARIOS);
-    expect(isAuthorized('inventario', PAGE_PERMISSIONS['/inventarios/facturas'])).toBe(true);
-    expect(isAuthorized('gerencia', PAGE_PERMISSIONS['/inventarios/facturas'])).toBe(true);
-    expect(isAuthorized('admin', PAGE_PERMISSIONS['/inventarios/facturas'])).toBe(true);
-    expect(isAuthorized('superuser', PAGE_PERMISSIONS['/inventarios/facturas'])).toBe(true);
+  it('la página de carga de facturas es del silo de compras internacionales', () => {
+    expect(PAGE_PERMISSIONS['/compras-internacionales/facturas']).toBe(CAN_VIEW_COMPRAS_INTERNACIONALES);
+    expect(isAuthorized('compras_internacionales', PAGE_PERMISSIONS['/compras-internacionales/facturas'])).toBe(true);
+    expect(isAuthorized('gerencia', PAGE_PERMISSIONS['/compras-internacionales/facturas'])).toBe(true);
+    expect(isAuthorized('admin', PAGE_PERMISSIONS['/compras-internacionales/facturas'])).toBe(true);
+    expect(isAuthorized('superuser', PAGE_PERMISSIONS['/compras-internacionales/facturas'])).toBe(true);
     for (const rol of ['compras', 'ventas', 'financiero', 'testuser', 'operaciones']) {
-      expect(isAuthorized(rol, PAGE_PERMISSIONS['/inventarios/facturas'])).toBe(false);
+      expect(isAuthorized(rol, PAGE_PERMISSIONS['/compras-internacionales/facturas'])).toBe(false);
     }
   });
 
@@ -296,7 +296,7 @@ describe('RBAC — cobertura de PAGE_PERMISSIONS', () => {
   });
 
   it('cerrar el agujero de /poc no cambió el acceso que la interfaz ya daba', () => {
-    for (const rol of ['admin', 'gerencia', 'compras', 'ventas', 'inventario', 'financiero', 'testuser']) {
+    for (const rol of ['admin', 'gerencia', 'compras', 'ventas', 'compras_internacionales', 'financiero', 'testuser']) {
       expect(isAuthorized(rol, CAN_VIEW_POC)).toBe(true);
     }
     // `operaciones` nunca vio esta página en ningún grupo del menú, y
@@ -308,12 +308,12 @@ describe('RBAC — cobertura de PAGE_PERMISSIONS', () => {
 
   it('project_manager sólo alcanza /status, y no escribe el juicio', () => {
     expect(isAuthorized('project_manager', PAGE_PERMISSIONS['/status'])).toBe(true);
-    for (const ruta of ['/compras', '/inventarios/reyma-vivo', '/gerencia', '/admin', '/superuser', '/oa']) {
+    for (const ruta of ['/compras', '/compras-internacionales/reyma-vivo', '/gerencia', '/admin', '/superuser', '/oa']) {
       expect(isAuthorized('project_manager', PAGE_PERMISSIONS[ruta])).toBe(false);
     }
     // Escribe el PLAN; el estado lo juzga el TSV versionado, no la interfaz.
     expect(isAuthorized('project_manager', CAN_EDIT_STATUS_PLAN)).toBe(true);
-    for (const rol of ['compras', 'inventario', 'gerencia', 'admin', 'operaciones']) {
+    for (const rol of ['compras', 'compras_internacionales', 'gerencia', 'admin', 'operaciones']) {
       expect(isAuthorized(rol, CAN_EDIT_STATUS_PLAN)).toBe(false);
     }
   });
@@ -328,7 +328,7 @@ describe('RBAC — cobertura de PAGE_PERMISSIONS', () => {
     expect(PAGE_PERMISSIONS['/status']).toBe(CAN_VIEW_STATUS);
     expect(CAN_VIEW_STATUS).toEqual(['superuser', 'gerencia', 'project_manager']);
     for (const rol of [
-      'compras', 'ventas', 'inventario', 'financiero', 'testuser',
+      'compras', 'ventas', 'compras_internacionales', 'financiero', 'testuser',
       'operaciones', 'admin', 'ceo', 'sales_manager',
     ]) {
       expect(isAuthorized(rol, PAGE_PERMISSIONS['/status'])).toBe(false);
@@ -342,7 +342,7 @@ describe('RBAC — cobertura de PAGE_PERMISSIONS', () => {
     const cubierta = (p: string) =>
       Object.keys(PAGE_PERMISSIONS).some((k) => p === k || p.startsWith(`${k}/`));
     for (const p of ['/status', '/poc/programacion', '/oa/excepciones', '/compras/forecast',
-                     '/inventarios/facturas', '/superuser', '/admin/usuarios', '/gerencia/gap-report']) {
+                     '/compras-internacionales/facturas', '/superuser', '/admin/usuarios', '/gerencia/gap-report']) {
       expect(cubierta(p)).toBe(true);
     }
   });
@@ -368,8 +368,8 @@ describe('PAGE_PERMISSIONS — coincidencia por prefijo más específico', () =>
   });
 
   it('gana la regla más específica, no la primera que coincide', () => {
-    // '/inventarios/facturas' es más específico que cualquier prefijo corto.
-    expect(reglaPara('/inventarios/facturas')[0]).toBe('/inventarios/facturas');
+    // '/compras-internacionales/facturas' es más específico que cualquier prefijo corto.
+    expect(reglaPara('/compras-internacionales/facturas')[0]).toBe('/compras-internacionales/facturas');
   });
 
   it('las páginas sensibles quedan fuera del alcance de los roles operativos', () => {

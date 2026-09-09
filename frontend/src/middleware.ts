@@ -118,10 +118,10 @@ export async function middleware(request: NextRequest) {
     // configured, which is exactly the assumption defence-in-depth exists to
     // remove.
     //
-    // MOST SPECIFIC PREFIX WINS, so '/inventarios/facturas' beats a broader
-    // '/inventarios' rule. A page with no matching entry stays reachable by any
-    // authenticated session — unchanged behaviour, and why this closes a hole
-    // without narrowing anything that already worked.
+    // MOST SPECIFIC PREFIX WINS, so '/compras-internacionales/facturas' beats
+    // a broader '/compras-internacionales' rule. A page with no matching entry
+    // stays reachable by any authenticated session — unchanged behaviour, and
+    // why this closes a hole without narrowing anything that already worked.
     const regla = Object.entries(PAGE_PERMISSIONS)
       .filter(([ruta]) => pathname === ruta || pathname.startsWith(`${ruta}/`))
       .sort((a, b) => b[0].length - a[0].length)[0];

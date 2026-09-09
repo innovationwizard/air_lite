@@ -27,7 +27,7 @@ const datoBase = {
 const faltaBase = {
   kind: 'falta_algo',
   queFalta: 'Falta la columna de tránsito por bodega',
-  url: 'https://airefill.app/inventarios/reyma-vivo',
+  url: 'https://airefill.app/compras-internacionales/reyma-vivo',
   meta,
   screenshot: null,
 };

@@ -3,7 +3,7 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/server';
 import { createServiceRoleClient } from '@/lib/supabase/server';
-import { autor } from '@/app/api/inventarios/reyma/lib';
+import { autor } from '@/app/api/compras-internacionales/reyma/lib';
 import { validateBugReport } from '@/lib/feedback/validate';
 import { sendBugReportEmail } from '@/lib/feedback/email';
 

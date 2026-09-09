@@ -22,7 +22,7 @@ interface AreaRecord {
 }
 
 const ASSIGNABLE_ROLES: Role[] = [
-  'admin', 'gerencia', 'compras', 'ventas', 'inventario', 'financiero', 'testuser', 'ceo', 'sales_manager',
+  'admin', 'gerencia', 'compras', 'ventas', 'compras_internacionales', 'financiero', 'testuser', 'ceo', 'sales_manager',
 ];
 
 export default function UsuariosPage() {

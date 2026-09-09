@@ -6,7 +6,7 @@ import { CAN_MANAGE_USERS, Role } from '@/lib/auth/roles';
 import { createServiceRoleClient } from '@/lib/supabase/server';
 
 const VALID_ROLES: Role[] = [
-  'admin', 'gerencia', 'compras', 'ventas', 'inventario', 'financiero', 'testuser', 'ceo', 'sales_manager',
+  'admin', 'gerencia', 'compras', 'ventas', 'compras_internacionales', 'financiero', 'testuser', 'ceo', 'sales_manager',
 ];
 
 /** GET /api/admin/users — list all users with profiles, plus the área catalog */

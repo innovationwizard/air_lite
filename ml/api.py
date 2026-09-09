@@ -8,6 +8,7 @@ import hmac
 import logging
 import os
 import threading
+import xmlrpc.client
 
 from flask import Flask, request, jsonify
 from supabase import create_client
@@ -418,6 +419,21 @@ def _mapas_reyma():
         if p.get('clave'):
             por_clave.setdefault(p['clave'], set()).add(p['codigo'])
 
+    # Cruce resuelto por Alexis en /inventarios/facturas/pendientes
+    # (20260909000001): append-only, última fila por clave manda. Se aplica
+    # DESPUÉS del seed de julio y GANA — es la decisión más reciente sobre esa
+    # clave — sin tocar `reyma_products.clave`, que sigue sirviendo a las
+    # claves ya buenas del xlsx original.
+    resueltas = (sb.table('reyma_clave_map')
+                   .select('clave, codigo, created_at')
+                   .order('created_at', desc=True).execute().data or [])
+    vistas = set()
+    for c in resueltas:
+        if c['clave'] in vistas:
+            continue
+        vistas.add(c['clave'])
+        por_clave[c['clave']] = {c['codigo']}
+
     # Tablita de Alexis: append-only, la última fila por código manda.
     rollos = {}
     filas = (sb.table('reyma_conversion_bulto')
@@ -544,6 +560,194 @@ def reyma_factura_preview():
         'filas': resultado.filas if resultado else [],
         'retenidas': resultado.retenidas if resultado else [],
         'errores': errores,
+    })
+
+
+# PLASTICOS ADHERIBLES DEL BAJIO, S.A. DE C.V. — el único proveedor REYMA con
+# OCs (probe 2026-08-05, ml/odoo_sync_reyma.py:85). Duplicado acá a propósito
+# en vez de importar ese módulo: es un script de sync batch (argparse, writes
+# por lotes) y este archivo es un proceso Flask siempre corriendo — más simple
+# no acoplar los dos.
+REYMA_PARTNER_ID = 23188
+
+_ODOO_URL = os.environ.get('ODOO_URL', '')
+_ODOO_DB = os.environ.get('ODOO_DB', '')
+_ODOO_USERNAME = os.environ.get('ODOO_USERNAME', '')
+_ODOO_API_KEY = os.environ.get('ODOO_API_KEY', '')
+
+
+def _odoo_execute(model, method, *args, **kwargs):
+    """
+    Una conexión Odoo de UNA sola vez, para una request HTTP en vivo — no la
+    conexión con reintentos de los scripts de sync (esos usan `sys.exit(1)` si
+    fallan, que mataría este worker). Si Odoo no responde, el llamador lo ve
+    como una excepción y responde 502; nunca se cae el proceso.
+
+    SOLO LECTURA — search/search_read/fields_get. Nunca create/write/unlink
+    (regla del CEO, ver ODOO_VERSION / .env.prod: creds verificadas
+    read-only). Esta función no impone eso por código: lo impone que ningún
+    llamador de este archivo pida otra cosa.
+    """
+    if not all([_ODOO_URL, _ODOO_DB, _ODOO_USERNAME, _ODOO_API_KEY]):
+        raise RuntimeError('Odoo no está configurado (ODOO_URL/ODOO_DB/ODOO_USERNAME/ODOO_API_KEY)')
+    common = xmlrpc.client.ServerProxy(f'{_ODOO_URL}/xmlrpc/2/common', allow_none=True)
+    uid = common.authenticate(_ODOO_DB, _ODOO_USERNAME, _ODOO_API_KEY, {})
+    if not uid:
+        raise RuntimeError('Odoo rechazó la autenticación')
+    models = xmlrpc.client.ServerProxy(f'{_ODOO_URL}/xmlrpc/2/object', allow_none=True)
+    return models.execute_kw(_ODOO_DB, uid, _ODOO_API_KEY, model, method, list(args), kwargs)
+
+
+@app.route('/reyma/productos/buscar', methods=['GET'])
+def reyma_productos_buscar():
+    """
+    Busca en vivo en Odoo el producto que corresponde a una clave REYMA sin
+    mapa — paso de resolución de /inventarios/facturas/pendientes (A12b).
+
+    A propósito NO se llama desde `/reyma/factura/preview`: ese camino tiene
+    que seguir funcionando aunque Odoo esté caído (hoy no depende de Odoo en
+    absoluto), así que la búsqueda en vivo vive en un endpoint aparte que sólo
+    se usa cuando Alexis está resolviendo, no cuando está subiendo el furgón.
+
+    Dos fuentes, en este orden de confianza:
+      1. `product.supplierinfo` de REYMA (partner 23188) cuyo `product_name`
+         — la propia palabra de REYMA para el producto — contiene `q`. Es
+         evidencia (tier 1 del diseño): si REYMA ya le puso ese nombre al
+         producto en Odoo, es la señal más fuerte que existe.
+      2. `product.template` en general (nombre o código) — por si el producto
+         es nuevo también para el lado REYMA de Odoo y todavía no tiene fila
+         de supplierinfo.
+
+    Query param: `q` (mínimo 2 caracteres). Devuelve como mucho 10 + 15.
+    """
+    q = (request.args.get('q') or '').strip()
+    if len(q) < 2:
+        return jsonify({'error': 'q debe tener al menos 2 caracteres'}), 400
+
+    try:
+        supplier_rows = _odoo_execute(
+            'product.supplierinfo', 'search_read',
+            [['partner_id', '=', REYMA_PARTNER_ID], ['product_name', 'ilike', q]],
+            fields=['product_name', 'product_tmpl_id'], limit=10,
+            context={'active_test': False},
+        )
+        tmpl_ids = sorted({r['product_tmpl_id'][0] for r in supplier_rows if r.get('product_tmpl_id')})
+        tmpl_por_id = {}
+        if tmpl_ids:
+            for t in _odoo_execute(
+                'product.template', 'search_read', [['id', 'in', tmpl_ids]],
+                fields=['default_code', 'name', 'uom_id', 'volume', 'active'],
+                context={'active_test': False},
+            ):
+                tmpl_por_id[t['id']] = t
+
+        de_reyma = []
+        for r in supplier_rows:
+            tmpl = r['product_tmpl_id'] and tmpl_por_id.get(r['product_tmpl_id'][0])
+            if not tmpl or not tmpl.get('default_code'):
+                continue
+            de_reyma.append({
+                'codigo': tmpl['default_code'],
+                'nombre_odoo': tmpl['name'],
+                'nombre_reyma': r.get('product_name') or None,
+                'uom': tmpl['uom_id'][1] if tmpl.get('uom_id') else None,
+                'cubicaje': tmpl.get('volume') or 0,
+                'activo': tmpl.get('active', True),
+                'fuente': 'reyma_supplierinfo',
+            })
+
+        generales = _odoo_execute(
+            'product.template', 'search_read',
+            ['|', ['default_code', 'ilike', q], ['name', 'ilike', q]],
+            fields=['default_code', 'name', 'uom_id', 'volume', 'active'],
+            limit=15, context={'active_test': False},
+        )
+        vistos = {p['codigo'] for p in de_reyma}
+        otros = [{
+            'codigo': t['default_code'],
+            'nombre_odoo': t['name'],
+            'nombre_reyma': None,
+            'uom': t['uom_id'][1] if t.get('uom_id') else None,
+            'cubicaje': t.get('volume') or 0,
+            'activo': t.get('active', True),
+            'fuente': 'odoo_general',
+        } for t in generales if t.get('default_code') and t['default_code'] not in vistos]
+
+    except Exception as e:  # noqa: BLE001 — Odoo caído/timeout no debe tumbar el worker
+        logger.warning('reyma/productos/buscar: Odoo falló: %s', e)
+        return jsonify({'error': f'No se pudo consultar Odoo: {e}'}), 502
+
+    return jsonify({'q': q, 'candidatos': de_reyma, 'otros': otros})
+
+
+@app.route('/reyma/factura/pendiente/reintentar', methods=['POST'])
+def reyma_factura_pendiente_reintentar():
+    """
+    Reevalúa líneas que quedaron en `reyma_factura_pendiente` (clave sin
+    mapa), después de que Alexis resuelve la clave en
+    /inventarios/facturas/pendientes.
+
+    A propósito llama a `evaluar()` — la MISMA regla que carga las facturas
+    nuevas, nunca una reimplementación en TypeScript (ver el docstring de
+    `reyma_factura_carga.py`). `_mapas_reyma()` relee de Supabase en cada
+    llamada, así que ya incluye la fila que Next.js acaba de insertar en
+    `reyma_clave_map` antes de llamar acá.
+
+    Entrada: {"lineas": [{archivo, folio_fiscal, factura, fecha, identificador,
+    cantidad, unidad, bultos, importe, precio_unitario, observ_destino,
+    destino, eta}, ...]} — la forma que guarda `reyma_factura_pendiente`, una
+    por fila. `destino`/`eta` viajan por línea (ya son un hecho, decidido por
+    Alexis cuando cargó la factura original) y acá se agrupan por prefijo de
+    furgón porque así es como `evaluar()` los espera.
+
+    Salida: {filas, retenidas, errores} — la MISMA forma que `evaluar()`
+    devuelve. `filas` son las que ya se pueden escribir en
+    `reyma_facturas_pdf`; lo que siga en `retenidas` (p. ej. un KGM sin
+    tablita de conversión) sigue pendiente — Next.js no las marca `aplicada`.
+    """
+    body = request.get_json(silent=True) or {}
+    entrada = body.get('lineas')
+    if not isinstance(entrada, list) or not entrada:
+        return jsonify({'error': 'se esperaba "lineas": [...] con al menos un elemento'}), 400
+
+    destinos, etas, lineas = {}, {}, []
+    for ln in entrada:
+        try:
+            archivo = str(ln['archivo'])
+            guia = guia_de(archivo)
+        except (KeyError, DatoInvalido) as e:
+            return jsonify({'error': f'línea inválida: {e}'}), 400
+        prefijo = prefijo_de(guia)
+        destinos[prefijo] = ln.get('destino')
+        etas[prefijo] = ln.get('eta')
+        lineas.append({
+            'archivo': archivo,
+            'folio_fiscal': ln.get('folio_fiscal'),
+            'factura': ln.get('factura'),
+            'fecha': ln.get('fecha'),
+            'identificador': ln.get('identificador'),
+            'cantidad': ln.get('cantidad'),
+            'unidad': ln.get('unidad'),
+            'bultos': ln.get('bultos'),
+            'importe': ln.get('importe'),
+            'precio_unitario': ln.get('precio_unitario'),
+            'observ_destino': ln.get('observ_destino') or '',
+        })
+
+    if any(not d for d in destinos.values()):
+        return jsonify({'error': 'falta destino en alguna línea'}), 400
+
+    try:
+        resultado = evaluar(lineas, destinos, etas,
+                             'reintento tras resolver clave en /inventarios/facturas/pendientes',
+                             _mapas_reyma())
+    except DatoInvalido as e:
+        return jsonify({'error': str(e)}), 422
+
+    return jsonify({
+        'filas': resultado.filas,
+        'retenidas': resultado.retenidas,
+        'errores': resultado.errores,
     })
 
 

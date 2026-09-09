@@ -1,7 +1,7 @@
 /**
  * RBAC role definitions and authorization helpers.
  *
- * 11 roles: superuser, admin, gerencia, compras, ventas, inventario, financiero, testuser, operaciones, ceo, sales_manager
+ * 11 roles: superuser, admin, gerencia, compras, ventas, compras_internacionales, financiero, testuser, operaciones, ceo, sales_manager
  * Superuser bypasses all checks.
  */
 
@@ -11,16 +11,17 @@ export const ROLES = {
   GERENCIA: 'gerencia',
   COMPRAS: 'compras',
   VENTAS: 'ventas',
-  INVENTARIO: 'inventario',
+  COMPRAS_INTERNACIONALES: 'compras_internacionales',
   FINANCIERO: 'financiero',
   TESTUSER: 'testuser',
   OPERACIONES: 'operaciones',
   /**
    * The client's project manager. Owns the PLAN on /status — priority order,
    * target dates, notes — and nothing else. Deliberately NOT given the compras
-   * or inventarios silos: he had been entering with a `compras` credential, so
-   * authorising the plan by that role would have handed the same authority to
-   * the buyer the plan measures. See 20260901000002_add_project_manager_role.sql
+   * or compras_internacionales silos: he had been entering with a `compras`
+   * credential, so authorising the plan by that role would have handed the
+   * same authority to the buyer the plan measures. See
+   * 20260901000002_add_project_manager_role.sql
    */
   PROJECT_MANAGER: 'project_manager',
   /**
@@ -65,7 +66,7 @@ export const CAN_VIEW_SYSTEM: Role[] = ['superuser'];
 export const CAN_VIEW_ADMIN: Role[] = ['superuser', 'admin'];
 
 export const CAN_VIEW_OPERATIONAL: Role[] = [
-  'superuser', 'admin', 'gerencia', 'compras', 'ventas', 'inventario', 'financiero', 'testuser', 'operaciones', 'project_manager',
+  'superuser', 'admin', 'gerencia', 'compras', 'ventas', 'compras_internacionales', 'financiero', 'testuser', 'operaciones', 'project_manager',
   'ceo', 'sales_manager',
 ];
 
@@ -82,8 +83,9 @@ export const CAN_EDIT_STATUS_PLAN: Role[] = ['superuser', 'project_manager'];
 
 /**
  * Who may VIEW /status (the gap analysis). Reserved for the PM, gerencia, and
- * superuser (Jorge, 2026-09-03) — every operational silo (compras, inventario,
- * ventas, etc.) had been reading it too via CAN_VIEW_OPERATIONAL, which was
+ * superuser (Jorge, 2026-09-03) — every operational silo (compras,
+ * compras_internacionales, ventas, etc.) had been reading it too via
+ * CAN_VIEW_OPERATIONAL, which was
  * never a deliberate grant to those roles specifically. `ceo` and
  * `sales_manager`, though clones of `gerencia`, are excluded on purpose: see
  * their ROLLOUT_FOCUS entries below.
@@ -107,7 +109,7 @@ export const CAN_CAPTURE_FORECAST: Role[] = ['superuser', 'admin', 'ventas'];
 
 /** Roles that can access OA (Open Orders) module */
 export const CAN_VIEW_OA: Role[] = [
-  'superuser', 'admin', 'gerencia', 'compras', 'inventario', 'financiero', 'operaciones', 'ceo', 'sales_manager',
+  'superuser', 'admin', 'gerencia', 'compras', 'compras_internacionales', 'financiero', 'operaciones', 'ceo', 'sales_manager',
 ];
 
 /** Roles that can access the Operaciones silo (Mario's tool) */
@@ -120,9 +122,9 @@ export const CAN_VIEW_COMPRAS: Role[] = [
   'superuser', 'admin', 'gerencia', 'compras', 'ceo', 'sales_manager',
 ];
 
-/** Roles that can access the Inventarios silo (Alexis' tool) */
-export const CAN_VIEW_INVENTARIOS: Role[] = [
-  'superuser', 'admin', 'gerencia', 'inventario', 'ceo', 'sales_manager',
+/** Roles that can access the Compras Internacionales silo (Alexis' tool) */
+export const CAN_VIEW_COMPRAS_INTERNACIONALES: Role[] = [
+  'superuser', 'admin', 'gerencia', 'compras_internacionales', 'ceo', 'sales_manager',
 ];
 
 /** Roles that can access the Gerencia silo (Luis-facing validation) */
@@ -149,13 +151,13 @@ export const CAN_VIEW_POC_ONLY: Role[] = ['testuser'];
  * to /status alone.
  */
 export const CAN_VIEW_POC: Role[] = [
-  'superuser', 'admin', 'gerencia', 'compras', 'ventas', 'inventario', 'financiero', 'testuser',
+  'superuser', 'admin', 'gerencia', 'compras', 'ventas', 'compras_internacionales', 'financiero', 'testuser',
   'ceo', 'sales_manager',
 ];
 
 /**
  * TEMPORARY delivery-phase focus (Jorge, 2026-08-11): while Wilmer (compras)
- * and Alexis (inventario) onboard, they are CONFINED to their live Odoo pages —
+ * and Alexis (compras_internacionales) onboard, they are CONFINED to their live Odoo pages —
  * the sidebar shows only those items, login lands on the FIRST one, and the
  * middleware redirects every other page (except /update-password) back to it,
  * so nothing distracts from validation. API routes / PAGE_PERMISSIONS are
@@ -175,9 +177,11 @@ export const ROLLOUT_FOCUS: Partial<Record<Role, string[]>> = {
   ],
   // A6.20 — los CUATRO modelos de Alexis, cada uno con su juego de reglas.
   // `reyma-vivo` sigue primero: es la landing y el modelo validado.
-  inventario: ['/inventarios/reyma-vivo', '/inventarios/carvajal-vivo',
-               '/inventarios/darnel-vivo', '/inventarios/asia-vivo',
-               '/inventarios/facturas'],
+  compras_internacionales: [
+    '/compras-internacionales/reyma-vivo', '/compras-internacionales/carvajal-vivo',
+    '/compras-internacionales/darnel-vivo', '/compras-internacionales/asia-vivo',
+    '/compras-internacionales/facturas',
+  ],
   /**
    * `gerencia` (2026-09-01) — confined to `/status`, and that is not a
    * demotion: it is the first page this role has ever had a recurring reason
@@ -250,16 +254,16 @@ export const PAGE_PERMISSIONS: Record<string, Role[]> = {
   '/compras/reabastecimiento': CAN_VIEW_COMPRAS,
   '/compras/reabastecimiento-vivo': CAN_VIEW_COMPRAS,
   // Narrower than the parent page (CAN_VIEW_COMPRAS) — most-specific-prefix-wins
-  // in the middleware, so this correctly excludes ventas/inventario/financiero/
-  // etc., who could view reabastecimiento-vivo but were never meant to manage
-  // supplier groups.
+  // in the middleware, so this correctly excludes ventas/compras_internacionales/
+  // financiero/etc., who could view reabastecimiento-vivo but were never meant
+  // to manage supplier groups.
   '/compras/reabastecimiento-vivo/proveedores': CAN_MANAGE_SUPPLIER_GROUPS,
-  '/inventarios/reyma': CAN_VIEW_INVENTARIOS,
-  '/inventarios/reyma-vivo': CAN_VIEW_INVENTARIOS,
-  '/inventarios/carvajal-vivo': CAN_VIEW_INVENTARIOS,
-  '/inventarios/darnel-vivo': CAN_VIEW_INVENTARIOS,
-  '/inventarios/asia-vivo': CAN_VIEW_INVENTARIOS,
-  '/inventarios/facturas': CAN_VIEW_INVENTARIOS,
+  '/compras-internacionales/reyma': CAN_VIEW_COMPRAS_INTERNACIONALES,
+  '/compras-internacionales/reyma-vivo': CAN_VIEW_COMPRAS_INTERNACIONALES,
+  '/compras-internacionales/carvajal-vivo': CAN_VIEW_COMPRAS_INTERNACIONALES,
+  '/compras-internacionales/darnel-vivo': CAN_VIEW_COMPRAS_INTERNACIONALES,
+  '/compras-internacionales/asia-vivo': CAN_VIEW_COMPRAS_INTERNACIONALES,
+  '/compras-internacionales/facturas': CAN_VIEW_COMPRAS_INTERNACIONALES,
   '/operaciones': CAN_VIEW_OPERACIONES,
   '/gerencia': CAN_VIEW_GERENCIA,
   '/superuser': CAN_VIEW_SYSTEM,
@@ -304,8 +308,8 @@ export function getDefaultPage(
       return '/compras';
     case ROLES.OPERACIONES:
       return '/operaciones';
-    case ROLES.INVENTARIO:
-      return '/inventarios/reyma';
+    case ROLES.COMPRAS_INTERNACIONALES:
+      return '/compras-internacionales/reyma';
     case ROLES.GERENCIA:
     case ROLES.CEO:
     case ROLES.SALES_MANAGER:
@@ -330,7 +334,7 @@ export const ROLE_LABELS: Record<Role, string> = {
   gerencia: 'Gerencia',
   compras: 'Compras',
   ventas: 'Ventas',
-  inventario: 'Inventario',
+  compras_internacionales: 'Compras Internacionales',
   financiero: 'Financiero',
   testuser: 'Usuario de Prueba',
   operaciones: 'Operaciones',

@@ -259,25 +259,36 @@ class TestConversionKgm:
 # ─── Mapeo de claves: error, no retención ────────────────────────────────────
 
 class TestMapeoDeClaves:
-    def test_una_clave_sin_mapa_DETIENE_la_carga(self):
-        # No se descarta la línea ni se le inventa código. Caso real: N9 /
-        # CN9X9D4PXN en G-226, que hubo que cargar a mano con el centinela
-        # `odoo:6037` porque el producto está fuera del alcance del modelo.
+    def test_una_clave_sin_mapa_se_RETIENE(self):
+        # Decisión 2026-09-09 (Jorge), tras el incidente F173634/CH2PRXN: no
+        # se descarta la línea ni se le inventa código, y YA NO detiene la
+        # factura entera — se retiene, con `tipo='clave_sin_mapa'`, para que
+        # Alexis la resuelva en /inventarios/facturas/pendientes cuando pueda.
         r = _evaluar([_linea(identificador='DESCONOCIDAXN')])
-        assert r.filas == [] and r.retenidas == []
-        assert 'sin mapa en reyma_products.clave' in r.errores[0]
+        assert r.filas == [] and r.errores == []
+        (ret,) = r.retenidas
+        assert ret['tipo'] == 'clave_sin_mapa'
+        assert 'sin mapa en reyma_products.clave' in ret['motivo']
+        # Lo suficiente para reconstruir la línea el día que se resuelva.
+        assert ret['identificador'] == 'DESCONOCIDAXN'
+        assert ret['folio_fiscal'] and ret['factura'] and ret['fecha'] and ret['archivo']
 
     def test_una_clave_ambigua_DETIENE_la_carga(self):
+        # A diferencia de una clave sin mapa, una clave AMBIGUA es una falla de
+        # datos en `reyma_products` (más de un código para la misma clave) que
+        # una sola decisión de Alexis no resuelve — sigue deteniendo la
+        # factura entera.
         r = _evaluar([_linea(identificador='AMBIGUAXN')])
         assert r.filas == []
         assert 'ambigua' in r.errores[0]
         assert '77200001' in r.errores[0] and '77200002' in r.errores[0]
 
-    def test_una_clave_sin_mapa_invalida_la_factura_entera(self):
-        # La diferencia con una retención: acá `filas` queda inutilizable
-        # porque la factura no está completa. El llamador NO debe escribir.
+    def test_una_clave_sin_mapa_NO_invalida_la_factura_entera(self):
+        # La diferencia con un error: el resto de la factura SÍ se carga.
         r = _evaluar([_linea(linea=1), _linea(linea=2, identificador='DESCONOCIDAXN')])
-        assert r.errores and not r.cargable
+        assert r.errores == [] and r.cargable
+        assert len(r.filas) == 1 and len(r.retenidas) == 1
+        assert r.retenidas[0]['tipo'] == 'clave_sin_mapa'
 
 
 # ─── Regresión contra producción ─────────────────────────────────────────────
@@ -336,13 +347,17 @@ def test_reproduce_exacto_lo_que_hay_en_produccion():
     r = evaluar(lineas, destinos, etas, 'regresión',
                 Mapas(por_clave=por_clave, rollos_por_bulto=rollos))
 
-    # El ÚNICO error esperado es N9, y se pinea por nombre en vez de
-    # silenciarse: `CN9X9D4PXN` está fuera del alcance del modelo y no tiene
-    # clave, así que las reglas lo rechazan — correctamente. Si algún día se le
-    # da entrada al catálogo, esta prueba se cae y obliga a decidirlo aquí en
-    # vez de descubrirlo en producción. Cualquier OTRO error es una regresión.
-    assert r.errores == ['G-226-2026 CN9X9D4PXN: sin mapa en reyma_products.clave'], r.errores
-    assert r.retenidas == [], r.retenidas[:3]
+    # N9 ya no es un error (decisión 2026-09-09): `CN9X9D4PXN` está fuera del
+    # alcance del catálogo derivado del fixture, así que ahora se RETIENE en
+    # vez de detener la factura — se pinea por nombre en vez de silenciarse.
+    # Si algún día se le da entrada al catálogo, esta prueba se cae y obliga a
+    # decidirlo aquí en vez de descubrirlo en producción. Cualquier error, o
+    # cualquier OTRA retención, es una regresión.
+    assert r.errores == [], r.errores
+    assert len(r.retenidas) == 1, r.retenidas
+    assert r.retenidas[0]['guia'] == 'G-226-2026'
+    assert r.retenidas[0]['identificador'] == 'CN9X9D4PXN'
+    assert r.retenidas[0]['tipo'] == 'clave_sin_mapa'
 
     producido = {(f['folio_fiscal'], f['codigo']): f for f in r.filas}
     assert set(producido) == set(esperado), 'el conjunto de filas no coincide'

@@ -30,8 +30,17 @@ Las reglas que hace cumplir este módulo (no son opcionales):
     BLTS, la línea se RETIENE — nunca se estima.
   * Siempre se guarda lo verbatim del papel además de lo convertido:
     `cantidad_cfdi` + `unidad` + `bultos`.
-  * `codigo` sale de `reyma_products.clave`. Una clave sin mapa detiene la
-    carga: no se descarta la línea ni se le inventa código.
+  * `codigo` sale de `reyma_products.clave`, fusionado con `reyma_clave_map`
+    (el cruce que resuelve Alexis en /inventarios/facturas/pendientes — última
+    fila por clave manda, igual que `reyma_conversion_bulto`). Una clave SIN
+    mapa en ninguno de los dos NO detiene la factura — RETIENE la línea
+    (`tipo='clave_sin_mapa'`): decisión 2026-09-09 (Jorge), revierte la regla
+    original tras el incidente F173634/CH2PRXN. El resto de la factura entra;
+    la línea retenida espera en `reyma_factura_pendiente` a que Alexis la
+    resuelva, cuando puede — no en el momento en que está descargando el
+    furgón. Una clave AMBIGUA (mapea a más de un código) SÍ sigue deteniendo
+    la factura entera: es una falla de datos en `reyma_products`, no algo que
+    una decisión de una línea pueda resolver.
 
 **Retenida vs error.** Una línea RETENIDA es una que el documento trae pero no
 sabemos convertir con certeza — el resto de la factura sí se puede cargar, y lo
@@ -195,7 +204,12 @@ def evaluar(lineas, destinos: dict, etas: dict, autor: str, mapas: Mapas) -> Res
 
         codigos = mapas.por_clave.get(ln['identificador'])
         if not codigos:
-            r._error(f"{guia} {ln['identificador']}: sin mapa en reyma_products.clave")
+            # 2026-09-09: ya no detiene la factura (ver docstring del módulo).
+            # Se retiene con lo suficiente para reconstruir la línea el día que
+            # Alexis resuelva la clave en /inventarios/facturas/pendientes.
+            r.retenidas.append(_retenida(
+                guia, ln, 'sin mapa en reyma_products.clave — pendiente de asignar',
+                tipo='clave_sin_mapa'))
             continue
         if len(codigos) > 1:
             r._error(f"{guia} {ln['identificador']}: clave ambigua → {sorted(codigos)}")
@@ -250,14 +264,31 @@ def evaluar(lineas, destinos: dict, etas: dict, autor: str, mapas: Mapas) -> Res
     return r
 
 
-def _retenida(guia: str, ln: dict, motivo: str) -> dict:
-    """Una línea retenida, con lo suficiente para explicarla en pantalla."""
+def _retenida(guia: str, ln: dict, motivo: str, tipo: str = 'sin_conversion') -> dict:
+    """
+    Una línea retenida, con lo suficiente para explicarla en pantalla.
+
+    `tipo='clave_sin_mapa'` es recuperable: la app la reintenta apenas Alexis
+    resuelve la clave, así que además de lo que se muestra se guarda lo que
+    hace falta para reconstruir la línea y llamar `evaluar()` de nuevo —
+    `archivo`/`folio_fiscal`/`factura`/`fecha`/`bultos`/`precio_unitario` —
+    en vez de reimplementar la conversión aparte (ver docstring del módulo:
+    no puede haber dos implementaciones de estas reglas).
+    """
     return {
         'guia': guia,
+        'tipo': tipo,
         'identificador': ln['identificador'],
         'descripcion': (ln.get('descripcion') or '')[:200],
         'cantidad': _a_float(ln['cantidad']),
         'unidad': ln['unidad'],
+        'bultos': _a_float(ln.get('bultos')),
         'importe': _a_float(ln.get('importe')),
+        'precio_unitario': _a_float(ln.get('precio_unitario')),
         'motivo': motivo,
+        'archivo': ln['archivo'],
+        'folio_fiscal': ln['folio_fiscal'],
+        'factura': ln['factura'],
+        'fecha': ln['fecha'],
+        'observ_destino': ln.get('observ_destino') or '',
     }
