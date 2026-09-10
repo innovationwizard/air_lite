@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  MOTIVOS, MAX_CODIGOS_POR_MES, etiquetaMes, cicloDelMes, consolidar,
+  MOTIVOS, MAX_CODIGOS_POR_MES, etiquetaMes, estadoCiclo, mesPorDefecto, consolidar,
   type Motivo, type FilaForecast,
 } from '@/lib/comercial/forecast';
 
@@ -43,7 +43,10 @@ export function ForecastClient() {
       const j = await r.json();
       if (!r.ok) throw new Error(j.error ?? 'No se pudo cargar');
       setD(j);
-      setMes((m) => m || j.mesesAbiertos[0]);
+      // `mesesAbiertos[0]` es el mes EN CURSO, cuya captura cerró el mes
+      // pasado: abrir ahí mandaba a los seis canales a cargar un mes ya
+      // comprado. Se abre en el primero cuya captura sigue viva.
+      setMes((m) => m || mesPorDefecto(new Date()));
     } catch (e) {
       setError(e instanceof Error ? e.message : 'No se pudo cargar');
     }
@@ -55,8 +58,6 @@ export function ForecastClient() {
   if (!d) return <div className="p-8 text-sm text-gray-500">Cargando…</div>;
 
   const capturando = d.puedeCapturar && !!d.miArea;
-  const ciclo = mes ? cicloDelMes(mes) : null;
-  const hoy = new Date();
 
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8 space-y-6">
@@ -71,21 +72,7 @@ export function ForecastClient() {
       </header>
 
       {/* El ciclo lo pone el cliente, no este documento. */}
-      {ciclo && (
-        <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 text-sm">
-          <span className="text-gray-800">
-            Para <strong>{etiquetaMes(mes)}</strong>: la captura cierra el{' '}
-            <strong>{ciclo.cierre.toLocaleDateString('es-GT', { day: 'numeric', month: 'long', timeZone: 'UTC' })}</strong>
-            {' '}y la reunión de forecast es el{' '}
-            <strong>{ciclo.reunion.toLocaleDateString('es-GT', { day: 'numeric', month: 'long', timeZone: 'UTC' })}</strong>.
-          </span>
-          {ciclo.cierre > hoy && (
-            <span className="text-amber-800 ml-1">
-              Quedan {Math.ceil((ciclo.cierre.getTime() - hoy.getTime()) / 86_400_000)} días.
-            </span>
-          )}
-        </div>
-      )}
+      {mes && <BannerCiclo mes={mes} />}
 
       <div className="flex flex-wrap gap-2">
         {d.mesesAbiertos.map((m) => (
@@ -110,6 +97,40 @@ export function ForecastClient() {
           Tu usuario todavía no tiene un canal comercial asignado, así que no podés cargar
           todavía. Un administrador lo configura en un minuto.
         </p>
+      )}
+    </div>
+  );
+}
+
+/* ── El plazo del ciclo ─────────────────────────────────────────────────── */
+
+const fechaLarga = (d: Date) =>
+  d.toLocaleDateString('es-GT', { day: 'numeric', month: 'long', timeZone: 'UTC' });
+
+/**
+ * Las dos fechas del ciclo, y cuánto queda.
+ *
+ * Redacta en pasado cuando el plazo venció, en vez de anunciar un plazo
+ * negativo: el mes en curso sigue siendo cargable —una corrección tardía es
+ * legítima— pero decirle «quedan −27 días» a quien vino a cargar contra reloj
+ * es la clase de fricción que dejó la hoja anterior a medio llenar.
+ */
+function BannerCiclo({ mes }: { mes: string }) {
+  const { cierre, reunion, cerrada, diasRestantes } = estadoCiclo(mes, new Date());
+  return (
+    <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 text-sm">
+      <span className="text-gray-800">
+        Para <strong>{etiquetaMes(mes)}</strong>: la captura {cerrada ? 'cerró' : 'cierra'} el{' '}
+        <strong>{fechaLarga(cierre)}</strong>
+        {' '}y la reunión de forecast {cerrada ? 'fue' : 'es'} el{' '}
+        <strong>{fechaLarga(reunion)}</strong>.
+      </span>
+      {!cerrada && (
+        <span className="text-amber-800 ml-1 font-medium">
+          {diasRestantes === 0 ? 'Cierra hoy.'
+            : diasRestantes === 1 ? 'Queda 1 día.'
+            : `Quedan ${diasRestantes} días.`}
+        </span>
       )}
     </div>
   );

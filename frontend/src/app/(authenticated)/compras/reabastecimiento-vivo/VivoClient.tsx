@@ -109,7 +109,10 @@ const COL_TIP = {
     'Pendiente de tomar reserva — captura manual (no existe en ningún sistema). '
     + '¿? significa sin dato, no cero. Resta de la exist. neta. '
     + 'El botón ✕ quita la captura y vuelve a ¿? (sin dato).',
-  adic: 'Adicional comercial del mes vigente (forecast comercial).',
+  adic: 'Adicional comercial del mes en captura (forecast comercial), sumando los seis canales. '
+    + 'SÓLO entra la compra extraordinaria: es certeza con destinatario. '
+    + 'Temporada y faltante/crítico son proyección del canal, se muestran en gris '
+    + 'como «+N rev.» y NO suman al Sugerido — se discuten en la reunión mensual.',
   ord: 'ORDENADO — la base de Wilmer y la ÚNICA que alimenta el Sugerido. '
     + 'Promedio mensual de cantidad ordenada (sale.order.line, estados venta y hecho; '
     + 'excluye cotización, cotización enviada y cancelado), por bodega de la orden.',
@@ -167,6 +170,8 @@ interface ApiRow {
   /** W15-A — esa declaración está cambiando lo que se ve en esta bodega. */
   destinoProvisional: boolean;
   adic: number; adicComercial: number; sugBodega: number | null;
+  /** Proyección comercial a revisión (temporada + crítico) — se muestra, no se suma. */
+  adicRevision: number;
   transitoDetalle: { fecha: string | null; qty: number; orden: string | null }[];
   p6: number; p3: number; h: number; win: 10 | 5;
   /** G4 invoiced lens — display only, never fed to the engine. null = sync has not computed it. */
@@ -542,7 +547,18 @@ export function VivoClient() {
           clearTip="Quitar captura manual — vuelve a ¿? (sin dato)"
         />
       </td>
-      <td className="px-3 py-2 border-b border-gray-100 text-right text-gray-500">{fmt(r.adic)}</td>
+      {/* Lo que va a revisión se VE pero no se suma: un número que nadie ve no
+          se puede discutir en la reunión, y uno que se suma solo no se discute
+          nunca. */}
+      <td className="px-3 py-2 border-b border-gray-100 text-right text-gray-500 whitespace-nowrap">
+        {fmt(r.adic)}
+        {r.adicRevision > 0 && (
+          <span className="text-gray-400 text-xs ml-1"
+                title="Proyección comercial a revisión (temporada + faltante/crítico). No suma al Sugerido.">
+            +{fmt(r.adicRevision)} rev.
+          </span>
+        )}
+      </td>
       <td className="px-3 py-2 border-b border-gray-100 text-right text-gray-700">{fmt(r.p6)}</td>
       <td className="px-3 py-2 border-b border-gray-100 text-right text-gray-700">{fmt(r.p3)}</td>
       <td className="px-3 py-2 border-b border-gray-100 text-right">

@@ -1,6 +1,7 @@
 import {
   sumaDirecto, mesesAbiertos, mesDentroDelHorizonte, primerDiaMes, etiquetaMes,
-  cicloDelMes, consolidar, MAX_CODIGOS_POR_MES, type FilaForecast,
+  cicloDelMes, mesPorDefecto, estadoCiclo, consolidar, MAX_CODIGOS_POR_MES,
+  type FilaForecast,
 } from '../forecast';
 
 describe('motivos', () => {
@@ -41,19 +42,91 @@ describe('horizonte de meses', () => {
 });
 
 describe('ciclo del cliente', () => {
-  it('septiembre 2026: cierre el viernes 11, reunion el miercoles 16', () => {
-    // Las unicas fechas del proyecto que nacen del calendario del cliente.
-    const c = cicloDelMes('2026-09-01');
+  /**
+   * CORREGIDO 2026-09-10. Esta prueba afirmaba que el ciclo de un mes cae en
+   * ESE mes: `cicloDelMes('2026-09-01')` = cierre 11-sep, reunion 16-sep. Se
+   * escribio desde la implementacion, y las dos compartian el mismo error de
+   * un mes.
+   *
+   * La definicion de terminado dice lo contrario en cuatro lugares (§0, §1,
+   * §2 y §5 de docs/compras/DEFINICION_TERMINADO_FORECAST_COMERCIAL.md), y §5
+   * no deja lugar a interpretacion: «las seis areas cargaron su forecast de
+   * OCTUBRE antes del viernes 11 de SEPTIEMBRE». El cierre del 11 de
+   * septiembre es el de OCTUBRE, no el de septiembre.
+   *
+   * Lo que costaba en pantalla: al jefe de canal que elegia correctamente
+   * Octubre, el banner le anunciaba «cierra el 9 de octubre, quedan 29 dias»
+   * el dia antes del cierre real.
+   */
+  it('octubre 2026 se captura en septiembre: cierre viernes 11, reunion miercoles 16', () => {
+    const c = cicloDelMes('2026-10-01');
     expect(c.cierre.toISOString().slice(0, 10)).toBe('2026-09-11');
     expect(c.reunion.toISOString().slice(0, 10)).toBe('2026-09-16');
     expect(c.cierre.getUTCDay()).toBe(5);
     expect(c.reunion.getUTCDay()).toBe(3);
   });
 
-  it('funciona en un mes que empieza en fin de semana', () => {
-    const c = cicloDelMes('2026-08-01'); // sabado
+  it('el ciclo de enero cae en diciembre del ano anterior', () => {
+    const c = cicloDelMes('2027-01-01');
+    expect(c.cierre.toISOString().slice(0, 10)).toBe('2026-12-11');
     expect(c.cierre.getUTCDay()).toBe(5);
     expect(c.reunion.getUTCDay()).toBe(3);
+  });
+
+  it('funciona en un mes cuyo ciclo empieza en fin de semana', () => {
+    const c = cicloDelMes('2026-09-01'); // el ciclo corre en agosto, que abre sabado
+    expect(c.cierre.getUTCDay()).toBe(5);
+    expect(c.reunion.getUTCDay()).toBe(3);
+  });
+});
+
+describe('mes por defecto', () => {
+  /**
+   * El valor por defecto es la decision de producto mas cara de esta pantalla:
+   * se equivoca en los seis canales a la vez y sin que nadie lo note.
+   */
+  it('el 10 de septiembre abre en OCTUBRE, no en el mes en curso', () => {
+    // La captura de septiembre cerro el 14 de agosto; la de octubre cierra
+    // manana. Abrir en septiembre mandaba a cargar un mes ya comprado.
+    expect(mesPorDefecto(new Date('2026-09-10T18:00:00Z'))).toBe('2026-10-01');
+  });
+
+  it('el dia del cierre todavia cuenta como abierto', () => {
+    // Cierra al TERMINAR ese viernes, no al empezarlo: quien entra el 11 a las
+    // 9 de la manana sigue a tiempo.
+    expect(mesPorDefecto(new Date('2026-09-11T09:00:00Z'))).toBe('2026-10-01');
+    expect(mesPorDefecto(new Date('2026-09-11T23:59:00Z'))).toBe('2026-10-01');
+  });
+
+  it('pasado el cierre salta al mes siguiente', () => {
+    expect(mesPorDefecto(new Date('2026-09-12T09:00:00Z'))).toBe('2026-11-01');
+  });
+
+  it('siempre devuelve un mes del horizonte', () => {
+    for (const dia of ['2026-01-05', '2026-06-30', '2026-12-31']) {
+      const hoy = new Date(`${dia}T12:00:00Z`);
+      expect(mesesAbiertos(hoy)).toContain(mesPorDefecto(hoy));
+    }
+  });
+});
+
+describe('estado del ciclo', () => {
+  it('el 10 de septiembre, a octubre le queda 1 dia', () => {
+    const e = estadoCiclo('2026-10-01', new Date('2026-09-10T18:00:00Z'));
+    expect(e.cerrada).toBe(false);
+    expect(e.diasRestantes).toBe(1);
+  });
+
+  it('marca cerrada la captura del mes en curso, sin plazo negativo', () => {
+    const e = estadoCiclo('2026-09-01', new Date('2026-09-10T18:00:00Z'));
+    expect(e.cerrada).toBe(true);
+    expect(e.diasRestantes).toBeLessThan(0);
+  });
+
+  it('el dia del cierre no esta cerrada y marca cero dias', () => {
+    const e = estadoCiclo('2026-10-01', new Date('2026-09-11T09:00:00Z'));
+    expect(e.cerrada).toBe(false);
+    expect(e.diasRestantes).toBe(0);
   });
 });
 

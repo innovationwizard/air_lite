@@ -77,14 +77,7 @@ export function etiquetaMes(mes: string): string {
   return `${NOMBRE_MES[m - 1]} ${a}`;
 }
 
-/**
- * Las dos fechas del ciclo del cliente, para el mes que se esté mirando:
- * cierre de captura el 2º viernes, reunión el 3er miércoles.
- *
- * Son las únicas fechas de todo el proyecto que nacen del calendario del
- * cliente y no de una negociación, así que la pantalla las muestra en vez de
- * inventar un plazo propio.
- */
+/** El n-ésimo `diaSemana` (0=domingo) de un mes, en UTC. */
 export function nEsimoDiaSemana(anio: number, mes1a12: number, diaSemana: number, n: number): Date {
   const d = new Date(Date.UTC(anio, mes1a12 - 1, 1));
   let cuenta = 0;
@@ -97,12 +90,67 @@ export function nEsimoDiaSemana(anio: number, mes1a12: number, diaSemana: number
   }
 }
 
+/**
+ * Las dos fechas del ciclo del cliente para el mes que se esté mirando:
+ * cierre de captura el 2º viernes, reunión el 3er miércoles.
+ *
+ * Son las únicas fechas de todo el proyecto que nacen del calendario del
+ * cliente y no de una negociación, así que la pantalla las muestra en vez de
+ * inventar un plazo propio.
+ */
 export function cicloDelMes(mes: string): { cierre: Date; reunion: Date } {
   const [a, m] = mes.split('-').map(Number);
+  // EL MES ANTERIOR, no el propio. Un pronóstico se levanta ANTES de que
+  // empiece el mes que describe, y la definición de terminado lo fija en una
+  // línea: «las seis áreas cargaron su forecast de OCTUBRE antes del viernes 11
+  // de SEPTIEMBRE» (docs/compras/DEFINICION_TERMINADO_FORECAST_COMERCIAL.md §5,
+  // y lo mismo en §0, §1 y §2). Calcularlo sobre el mes propio cerraba la
+  // captura de octubre el 9 de octubre: nueve días DESPUÉS de que el mes
+  // empezó y con el pedido ya puesto.
+  const anioCiclo = m === 1 ? a - 1 : a;
+  const mesCiclo = m === 1 ? 12 : m - 1;
   return {
-    cierre: nEsimoDiaSemana(a, m, 5, 2),   // 2º viernes
-    reunion: nEsimoDiaSemana(a, m, 3, 3),  // 3er miércoles
+    cierre: nEsimoDiaSemana(anioCiclo, mesCiclo, 5, 2),   // 2º viernes
+    reunion: nEsimoDiaSemana(anioCiclo, mesCiclo, 3, 3),  // 3er miércoles
   };
+}
+
+/** Medianoche UTC del día de `d` — para comparar días, no instantes. */
+function diaUTC(d: Date): number {
+  return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
+}
+
+/**
+ * El mes que la pantalla debe abrir: el primero del horizonte cuya captura
+ * sigue abierta.
+ *
+ * No es un detalle de presentación. `mesesAbiertos` encabeza con el mes EN
+ * CURSO, cuya captura cerró el mes pasado, así que abrir ahí es empujar al
+ * jefe de canal a cargar un mes que ya se compró — y un valor por defecto
+ * equivocado se equivoca a escala, en los seis canales a la vez. El día del
+ * cierre cuenta como abierto: se cierra al terminar ese viernes, no al
+ * empezarlo.
+ *
+ * Si ninguno sigue abierto (venció el horizonte entero), abre el último, que
+ * es el más lejano y el único todavía accionable.
+ */
+export function mesPorDefecto(hoy: Date): string {
+  const abiertos = mesesAbiertos(hoy);
+  const hoySinHora = diaUTC(hoy);
+  return abiertos.find((m) => cicloDelMes(m).cierre.getTime() >= hoySinHora)
+    ?? abiertos[abiertos.length - 1];
+}
+
+/**
+ * Estado del ciclo de un mes respecto de hoy, para que la pantalla no tenga
+ * que recalcularlo ni redactar un plazo en negativo.
+ */
+export function estadoCiclo(mes: string, hoy: Date): {
+  cierre: Date; reunion: Date; cerrada: boolean; diasRestantes: number;
+} {
+  const { cierre, reunion } = cicloDelMes(mes);
+  const dias = Math.round((cierre.getTime() - diaUTC(hoy)) / 86_400_000);
+  return { cierre, reunion, cerrada: dias < 0, diasRestantes: dias };
 }
 
 export interface FilaForecast {

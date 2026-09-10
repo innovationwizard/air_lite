@@ -15,6 +15,7 @@ import {
   sugerido,
   doh,
 } from '@/app/(authenticated)/compras/reabastecimiento/engine';
+import { mesPorDefecto, sumaDirecto, type Motivo } from '@/lib/comercial/forecast';
 import {
   evaluarTendencia, evaluarDivergencia, evaluarAlerta, tieneReferenciaAnioAnterior,
   type Tendencia, type Divergencia, type Alerta,
@@ -121,6 +122,12 @@ export interface LiveRow {
   /** W15-A — la declaración está cambiando lo que se ve en ESTA bodega. */
   destinoProvisional: boolean;
   adic: number; adicComercial: number; sugBodega: number | null;
+  /**
+   * Forecast comercial que NO entra al pedido: `temporada` + `critico`, que
+   * son proyección del canal y se discuten en la reunión. Viaja para poder
+   * mostrarse, nunca para sumarse.
+   */
+  adicRevision: number;
   transitoDetalle: { fecha: string | null; qty: number; orden: string | null }[];
   p6: number; p3: number; h: number;
   f6: number | null; f3: number | null;
@@ -157,6 +164,53 @@ export function volumenM3(raw: number | string | null | undefined): number | nul
   return Number.isFinite(n) && n > 0 ? n : null;
 }
 
+/**
+ * Forecast comercial de un mes, por producto: SUMA de las seis áreas, separando
+ * lo que es compromiso de lo que es proyección.
+ *
+ * Dos reglas, y ninguna es nueva — ya estaban escritas en
+ * `lib/comercial/forecast.ts` y en la migración 20260901000006. Lo que había
+ * acá era de cuando `comercial_forecast` era append-only y la escribía un solo
+ * comprador; con seis canales capturando dejó de servir:
+ *
+ *   1. SUMAR, no quedarse con la última. Hay una fila por (área, mes,
+ *      producto), así que seis canales dejan seis filas del mismo código. El
+ *      merge anterior se quedaba con la más reciente y descartaba en silencio
+ *      las otras cinco: Mayoreo 500 + Tiendas 300 + Institucional 200 llegaba
+ *      como 200, mientras el consolidado de /comercial/forecast mostraba
+ *      1,000. El mismo dato, dos pantallas, dos números y ningún error.
+ *   2. Sólo `extraordinaria` suma al pedido — es certeza con destinatario.
+ *      `temporada` y `critico` son PROYECCIÓN del canal: se revisan en la
+ *      reunión si superan la proyección de la app, y no entran solas al
+ *      Sugerido. Sumarlas movía la compra sin que nadie la revisara, que es de
+ *      donde salieron los 18 furgones de exceso — y el jefe de canal lo hacía
+ *      leyendo en pantalla, literalmente, «se revisa en la reunión».
+ *
+ * Lo que queda a revisión se devuelve aparte: tiene que poder VERSE sin mover
+ * el número.
+ *
+ * `bodega` null en la fila = todas las bodegas, que es como lo escribe la
+ * pantalla de captura (el canal proyecta lo que va a vender, no dónde se
+ * guarda).
+ *
+ * Función pura y exportada para poder probarla: es la regla que decide cuánto
+ * se compra de más.
+ */
+export function consolidarComercial(
+  filas: ComercialRow[],
+  bodega: string,
+): Map<number, { directo: number; aRevision: number }> {
+  const porProducto = new Map<number, { directo: number; aRevision: number }>();
+  for (const c of filas) {
+    if (c.bodega !== null && c.bodega !== bodega) continue;
+    const acc = porProducto.get(c.product_id) ?? { directo: 0, aRevision: 0 };
+    if (sumaDirecto(c.motivo as Motivo)) acc.directo += c.quantity;
+    else acc.aRevision += c.quantity;
+    porProducto.set(c.product_id, acc);
+  }
+  return porProducto;
+}
+
 /** Everything the page and the export both need for one bodega. */
 export async function buildRows(
   service: SupabaseClient,
@@ -165,7 +219,14 @@ export async function buildRows(
   rows: LiveRow[]; maxAsOf: string; monthStart: string; coberturaDias: number;
   groups: { id: string; displayName: string }[];
 }> {
-    const monthStart = `${new Date().toISOString().slice(0, 7)}-01`;
+    // El mes cuyo forecast se está capturando, NO el mes del calendario.
+    // `${new Date().toISOString().slice(0, 7)}-01` leía el mes en curso, así
+    // que todo lo que los seis canales cargaran para octubre —el mes que este
+    // ciclo existe para cubrir— era invisible acá hasta el 1 de octubre: dos
+    // semanas después de la reunión que tenía que usarlo y con el pedido ya
+    // puesto. Misma regla que abre la pantalla de captura, importada de un
+    // solo lugar para que ambas no puedan discrepar.
+    const monthStart = mesPorDefecto(new Date());
 
     const [inputs, products, links, suppliers, transitoOv, pendingOv, comercial, sugBodegaOv, detalleTr, cobertura,
            destinoDecl, supplierGroups, supplierGroupMembers] =
@@ -261,15 +322,9 @@ export async function buildRows(
     }
     const pendingByProduct = latest(pendingOv);
     const destinoByProduct = ultimaPorProducto(destinoDecl);
-    // Comercial: bodega-specific entry beats the all-bodegas (null) entry.
-    const comercialByProduct = new Map<number, { qty: number; motivo: string }>();
-    for (const c of comercial) {
-      if (c.bodega !== null && c.bodega !== bodega) continue;
-      const existing = comercialByProduct.get(c.product_id);
-      if (!existing) {
-        comercialByProduct.set(c.product_id, { qty: c.quantity, motivo: c.motivo });
-      }
-    }
+    // Suma de los seis canales, y sólo lo que es compromiso — ver
+    // `consolidarComercial` arriba.
+    const comercialByProduct = consolidarComercial(comercial, bodega);
 
     let maxAsOf = '';
     const rows = inputs.map((r) => {
@@ -294,7 +349,9 @@ export async function buildRows(
       const transSync = transitoSegunDestino(bodega, destino, r.transito, GENERAL_BODEGA);
       const transOverride = transitoByProduct.get(r.product_id) ?? null;
       const trans = transOverride ?? transSync;
-      const adicComercial = comercialByProduct.get(r.product_id)?.qty ?? 0;
+      const comercialFila = comercialByProduct.get(r.product_id);
+      const adicComercial = comercialFila?.directo ?? 0;
+      const adicRevision = comercialFila?.aRevision ?? 0;
       // A4.17 — el sugerido que pidió la bodega SE SUMA al término aditivo del
       // motor. Se suma acá y no dentro del motor a propósito: `engine.ts` está
       // verificado al 99.85% de paridad contra el libro y no se toca. Con cero
@@ -367,6 +424,7 @@ export async function buildRows(
         // Las dos fuentes viajan separadas a la pantalla: un aditivo que no
         // dice de dónde salió es un número que nadie puede defender.
         adicComercial: round1(adicComercial),
+        adicRevision: round1(adicRevision),
         sugBodega: sugBodegaByProduct.get(r.product_id) ?? null,
         transitoDetalle: (detallePorProducto.get(r.product_id) ?? [])
           .map((d) => ({ fecha: d.fecha, qty: round1(d.qty), orden: d.orden })),
