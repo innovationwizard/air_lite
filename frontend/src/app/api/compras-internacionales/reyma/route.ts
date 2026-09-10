@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/server';
 import { CAN_VIEW_COMPRAS_INTERNACIONALES } from '@/lib/auth/roles';
 import { createServiceRoleClient } from '@/lib/supabase/server';
+import { fetchAll } from '@/lib/supabase/paginado';
 import type { ModeloRow, VentasRow } from '@/app/(authenticated)/compras-internacionales/reyma/engine';
 import { computePdfTransito, type PdfTransito } from '@/app/(authenticated)/compras-internacionales/reyma-vivo/saldos';
 import type {
@@ -106,19 +107,6 @@ interface MatchRowDb {
   tier: number; regla: string; estado: string; autor: string; created_at: string;
 }
 
-async function fetchAll<T>(
-  query: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>,
-  page = 1000,
-): Promise<T[]> {
-  const out: T[] = [];
-  for (let from = 0; ; from += page) {
-    const { data, error } = await query(from, from + page - 1);
-    if (error) throw new Error(error.message);
-    out.push(...(data ?? []));
-    if (!data || data.length < page) return out;
-  }
-}
-
 /** Parámetros por modelo. NULL = nadie lo ha declarado; no se sustituye. */
 interface ModeloProveedorDb {
   slug: string; nombre: string; provisional: boolean;
@@ -169,33 +157,41 @@ export async function GET(request: Request) {
     const modeloCfg = modeloCfgRaw as ModeloProveedorDb | null;
 
     const [products, stock, pendientes, transito, ventas, issuesRaw] = await Promise.all([
-      fetchAll<ProductRowDb>((a, b) =>
+      // El desempate por columna única NO ES OPCIONAL — ver `fetchAll` en
+      // `@/lib/supabase/paginado`. Acá el duplicado no descoloca una fila: se
+      // SUMA. Un pendiente contado dos veces es un pendiente que no existe.
+      // `codigo` es la primary key de `reyma_products`; el resto usa `id`.
+      fetchAll<ProductRowDb>(() =>
         service.from('reyma_products')
           .select('codigo, clave, nombre_odoo, descripcion, categoria, categoria_fuente, cubicaje, precio_factura, activo')
-          .eq('en_alcance', true).eq('modelo', modelo).order('codigo').range(a, b)),
-      fetchAll<StockRowDb>((a, b) =>
+          .eq('en_alcance', true).eq('modelo', modelo), 'codigo'),
+      fetchAll<StockRowDb>(() =>
         service.from('reyma_stock').select('codigo, bodega, cantidad')
-          .eq('sync_id', run.id).range(a, b)),
-      fetchAll<PendRowDb>((a, b) =>
+          .eq('sync_id', run.id), 'id'),
+      fetchAll<PendRowDb>(() =>
         service.from('reyma_pendientes').select('codigo, cantidad, edad_dias, bodega_origen')
-          .eq('sync_id', run.id).range(a, b)),
-      fetchAll<TransRowDb>((a, b) =>
+          .eq('sync_id', run.id), 'id'),
+      fetchAll<TransRowDb>(() =>
         service.from('reyma_transito')
           .select('codigo, po_name, fecha_planeada, cantidad_pendiente, destino, es_entrega_directa, es_fecha_pasada')
-          .eq('sync_id', run.id).range(a, b)),
-      fetchAll<VentaRowDb>((a, b) =>
-        service.from('reyma_ventas_mensuales').select('codigo, anio, mes, cajas, fuente, bodega').range(a, b)),
-      fetchAll<SyncIssue & { sync_id: string }>((a, b) =>
+          .eq('sync_id', run.id), 'id'),
+      fetchAll<VentaRowDb>(() =>
+        service.from('reyma_ventas_mensuales').select('codigo, anio, mes, cajas, fuente, bodega'), 'id'),
+      fetchAll<SyncIssue & { sync_id: string }>(() =>
         service.from('sync_issues').select('severity, entity, message, sync_id')
-          .eq('sync_id', run.id).range(a, b)),
+          .eq('sync_id', run.id), 'id'),
     ]);
 
     // ── L3 write-path state (append-only history; latest row wins)
     const [overridesRaw, ncRaw, notasRaw, facturasRaw, planesRaw, pedidosRaw, ordenGlobalRaw, poLineasRaw, facturasPdfRaw, etaConfigRaw, matchRaw] = await Promise.all([
-      fetchAll<OverrideRowDb>((a, b) =>
+      // Append-only leído de más nuevo a más viejo: el desempate por `id`
+      // (uuidv7 = orden de creación) también decide cuál gana cuando dos
+      // comparten `created_at`, que antes quedaba al azar del planner.
+      fetchAll<OverrideRowDb>(() =>
         service.from('reyma_proyeccion_overrides')
           .select('codigo, cajas, autor, created_at')
-          .order('created_at', { ascending: false }).range(a, b)),
+          .order('created_at', { ascending: false }),
+        { columna: 'id', ascending: false }),
       service.from('reyma_nc_config')
         .select('tarifa_usd, vigente_hasta, nota, autor, created_at')
         .order('created_at', { ascending: false }).limit(1)
@@ -203,14 +199,15 @@ export async function GET(request: Request) {
           if (error) throw new Error(error.message);
           return (data ?? []) as NcConfigRowDb[];
         }),
-      fetchAll<NotaRowDb>((a, b) =>
+      fetchAll<NotaRowDb>(() =>
         service.from('reyma_furgon_notas')
           .select('po_name, eta, nota, autor, created_at')
-          .order('created_at', { ascending: false }).range(a, b)),
-      fetchAll<FacturaRowDb>((a, b) =>
+          .order('created_at', { ascending: false }),
+        { columna: 'id', ascending: false }),
+      fetchAll<FacturaRowDb>(() =>
         service.from('reyma_facturas')
           .select('factura, fecha, referencia, tipo, codigo, cantidad, precio_unit')
-          .eq('sync_id', run.id).range(a, b)),
+          .eq('sync_id', run.id), 'id'),
       service.from('reyma_plan_despacho')
         .select('semana, payload, autor, created_at')
         .order('created_at', { ascending: false }).limit(1)
@@ -232,22 +229,24 @@ export async function GET(request: Request) {
           if (error) throw new Error(error.message);
           return (data ?? []) as OrdenGlobalRowDb[];
         }),
-      fetchAll<PoLineaRowDb>((a, b) =>
+      fetchAll<PoLineaRowDb>(() =>
         service.from('reyma_po_lineas')
           .select('po_name, codigo, cajas, recibidas, precio_unit')
-          .eq('sync_id', run.id).range(a, b)),
-      fetchAll<FacturaPdfRowDb>((a, b) =>
+          .eq('sync_id', run.id), 'id'),
+      fetchAll<FacturaPdfRowDb>(() =>
         service.from('reyma_facturas_pdf')
-          .select('folio_fiscal, factura, guia, destino, fecha, eta, codigo, clave, cantidad, precio_unit')
-          .range(a, b)),
-      fetchAll<EtaConfigRowDb>((a, b) =>
+          .select('folio_fiscal, factura, guia, destino, fecha, eta, codigo, clave, cantidad, precio_unit'),
+        'id'),
+      fetchAll<EtaConfigRowDb>(() =>
         service.from('reyma_eta_config')
           .select('destino, dias_habiles, autor, created_at')
-          .order('created_at', { ascending: false }).range(a, b)),
-      fetchAll<MatchRowDb>((a, b) =>
+          .order('created_at', { ascending: false }),
+        { columna: 'id', ascending: false }),
+      fetchAll<MatchRowDb>(() =>
         service.from('reyma_factura_match')
           .select('folio_fiscal, factura, odoo_factura, tier, regla, estado, autor, created_at')
-          .order('created_at', { ascending: false }).range(a, b)),
+          .order('created_at', { ascending: false }),
+        { columna: 'id', ascending: false }),
     ]);
 
     // ETA config: última fila por destino manda (append-only, mismo patrón que

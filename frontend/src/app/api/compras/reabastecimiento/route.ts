@@ -47,7 +47,7 @@ export async function GET(request: Request) {
 
     // Rows come from the SHARED builder the xlsx export also uses — see rows.ts.
     // tiendas comes from the SHARED lib.ts builder — the snapshot route uses it too.
-    const [{ rows, maxAsOf, monthStart, coberturaDias, groups }, tiendas, lastSync] = await Promise.all([
+    const [{ rows, maxAsOf, monthStart, coberturaDias, groups, areasComerciales }, tiendas, lastSync] = await Promise.all([
       buildRows(service, bodega),
       buildTiendas(service),
       service.from('sync_runs').select('id, status, started_at, finished_at, counts')
@@ -60,6 +60,8 @@ export async function GET(request: Request) {
       bodegas,
       rows,
       groups,
+      // Los canales comerciales que rotulan las columnas del Adic. por canal.
+      areasComerciales,
       tiendas,
       meta: {
         count: rows.length,

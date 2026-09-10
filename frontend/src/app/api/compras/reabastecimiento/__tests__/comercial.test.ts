@@ -12,12 +12,13 @@ import { consolidarComercial } from '../rows';
 
 const fila = (o: {
   product_id: number; quantity: number; motivo: string;
-  bodega?: string | null; created_at?: string;
+  area?: string; bodega?: string | null; created_at?: string;
 }) => ({
   product_id: o.product_id,
   bodega: o.bodega ?? null,
   quantity: o.quantity,
   motivo: o.motivo,
+  area: o.area ?? 'mayoreo',
   created_at: o.created_at ?? '2026-09-10T12:00:00Z',
 });
 
@@ -39,7 +40,37 @@ describe('consolidarComercial', () => {
       fila({ product_id: 7, quantity: 400, motivo: 'temporada' }),
       fila({ product_id: 7, quantity: 250, motivo: 'critico' }),
     ], 'San Jose VN');
-    expect(r.get(7)).toEqual({ directo: 100, aRevision: 650 });
+    expect(r.get(7)?.directo).toBe(100);
+    expect(r.get(7)?.aRevision).toBe(650);
+  });
+
+  it('dice QUIEN pidio CUANTO, no solo el total', () => {
+    // El total sin autor no se puede discutir: ante «Adic. 1,000» ni el
+    // comprador puede preguntar por que, ni el canal defender su numero.
+    const r = consolidarComercial([
+      fila({ product_id: 5, quantity: 500, motivo: 'extraordinaria', area: 'mayoreo' }),
+      fila({ product_id: 5, quantity: 300, motivo: 'extraordinaria', area: 'tiendas' }),
+      fila({ product_id: 5, quantity: 200, motivo: 'temporada', area: 'peten' }),
+    ], 'San Jose VN');
+    expect(r.get(5)?.porArea).toEqual({
+      mayoreo: { directo: 500, aRevision: 0 },
+      tiendas: { directo: 300, aRevision: 0 },
+      peten: { directo: 0, aRevision: 200 },
+    });
+    // Y el desglose reconcilia con los totales, o son dos numeros distintos.
+    const pa = r.get(5)!.porArea;
+    const sumaDir = Object.values(pa).reduce((n, a) => n + a.directo, 0);
+    const sumaRev = Object.values(pa).reduce((n, a) => n + a.aRevision, 0);
+    expect(sumaDir).toBe(r.get(5)!.directo);
+    expect(sumaRev).toBe(r.get(5)!.aRevision);
+  });
+
+  it('un mismo canal que carga dos motivos queda separado dentro de su columna', () => {
+    const r = consolidarComercial([
+      fila({ product_id: 6, quantity: 400, motivo: 'extraordinaria', area: 'zacapa' }),
+      fila({ product_id: 6, quantity: 150, motivo: 'critico', area: 'zacapa' }),
+    ], 'San Jose VN');
+    expect(r.get(6)?.porArea.zacapa).toEqual({ directo: 400, aRevision: 150 });
   });
 
   it('un producto solo de proyeccion no mueve el Sugerido ni un punto', () => {

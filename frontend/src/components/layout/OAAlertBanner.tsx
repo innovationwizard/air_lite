@@ -16,6 +16,23 @@ interface AlertData {
   warehouse_alerts: { warehouse_id: number; warehouse_name: string; alert_level: string }[];
 }
 
+/**
+ * Superficies donde este banner NO aparece.
+ *
+ *   /gerencia  — superficie de demostración: el banner es operativo y estorba
+ *                a lo que se está mostrando.
+ *   /comercial — la captura del forecast comercial (Jorge, 2026-09-10). El
+ *                banner habla de quiebres y exceso de inventario, que son
+ *                señales de COMPRAS: el jefe de canal no puede accionarlas, y
+ *                sus enlaces lo sacan de la pantalla hacia /oa/excepciones en
+ *                medio de una captura contra reloj. El requisito principal de
+ *                esa pantalla es QUE SE USE, así que todo lo que no sea
+ *                imprescindible se quita del camino.
+ *
+ * Prefijos, para que las sub-rutas viajen con su página.
+ */
+const RUTAS_SIN_BANNER = ['/gerencia', '/comercial'];
+
 export default function OAAlertBanner() {
   const pathname = usePathname();
   const { profile, loading: roleLoading } = useUserRole();
@@ -24,10 +41,10 @@ export default function OAAlertBanner() {
   const [loaded, setLoaded] = useState(false);
 
   const hasAccess = profile && isAuthorized(profile.role, CAN_VIEW_OA);
-  const isDemoSurface = pathname?.startsWith('/gerencia');
+  const oculto = RUTAS_SIN_BANNER.some((r) => pathname?.startsWith(r));
 
   useEffect(() => {
-    if (roleLoading || !hasAccess || isDemoSurface) return;
+    if (roleLoading || !hasAccess || oculto) return;
 
     fetch('/api/oa/alerts')
       .then((res) => res.json())
@@ -36,9 +53,9 @@ export default function OAAlertBanner() {
         setLoaded(true);
       })
       .catch(() => setLoaded(true));
-  }, [roleLoading, hasAccess, isDemoSurface]);
+  }, [roleLoading, hasAccess, oculto]);
 
-  if (isDemoSurface) return null;
+  if (oculto) return null;
   if (roleLoading || !hasAccess || !loaded || dismissed) return null;
   if (!alerts) return null;
 

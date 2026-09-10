@@ -6,22 +6,9 @@
  * synced inputs.
  */
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { fetchAll } from '@/lib/supabase/paginado';
 
 export const GENERAL_BODEGA = 'General';
-
-/** Page through a PostgREST query — supabase-js caps a single select at 1000 rows. */
-export async function fetchAll<T>(
-  query: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>,
-  page = 1000,
-): Promise<T[]> {
-  const out: T[] = [];
-  for (let from = 0; ; from += page) {
-    const { data, error } = await query(from, from + page - 1);
-    if (error) throw new Error(error.message);
-    out.push(...(data ?? []));
-    if (!data || data.length < page) return out;
-  }
-}
 
 /** Known bodega names = bodega_map values + the General display aggregate. */
 export async function knownBodegas(service: SupabaseClient): Promise<string[]> {
@@ -54,8 +41,11 @@ export function round1(n: number): number {
  * shown, labelled, and never folded into a purchasing bodega.
  */
 export async function buildTiendas(service: SupabaseClient): Promise<Tiendas> {
-  const tiendaRows = await fetchAll<TiendaRow>((a, b) =>
-    service.from('invoiced_tiendas').select('product_id, tienda, f6, f3').range(a, b));
+  // Un duplicado acá no se ve: se SUMA, e infla el total de una tienda sin
+  // que nada quede fuera de lugar. Por eso el desempate importa igual que en
+  // la tabla, o más.
+  const tiendaRows = await fetchAll<TiendaRow>(() =>
+    service.from('invoiced_tiendas').select('product_id, tienda, f6, f3'), 'id');
 
   const porTiendaMap = new Map<string, { f6: number; f3: number }>();
   for (const t of tiendaRows) {

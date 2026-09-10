@@ -95,9 +95,31 @@ salieron los **18 furgones de exceso** que documenta §1 de la definición.
 
 Ahora sólo `extraordinaria` suma (importando `sumaDirecto` de
 `lib/comercial/forecast.ts`, no reimplementando la regla). Lo que va a revisión
-se acumula aparte y **se muestra sin sumarse**, como `+N rev.` junto a la
-columna Adic. del vivo: un número que nadie ve no se puede discutir en la
-reunión, y uno que se suma solo no se discute nunca.
+se acumula aparte y **se muestra sin sumarse**: un número que nadie ve no se
+puede discutir en la reunión, y uno que se suma solo no se discute nunca.
+
+### 3.4b · Y el total tampoco decía QUIÉN pedía CUÁNTO (corregido el mismo día)
+
+La primera corrección de 3.4 dejó `Adic.` como **una sola columna**: el total
+que entra al pedido, con la parte a revisión anotada al lado. Jorge lo rechazó
+en el acto, y con razón — es el mismo defecto que 3.4, un nivel más adentro, y
+rompe la regla que el propio `rows.ts` ya tenía escrita para `adicComercial` vs
+`sugBodega`: *«un aditivo que no dice de dónde salió es un número que nadie
+puede defender»*. Ante «Adic. 800», ni el comprador puede preguntarle a nadie
+por qué, ni el canal defender su número en la reunión.
+
+`Adic.` queda como el total que entra, y a su derecha va **una columna por
+canal**, generada desde `comercial_areas` (no una lista en el código: la
+migración 20260901000006 dejó dicho que un canal nuevo no debe necesitar
+despliegue, y ya se agregaron dos a los tres días). En cada celda, arriba lo
+que entra al pedido y debajo en gris `N rev.`, la proyección que se discute.
+En el xlsx son **dos columnas por canal** —`Mayoreo` y `Mayoreo (rev.)`—
+porque en una hoja de cálculo se filtran por separado.
+
+Las columnas por canal son de sólo lectura: `ClaveOrden` es una unión fija y
+los canales son datos, así que ordenar y filtrar por rango siguen viviendo en
+`Adic.`. Una prueba nueva verifica que el desglose **reconcilia** con los
+totales — si no, vuelven a ser dos números para el mismo dato.
 
 ### 3.5 · Octubre no llegaba a Wilmer en absoluto
 

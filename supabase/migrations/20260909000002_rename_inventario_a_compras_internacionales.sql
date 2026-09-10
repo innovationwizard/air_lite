@@ -34,7 +34,24 @@
 -- — this repo's migration history drifts from what is actually applied; see
 -- the migrations-applied-by-hand note). Idempotent: safe to re-run.
 --
--- ROLLBACK (if ever needed, mirror image of steps b/c/d):
+-- FIXED 2026-09-09 (first attempt failed): `user_profiles.role`,
+-- `route_permissions.role`, AND `bug_reports.role` are all `VARCHAR(20)`
+-- (20260322000001, 20260323000002, 20260810000001) — `'compras_internacionales'`
+-- is 23 characters, so the first run of this file errored on step (b) with
+-- `22001: value too long for type character varying(20)`. Confirmed
+-- read-only afterward: the whole script rolled back atomically (Supabase SQL
+-- editor runs a pasted script as one transaction) — Alexis's row and all 26
+-- `route_permissions` rows were still `role='inventario'`, nothing partial.
+-- `bug_reports.role` wasn't even touched by this migration, but Alexis's next
+-- bug report would have hit the identical wall the moment his session role
+-- became `compras_internacionales` — widened here too, pre-emptively, not
+-- reactively. Sized to VARCHAR(40), matching this codebase's existing
+-- convention for role/slug columns (`reyma_products.modelo VARCHAR(40)`,
+-- 20260901000011) — headroom for whatever comes after this one.
+--
+-- ROLLBACK (if ever needed, mirror image of steps b/c/d — the column widenings
+-- are NOT rolled back: widening is one-directional by design, and a narrower
+-- column serves no purpose once nothing needs the extra room):
 --   UPDATE user_profiles SET role = 'inventario' WHERE role = 'compras_internacionales';
 --   UPDATE route_permissions
 --      SET role = 'inventario',
@@ -45,6 +62,14 @@
 --     CHECK (role IN ('superuser','admin','gerencia','compras','ventas','inventario',
 --                      'financiero','testuser','operaciones','project_manager',
 --                      'ceo','sales_manager'));
+
+-- 0) Widen the three VARCHAR(20) role columns FIRST — everything below writes
+--    or allow-lists a 23-character value, so this has to land before any of
+--    it. Widening a VARCHAR is always safe: it can't truncate or reject any
+--    value that already fits, so this alone changes nothing observable.
+ALTER TABLE user_profiles ALTER COLUMN role TYPE VARCHAR(40);
+ALTER TABLE route_permissions ALTER COLUMN role TYPE VARCHAR(40);
+ALTER TABLE bug_reports ALTER COLUMN role TYPE VARCHAR(40);
 
 -- a) Purely additive — safe to run anytime, changes nothing observable.
 --    Widens the allow-list to include the new role WITHOUT removing the old
@@ -90,4 +115,10 @@ ALTER TABLE user_profiles ADD CONSTRAINT user_profiles_role_check
 --   select route_pattern from route_permissions
 --    where role = 'compras_internacionales' and route_pattern like '/api/compras-internacionales%'
 --    order by route_pattern;
---     → expect 15 rows
+--     → expect 17 rows (corrected 2026-09-09 after applying: the plan's "15"
+--       undercounted the three clave-pendiente/* sub-routes added this
+--       session; verified against production — 17 + 9 elsewhere = 26 total)
+--
+-- APPLIED 2026-09-09 — verified: Alexis role=compras_internacionales, 0 rows
+-- left at role='inventario' in either table, 26/26 route_permissions rows
+-- migrated (17 under /api/compras-internacionales/*, 9 unchanged elsewhere).

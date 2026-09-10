@@ -23,7 +23,8 @@ import {
 import {
   type DestinoDeclarado, destinoAfectaFila, transitoSegunDestino, ultimaPorProducto,
 } from '@/lib/compras/destino';
-import { GENERAL_BODEGA, fetchAll, round1 } from './lib';
+import { fetchAll } from '@/lib/supabase/paginado';
+import { GENERAL_BODEGA, round1 } from './lib';
 
 /**
  * SEASONAL EXCEPTIONS — per-SKU, by explicit decision, NOT a rule.
@@ -103,7 +104,7 @@ interface DetalleRow {
 interface DestinoRow { product_id: number; destino: string | null; created_at: string }
 interface ComercialRow {
   product_id: number; bodega: string | null; quantity: number;
-  motivo: string; created_at: string;
+  motivo: string; area: string; created_at: string;
 }
 
 
@@ -128,6 +129,15 @@ export interface LiveRow {
    * mostrarse, nunca para sumarse.
    */
   adicRevision: number;
+  /**
+   * QUIÉN pidió CUÁNTO, por canal comercial (slug → cantidades).
+   *
+   * Un total sin autor no se puede discutir: ante «Adic. 800», el comprador no
+   * puede preguntarle a nadie por qué, ni el canal defender su número en la
+   * reunión. Es la misma regla que ya separa `adicComercial` de `sugBodega`,
+   * aplicada un nivel más adentro.
+   */
+  adicPorArea: Record<string, { directo: number; aRevision: number }>;
   transitoDetalle: { fecha: string | null; qty: number; orden: string | null }[];
   p6: number; p3: number; h: number;
   f6: number | null; f3: number | null;
@@ -196,16 +206,31 @@ export function volumenM3(raw: number | string | null | undefined): number | nul
  * Función pura y exportada para poder probarla: es la regla que decide cuánto
  * se compra de más.
  */
+export interface AporteComercial {
+  directo: number;
+  aRevision: number;
+  /** slug del canal → lo que ese canal pidió. */
+  porArea: Record<string, { directo: number; aRevision: number }>;
+}
+
 export function consolidarComercial(
   filas: ComercialRow[],
   bodega: string,
-): Map<number, { directo: number; aRevision: number }> {
-  const porProducto = new Map<number, { directo: number; aRevision: number }>();
+): Map<number, AporteComercial> {
+  const porProducto = new Map<number, AporteComercial>();
   for (const c of filas) {
     if (c.bodega !== null && c.bodega !== bodega) continue;
-    const acc = porProducto.get(c.product_id) ?? { directo: 0, aRevision: 0 };
-    if (sumaDirecto(c.motivo as Motivo)) acc.directo += c.quantity;
-    else acc.aRevision += c.quantity;
+    const acc = porProducto.get(c.product_id)
+      ?? { directo: 0, aRevision: 0, porArea: {} as AporteComercial['porArea'] };
+    const canal = acc.porArea[c.area] ?? { directo: 0, aRevision: 0 };
+    if (sumaDirecto(c.motivo as Motivo)) {
+      acc.directo += c.quantity;
+      canal.directo += c.quantity;
+    } else {
+      acc.aRevision += c.quantity;
+      canal.aRevision += c.quantity;
+    }
+    acc.porArea[c.area] = canal;
     porProducto.set(c.product_id, acc);
   }
   return porProducto;
@@ -218,6 +243,15 @@ export async function buildRows(
 ): Promise<{
   rows: LiveRow[]; maxAsOf: string; monthStart: string; coberturaDias: number;
   groups: { id: string; displayName: string }[];
+  /**
+   * Los canales comerciales, para rotular y ORDENAR sus columnas.
+   *
+   * Vienen de la tabla y no de una lista en el código a propósito: la
+   * migración 20260901000006 dejó dicho que un canal nuevo no debe necesitar
+   * ni migración ni despliegue, y ya se agregaron dos (Zacapa y Petén) tres
+   * días después de sembrar los primeros cuatro.
+   */
+  areasComerciales: { slug: string; nombre: string }[];
 }> {
     // El mes cuyo forecast se está capturando, NO el mes del calendario.
     // `${new Date().toISOString().slice(0, 7)}-01` leía el mes en curso, así
@@ -229,37 +263,48 @@ export async function buildRows(
     const monthStart = mesPorDefecto(new Date());
 
     const [inputs, products, links, suppliers, transitoOv, pendingOv, comercial, sugBodegaOv, detalleTr, cobertura,
-           destinoDecl, supplierGroups, supplierGroupMembers] =
+           destinoDecl, supplierGroups, supplierGroupMembers, areasCom] =
       await Promise.all([
-        fetchAll<InputRow>((a, b) =>
-          service.from('reabastecimiento_inputs').select('*').eq('bodega', bodega).range(a, b)),
-        fetchAll<ProductRef>((a, b) =>
-          service.from('products').select('id, sku, name, category, purchase_ok, volume_m3').range(a, b)),
-        fetchAll<SupplierLink>((a, b) =>
-          service.from('product_suppliers').select('product_id, supplier_id').range(a, b)),
-        fetchAll<SupplierRef>((a, b) =>
-          service.from('suppliers').select('id, name').range(a, b)),
-        fetchAll<OverrideRow>((a, b) =>
+        // El desempate por columna única de cada consulta NO ES OPCIONAL —
+        // ver el comentario de `fetchAll` en ./lib.ts: sin él el paginado
+        // repite una fila y pierde otra, en silencio.
+        fetchAll<InputRow>(() =>
+          service.from('reabastecimiento_inputs').select('*').eq('bodega', bodega), 'id'),
+        fetchAll<ProductRef>(() =>
+          service.from('products').select('id, sku, name, category, purchase_ok, volume_m3'), 'id'),
+        // `id` es SERIAL, así que ordenar por él es el orden de inserción —
+        // que es justo lo que asume «el primer link es el proveedor
+        // principal» unas líneas más abajo. Antes lo daba por sentado sin
+        // pedirlo; ahora lo pide.
+        fetchAll<SupplierLink>(() =>
+          service.from('product_suppliers').select('product_id, supplier_id'), 'id'),
+        fetchAll<SupplierRef>(() =>
+          service.from('suppliers').select('id, name'), 'id'),
+        fetchAll<OverrideRow>(() =>
           service.from('transito_overrides').select('product_id, qty, created_at')
-            .eq('bodega', bodega).order('created_at', { ascending: false }).range(a, b)),
-        fetchAll<OverrideRow>((a, b) =>
+            .eq('bodega', bodega).order('created_at', { ascending: false }),
+          { columna: 'id', ascending: false }),
+        fetchAll<OverrideRow>(() =>
           service.from('pending_reserve_overrides').select('product_id, qty, created_at')
-            .eq('bodega', bodega).order('created_at', { ascending: false }).range(a, b)),
-        fetchAll<ComercialRow>((a, b) =>
+            .eq('bodega', bodega).order('created_at', { ascending: false }),
+          { columna: 'id', ascending: false }),
+        fetchAll<ComercialRow>(() =>
           service.from('comercial_forecast')
-            .select('product_id, bodega, quantity, motivo, created_at')
+            .select('product_id, bodega, quantity, motivo, area, created_at')
             .eq('month', monthStart)
-            .order('created_at', { ascending: false }).range(a, b)),
+            .order('created_at', { ascending: false }),
+          { columna: 'id', ascending: false }),
         // A4.17 — el pedido adicional del encargado del CD, por bodega.
         // Append-only; `qty` NULL es un borrado, igual que en tránsito.
-        fetchAll<OverrideRow>((a, b) =>
+        fetchAll<OverrideRow>(() =>
           service.from('sugerido_bodega').select('product_id, qty, created_at')
-            .eq('bodega', bodega).order('created_at', { ascending: false }).range(a, b)),
+            .eq('bodega', bodega).order('created_at', { ascending: false }),
+          { columna: 'id', ascending: false }),
         // A6.15 — el desglose por fecha del tránsito de ESTA bodega. Tabla
         // derivada: la reemplaza entera cada sincronización.
-        fetchAll<DetalleRow>((a, b) =>
+        fetchAll<DetalleRow>(() =>
           service.from('transito_detalle').select('product_id, fecha, qty, orden')
-            .eq('bodega', bodega).order('fecha', { ascending: true }).range(a, b)),
+            .eq('bodega', bodega).order('fecha', { ascending: true }), 'id'),
         // Coverage horizon for THIS bodega — append-only, newest row wins.
         // No row is a real answer: it means the engine default (30 días).
         service.from('bodega_cobertura').select('dias')
@@ -268,15 +313,23 @@ export async function buildRows(
         // W15-A — la declaración es GLOBAL AL PRODUCTO, no por bodega: viendo
         // San José hay que saber que el producto fue declarado a Zacapa, o el
         // tránsito no se puede mover de una vista a otra.
-        fetchAll<DestinoRow>((a, b) =>
+        fetchAll<DestinoRow>(() =>
           service.from('transito_destino').select('product_id, destino, created_at')
-            .order('created_at', { ascending: false }).range(a, b)),
+            .order('created_at', { ascending: false }),
+          { columna: 'id', ascending: false }),
         // Grupos de proveedores (2026-09-04) — ver rows.ts §provGroupId abajo.
-        fetchAll<SupplierGroupRef>((a, b) =>
-          service.from('supplier_groups').select('id, display_name').range(a, b)),
-        fetchAll<SupplierGroupMemberRef>((a, b) =>
-          service.from('supplier_group_members').select('supplier_id, group_id').range(a, b)),
+        fetchAll<SupplierGroupRef>(() =>
+          service.from('supplier_groups').select('id, display_name'), 'id'),
+        // `supplier_id` ES la primary key acá (un proveedor, a lo sumo un
+        // grupo), así que es el desempate único de esta tabla.
+        fetchAll<SupplierGroupMemberRef>(() =>
+          service.from('supplier_group_members').select('supplier_id, group_id'), 'supplier_id'),
+        // Catálogo de canales comerciales — seis filas hoy; el orden por
+        // nombre es el orden de las columnas, para que no bailen entre cargas.
+        service.from('comercial_areas').select('slug, nombre').eq('activa', true).order('nombre'),
       ]);
+    const areasComerciales =
+      (areasCom?.data as { slug: string; nombre: string }[] | null) ?? [];
 
     const coberturaDias = (cobertura?.data as { dias: number } | null)?.dias
       ?? COBERTURA_DEFAULT_DIAS;
@@ -352,6 +405,7 @@ export async function buildRows(
       const comercialFila = comercialByProduct.get(r.product_id);
       const adicComercial = comercialFila?.directo ?? 0;
       const adicRevision = comercialFila?.aRevision ?? 0;
+      const adicPorArea = comercialFila?.porArea ?? {};
       // A4.17 — el sugerido que pidió la bodega SE SUMA al término aditivo del
       // motor. Se suma acá y no dentro del motor a propósito: `engine.ts` está
       // verificado al 99.85% de paridad contra el libro y no se toca. Con cero
@@ -425,6 +479,7 @@ export async function buildRows(
         // dice de dónde salió es un número que nadie puede defender.
         adicComercial: round1(adicComercial),
         adicRevision: round1(adicRevision),
+        adicPorArea,
         sugBodega: sugBodegaByProduct.get(r.product_id) ?? null,
         transitoDetalle: (detallePorProducto.get(r.product_id) ?? [])
           .map((d) => ({ fecha: d.fecha, qty: round1(d.qty), orden: d.orden })),
@@ -465,7 +520,7 @@ export async function buildRows(
     classifyAbc(rows);
 
   return {
-    rows, maxAsOf, monthStart, coberturaDias,
+    rows, maxAsOf, monthStart, coberturaDias, areasComerciales,
     groups: supplierGroups.map((g) => ({ id: g.id, displayName: g.display_name })),
   };
 }

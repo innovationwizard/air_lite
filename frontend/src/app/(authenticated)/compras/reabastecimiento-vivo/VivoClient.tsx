@@ -109,10 +109,13 @@ const COL_TIP = {
     'Pendiente de tomar reserva — captura manual (no existe en ningún sistema). '
     + '¿? significa sin dato, no cero. Resta de la exist. neta. '
     + 'El botón ✕ quita la captura y vuelve a ¿? (sin dato).',
-  adic: 'Adicional comercial del mes en captura (forecast comercial), sumando los seis canales. '
-    + 'SÓLO entra la compra extraordinaria: es certeza con destinatario. '
-    + 'Temporada y faltante/crítico son proyección del canal, se muestran en gris '
-    + 'como «+N rev.» y NO suman al Sugerido — se discuten en la reunión mensual.',
+  adic: 'TOTAL que entra al pedido: forecast comercial del mes en captura (sólo compra '
+    + 'extraordinaria, sumando los canales) más lo que pidió la bodega. El desglose por '
+    + 'canal está en las columnas siguientes.',
+  canal: 'Lo que pidió ESTE canal para el mes en captura. Arriba, la compra extraordinaria: '
+    + 'certeza con destinatario, entra al pedido. Debajo en gris, «N rev.»: temporada o '
+    + 'faltante/crítico, que son proyección del canal y NO suman al Sugerido — se discuten '
+    + 'en la reunión mensual.',
   ord: 'ORDENADO — la base de Wilmer y la ÚNICA que alimenta el Sugerido. '
     + 'Promedio mensual de cantidad ordenada (sale.order.line, estados venta y hecho; '
     + 'excluye cotización, cotización enviada y cancelado), por bodega de la orden.',
@@ -172,6 +175,8 @@ interface ApiRow {
   adic: number; adicComercial: number; sugBodega: number | null;
   /** Proyección comercial a revisión (temporada + crítico) — se muestra, no se suma. */
   adicRevision: number;
+  /** QUIÉN pidió CUÁNTO: slug del canal → sus cantidades. */
+  adicPorArea: Record<string, { directo: number; aRevision: number }>;
   transitoDetalle: { fecha: string | null; qty: number; orden: string | null }[];
   p6: number; p3: number; h: number; win: 10 | 5;
   /** G4 invoiced lens — display only, never fed to the engine. null = sync has not computed it. */
@@ -206,6 +211,8 @@ interface Tiendas {
 }
 interface ApiPayload {
   bodega: string; bodegas: string[]; rows: ApiRow[]; groups: ProveedorGrupo[];
+  /** Canales comerciales activos — rotulan y ordenan las columnas del Adic. */
+  areasComerciales?: { slug: string; nombre: string }[];
   tiendas?: Tiendas; meta: ApiMeta;
 }
 
@@ -476,6 +483,13 @@ export function VivoClient() {
    * vistas se separen: la próxima columna se agregaría en una sola y nadie
    * lo notaría hasta que un número no coincida entre modos.
    */
+  /**
+   * Los canales que rotulan las columnas del Adic. Vienen del servidor, no de
+   * una lista acá: la migración 20260901000006 dejó dicho que un canal nuevo
+   * no debe necesitar despliegue, y ya se agregaron dos a los tres días.
+   */
+  const areas = useMemo(() => payload?.areasComerciales ?? [], [payload]);
+
   const renderFila = useCallback((r: ApiRow) => {
   const band = sev(r.doh);
   // El resaltado de fila lo dispara la alerta COMBINADA
@@ -547,18 +561,28 @@ export function VivoClient() {
           clearTip="Quitar captura manual — vuelve a ¿? (sin dato)"
         />
       </td>
-      {/* Lo que va a revisión se VE pero no se suma: un número que nadie ve no
-          se puede discutir en la reunión, y uno que se suma solo no se discute
-          nunca. */}
-      <td className="px-3 py-2 border-b border-gray-100 text-right text-gray-500 whitespace-nowrap">
-        {fmt(r.adic)}
-        {r.adicRevision > 0 && (
-          <span className="text-gray-400 text-xs ml-1"
-                title="Proyección comercial a revisión (temporada + faltante/crítico). No suma al Sugerido.">
-            +{fmt(r.adicRevision)} rev.
-          </span>
-        )}
-      </td>
+      <td className="px-3 py-2 border-b border-gray-100 text-right text-gray-500">{fmt(r.adic)}</td>
+      {/* QUIÉN pidió CUÁNTO — una columna por canal.
+          Un total sin autor no se puede discutir: ante «Adic. 800» ni el
+          comprador puede preguntar por qué, ni el canal defender su número en
+          la reunión. Lo que va a revisión se VE, en gris y aparte, porque un
+          número que nadie ve no se discute y uno que se suma solo tampoco. */}
+      {areas.map((a) => {
+        const ap = r.adicPorArea?.[a.slug];
+        return (
+          <td key={a.slug}
+              className="px-3 py-2 border-b border-gray-100 text-right whitespace-nowrap">
+            {ap?.directo ? <span className="text-gray-700">{fmt(ap.directo)}</span>
+                         : <span className="text-gray-200">·</span>}
+            {ap?.aRevision ? (
+              <span className="block text-[11px] text-gray-400 leading-tight"
+                    title="Proyección del canal: no suma al Sugerido, se discute en la reunión.">
+                {fmt(ap.aRevision)} rev.
+              </span>
+            ) : null}
+          </td>
+        );
+      })}
       <td className="px-3 py-2 border-b border-gray-100 text-right text-gray-700">{fmt(r.p6)}</td>
       <td className="px-3 py-2 border-b border-gray-100 text-right text-gray-700">{fmt(r.p3)}</td>
       <td className="px-3 py-2 border-b border-gray-100 text-right">
@@ -603,7 +627,7 @@ export function VivoClient() {
       </td>
     </tr>
   );
-  }, [commitEdit, commitDestino, commitSugBodega, destinos]);
+  }, [commitEdit, commitDestino, commitSugBodega, destinos, areas]);
 
   return (
     <div className="p-6 max-w-[1240px] mx-auto">
@@ -728,6 +752,7 @@ export function VivoClient() {
                 */}
               <ExportarExcel
                 filas={list}
+                areas={areas}
                 contexto={{
                   bodega,
                   bodegaLabel: BODEGA_LABEL[bodega] ?? bodega,
@@ -816,6 +841,12 @@ export function VivoClient() {
                         filtroKey="pending" rango={rangos.pending} onRango={onRango}><span className="inline-flex items-center gap-1">Pend. reserva <Pencil size={11} /></span></Th>
                     <Th tip={COL_TIP.adic} sortKey="adic" orden={orden} onSort={onSort}
                         filtroKey="adic" rango={rangos.adic} onRango={onRango}>Adic.</Th>
+                    {/* Sin `sortKey` ni `filtroKey` a propósito: `ClaveOrden` es
+                        una unión fija y los canales son datos que cambian sin
+                        despliegue. Ordenar y filtrar siguen viviendo en Adic. */}
+                    {areas.map((a) => (
+                      <Th key={a.slug} tip={COL_TIP.canal}>{a.nombre}</Th>
+                    ))}
                     <Th tip={COL_TIP.ord} sortKey="p6" orden={orden} onSort={onSort}
                         filtroKey="p6" rango={rangos.p6} onRango={onRango}>Ord. 6m</Th>
                     <Th tip={COL_TIP.ord} sortKey="p3" orden={orden} onSort={onSort}

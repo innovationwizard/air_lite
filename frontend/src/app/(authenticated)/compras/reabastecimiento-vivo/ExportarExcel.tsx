@@ -25,8 +25,10 @@ import {
  * que corregir, un paso más entre él y el archivo no compra nada — y lo que
  * pidió fue manipularlo en Excel, no en la app.
  */
-export function ExportarExcel({ filas, contexto, filasEnPantalla }: {
+export function ExportarExcel({ filas, contexto, filasEnPantalla, areas = [] }: {
   filas: readonly FilaExport[];
+  /** Canales comerciales — sus columnas van en el archivo igual que en pantalla. */
+  areas?: readonly { slug: string; nombre: string }[];
   /** Todo menos `generadoEn`, que se fija en el instante del click. */
   contexto: Omit<ContextoExport, 'generadoEn'>;
   /**
@@ -47,7 +49,7 @@ export function ExportarExcel({ filas, contexto, filasEnPantalla }: {
     try {
       const ctx: ContextoExport = { ...contexto, generadoEn: new Date() };
       const archivo = nombreArchivo(ctx);
-      const bytes = buildWorkbook(construirLibroSugerido(filas, ctx));
+      const bytes = buildWorkbook(construirLibroSugerido(filas, ctx, areas));
 
       const blob = new Blob([bytes as unknown as BlobPart], {
         type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
@@ -76,7 +78,7 @@ export function ExportarExcel({ filas, contexto, filasEnPantalla }: {
       // peor modo posible para un botón de descarga.
       setError(e instanceof Error ? e.message : 'No se pudo generar el archivo');
     }
-  }, [filas, contexto, recortada, filasEnPantalla]);
+  }, [filas, contexto, recortada, filasEnPantalla, areas]);
 
   return (
     <div className="inline-flex items-center gap-2">

@@ -71,6 +71,8 @@ export interface FilaExport {
   /** null = «¿?», sin dato. NUNCA se escribe como 0 (regla 20260813000001). */
   pending: number | null;
   adic: number;
+  /** QUIÉN pidió CUÁNTO: slug del canal → sus cantidades. */
+  adicPorArea?: Record<string, { directo: number; aRevision: number }>;
   p6: number;
   p3: number;
   mtd: number | null;
@@ -291,11 +293,46 @@ export const COLUMNAS_SUGERIDO: readonly {
  * de menor a mayor… todo lo que tenga más de 10 cajas sí lo compro… filtro lo
  * que [la bodega] no vende"* (R5).
  */
-export function construirHojaSugerido(filas: readonly FilaExport[]): SheetSpec {
+/**
+ * Las columnas del archivo para un juego dado de canales comerciales.
+ *
+ * Los canales son DATOS (`comercial_areas`), no una lista fija, así que las
+ * columnas se arman en tiempo de ejecución. Van justo después de `Adic.` y en
+ * el mismo orden que en pantalla: el archivo tiene que poder leerse al lado de
+ * la vista sin traducir nada — es la regla que arregló el export el 26-ago.
+ *
+ * Dos columnas por canal, y no una: lo que ENTRA al pedido y lo que queda A
+ * REVISIÓN son dos conversaciones distintas, y en una hoja de cálculo se
+ * filtran por separado. Fundirlas obligaría a deshacer la suma a mano, que es
+ * exactamente el trabajo que este archivo vino a quitar.
+ */
+export function columnasSugerido(
+  areas: readonly { slug: string; nombre: string }[] = [],
+): typeof COLUMNAS_SUGERIDO {
+  if (areas.length === 0) return COLUMNAS_SUGERIDO;
+  const i = COLUMNAS_SUGERIDO.findIndex((c) => c.header === 'Adic.');
+  const porCanal = areas.flatMap((a) => [
+    {
+      header: a.nombre, width: 12, type: 'number' as const,
+      valor: (f: FilaExport) => f.adicPorArea?.[a.slug]?.directo ?? 0,
+    },
+    {
+      header: `${a.nombre} (rev.)`, width: 14, type: 'number' as const,
+      valor: (f: FilaExport) => f.adicPorArea?.[a.slug]?.aRevision ?? 0,
+    },
+  ]);
+  return [...COLUMNAS_SUGERIDO.slice(0, i + 1), ...porCanal, ...COLUMNAS_SUGERIDO.slice(i + 1)];
+}
+
+export function construirHojaSugerido(
+  filas: readonly FilaExport[],
+  areas: readonly { slug: string; nombre: string }[] = [],
+): SheetSpec {
+  const columnas = columnasSugerido(areas);
   return {
     name: 'Sugerido',
-    columns: COLUMNAS_SUGERIDO.map((c) => ({ header: c.header, width: c.width, type: c.type })),
-    rows: filas.map((f, i) => COLUMNAS_SUGERIDO.map((c) => c.valor(f, i))),
+    columns: columnas.map((c) => ({ header: c.header, width: c.width, type: c.type })),
+    rows: filas.map((f, i) => columnas.map((c) => c.valor(f, i))),
   };
 }
 
@@ -424,6 +461,7 @@ export function construirHojaOrigen(
 /** El libro completo: la tabla de trabajo, y de dónde salió. */
 export function construirLibroSugerido(
   filas: readonly FilaExport[], ctx: ContextoExport,
+  areas: readonly { slug: string; nombre: string }[] = [],
 ): SheetSpec[] {
-  return [construirHojaSugerido(filas), construirHojaOrigen(filas, ctx)];
+  return [construirHojaSugerido(filas, areas), construirHojaOrigen(filas, ctx)];
 }
