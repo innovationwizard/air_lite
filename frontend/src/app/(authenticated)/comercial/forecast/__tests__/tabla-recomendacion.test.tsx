@@ -7,6 +7,11 @@
  * ningún número inventado.
  */
 import { render, screen, waitFor, within } from '@testing-library/react';
+
+jest.mock('@/lib/comercial/forecastExport', () => ({
+  ...jest.requireActual('@/lib/comercial/forecastExport'),
+  sha256Hex: jest.fn(async () => 'ab'.repeat(32)),
+}));
 import userEvent from '@testing-library/user-event';
 import { ForecastClient } from '../ForecastClient';
 
@@ -92,10 +97,12 @@ let puts: { url: string; body: Record<string, unknown> }[];
 let gets: string[];
 
 let bloqueos: { method: string; url: string; body?: Record<string, unknown> }[];
+let exportados: Record<string, unknown>[];
+let guardadasFuera: unknown[] = [];
 let datos: Record<string, unknown> = DATOS;
 
 function mockFetch(historial: unknown = HISTORIAL, buscado: unknown = null) {
-  puts = []; gets = []; bloqueos = [];
+  puts = []; gets = []; bloqueos = []; exportados = []; guardadasFuera = [];
   global.fetch = jest.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
     if (url.startsWith('/api/comercial/bloqueo')) {
@@ -112,9 +119,17 @@ function mockFetch(historial: unknown = HISTORIAL, buscado: unknown = null) {
       }
       return { ok: true, json: async () => ({ bloqueo: null }) } as Response;
     }
+    if (url.startsWith('/api/comercial/exportado')) {
+      exportados.push(JSON.parse(String(init?.body)));
+      return { ok: true, json: async () => ({ registro: { id: 'x' } }) } as Response;
+    }
     if (url.startsWith('/api/comercial/historial')) {
       gets.push(url);
-      const q = new URL(url, 'http://x').searchParams.get('q');
+      const u = new URL(url, 'http://x');
+      if (u.searchParams.get('guardados') === '1') {
+        return { ok: true, json: async () => ({ ...HISTORIAL, filas: guardadasFuera }) } as Response;
+      }
+      const q = u.searchParams.get('q');
       return { ok: true, json: async () => (q && buscado ? buscado : historial) } as Response;
     }
     if (url === '/api/comercial/forecast' && init?.method === 'PUT') {
@@ -430,4 +445,62 @@ it('«Modificados» pregunta al servidor y el aprobado tal cual queda marcado co
   await waitFor(() => expect(gets.some((u) => u.includes('modificados=1'))).toBe(true));
   expect(screen.getByRole('button', { name: 'Modificados' })).toHaveAttribute('aria-pressed', 'true');
   expect(screen.getByRole('heading', { name: /para modificados/ })).toBeInTheDocument();
+});
+
+describe('«Exportar a Excel»', () => {
+  beforeEach(() => {
+    URL.createObjectURL = jest.fn(() => 'blob:x');
+    URL.revokeObjectURL = jest.fn();
+    HTMLAnchorElement.prototype.click = jest.fn();
+  });
+
+  it('descarga lo que se ve más lo guardado fuera de pantalla, y registra el archivo con su hash', async () => {
+    // a row saved earlier, beyond the on-screen set
+    guardadasFuera = [
+      fila({ productId: 3, sku: '11111111' }),                                                   // also on screen: not duplicated
+      fila({ productId: 77, sku: '77777777', nombre: 'LEJANO', capturado: { quantity: 40, motivo: 'ajustado' } }),
+    ];
+    const user = await montar();
+    await user.click(screen.getByRole('button', { name: 'Exportar a Excel' }));
+    await waitFor(() => expect(HTMLAnchorElement.prototype.click).toHaveBeenCalled());
+    expect(gets.some((u) => u.includes('guardados=1'))).toBe(true);
+    await waitFor(() => expect(exportados).toHaveLength(1));
+    expect(exportados[0]).toMatchObject({
+      area: 'supermercados', month: '2026-10-01', totalFilas: 4, hash: 'ab'.repeat(32),
+      filtros: { modificados: false, bloqueado: false, enPantalla: 3, guardadasFueraDePantalla: 1 },
+    });
+    expect(String(exportados[0].archivo)).toMatch(/^Forecast_supermercados_2026-10_.*\.xlsx$/);
+    await waitFor(() => expect(screen.getByText(/4 filas · Supermercados · 2026-10 \(1 guardadas fuera de pantalla\)/)).toBeInTheDocument());
+  });
+
+  it('con un filtro, exporta sólo lo filtrado (más lo guardado)', async () => {
+    const user = await montar();
+    await user.click(screen.getByRole('button', { name: 'estable' }));
+    await user.click(screen.getByRole('button', { name: 'Exportar a Excel' }));
+    await waitFor(() => expect(exportados).toHaveLength(1));
+    expect(exportados[0]).toMatchObject({ totalFilas: 2, filtros: { etiqueta: 'estable', enPantalla: 2 } });
+  });
+
+  it('si el registro falla, el archivo igual baja y se avisa en rojo', async () => {
+    const user = await montar();
+    const original = global.fetch;
+    global.fetch = jest.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input).startsWith('/api/comercial/exportado')) return { ok: false, status: 500, json: async () => ({ error: 'caído' }) } as Response;
+      return (original as typeof fetch)(input, init);
+    }) as unknown as typeof fetch;
+    await user.click(screen.getByRole('button', { name: 'Exportar a Excel' }));
+    await waitFor(() => expect(HTMLAnchorElement.prototype.click).toHaveBeenCalled());
+    await waitFor(() => expect(screen.getByText(/se descargó, pero no quedó registrado: caído/)).toBeInTheDocument());
+  });
+
+  it('quien sólo lee también puede exportar el canal que mira', async () => {
+    datos = { ...DATOS, miArea: null, puedeCapturar: false };
+    mockFetch();
+    const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime });
+    render(<ForecastClient />);
+    await waitFor(() => expect(screen.getByText(/Ver la tabla de un canal/)).toBeInTheDocument());
+    await user.selectOptions(screen.getByRole('combobox'), 'supermercados');
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Exportar a Excel' })).toBeInTheDocument());
+    expect(screen.queryByRole('button', { name: 'Bloquear cambios' })).not.toBeInTheDocument();
+  });
 });

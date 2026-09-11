@@ -101,6 +101,17 @@ export async function GET(request: Request) {
   // adjusted recommendation or a hand-added code — never one approved as-is.
   // A fact recorded at save time (motivo), not a live comparison.
   const modificados = url.searchParams.get('modificados') === '1';
+  // `guardados=1`: every row with a saved capture for the month, whatever
+  // the motivo and whatever else is filtered — the export uses it to reach
+  // saved rows beyond the on-screen 50 (Jorge 2026-09-11). Not capped.
+  const guardados = url.searchParams.get('guardados') === '1';
+  if (guardados) {
+    const conCaptura = todas.filter((f) => f.capturado !== null);
+    return NextResponse.json({
+      ...meta, historialDisponible: true, asOf, busqueda: null,
+      total: conCaptura.length, totalCanal: todas.length, filas: conCaptura,
+    });
+  }
   const filas = todas.filter((f) =>
     (!modificados || (f.capturado !== null && esModificado(f.capturado.motivo)))
     && (!q || normalizar(f.sku).includes(q) || normalizar(f.nombre).includes(q))

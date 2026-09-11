@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { MOTIVOS, esBase, etiquetaMes, type Motivo } from '@/lib/comercial/forecast';
 import type { BloqueoResumen } from './types';
+import { ExportarForecast } from './ExportarForecast';
+import type { FilaForecastExport } from '@/lib/comercial/forecastExport';
 import {
   ETIQUETA_TEXTO, FALTA_CRITICA, DIVERGENCIA_ANIO_ANTERIOR, TOP_N, type Etiqueta, type Recomendacion,
 } from '@/lib/comercial/recomendacion';
@@ -335,6 +337,26 @@ export function TablaRecomendacion({ area, mes, soloLectura, onCambio, bloqueo =
   const cargadas = useMemo(() => visibles.filter((f) =>
     f.productId in guardado ? guardado[f.productId] > 0 : !!f.capturado).length, [visibles, guardado]);
 
+  /** The row as the export wants it: what the cell shows, and what is saved. */
+  const paraExportar = useCallback((f: FilaHistorial, fueraDePantalla: boolean): FilaForecastExport => {
+    const texto = fueraDePantalla ? (f.capturado ? String(f.capturado.quantity) : '') : valorDe(f).trim();
+    const mi = texto === '' ? null : Number(texto);
+    const motivo = fueraDePantalla
+      ? (f.capturado?.motivo ?? null)
+      : (f.productId in guardado && guardado[f.productId] === 0 ? null
+         : (motivoGuardado[f.productId] ?? f.capturado?.motivo ?? null));
+    return { ...f, miForecast: Number.isFinite(mi as number) ? mi : null, motivoGuardado: motivo, fueraDePantalla };
+  }, [valorDe, guardado, motivoGuardado]);
+
+  // Every saved row of the month, whatever is filtered: the export reaches
+  // beyond the 50 on screen (Jorge 2026-09-11).
+  const cargarGuardadas = useCallback(async (): Promise<FilaForecastExport[]> => {
+    const r = await fetch(`/api/comercial/historial?area=${encodeURIComponent(area)}&mes=${encodeURIComponent(mes)}&guardados=1`);
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error ?? 'No se pudieron leer las filas guardadas');
+    return (j.filas as FilaHistorial[]).map((f) => paraExportar(f, true));
+  }, [area, mes, paraExportar]);
+
   if (error) return <div className="text-sm text-red-700">{error}</div>;
   if (!h) return <div className="text-sm text-gray-500">Cargando el historial del canal…</div>;
   const buscando = !!h.busqueda || !!filtroProveedor || !!filtroCategoria || soloModificados;
@@ -362,8 +384,8 @@ export function TablaRecomendacion({ area, mes, soloLectura, onCambio, bloqueo =
 
   return (
     <section className="bg-white border border-gray-200 rounded-lg p-5 space-y-3">
-      <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <div>
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="mr-auto">
           <h2 className="text-sm font-medium text-gray-900">
             {buscando
               ? `${h.total} códigos de ${h.area.nombre} para ${filtroTexto} — ${etiquetaMes(mes)}`
@@ -379,6 +401,7 @@ export function TablaRecomendacion({ area, mes, soloLectura, onCambio, bloqueo =
             </button>
           </p>
         </div>
+        <div className="flex flex-wrap items-center gap-3 md:ml-auto">
         {bloqueado ? (
           <div className="flex items-center gap-3">
             <span className="text-sm text-amber-800 font-medium" data-testid="bloqueado"
@@ -414,6 +437,25 @@ export function TablaRecomendacion({ area, mes, soloLectura, onCambio, bloqueo =
             </button>
           </div>
         )}
+        {/* Far right on purpose, away from the two buttons that change data (Jorge 2026-09-11). */}
+        <div className="md:ml-8">
+          <ExportarForecast
+            filas={visibles.map((f) => paraExportar(f, false))}
+            cargarGuardadas={cargarGuardadas}
+            contexto={{
+              areaSlug: h.area.slug, areaNombre: h.area.nombre, mes, bodega: nombreBodega(h.bodega),
+              autor: null, asOf: h.asOf, bloqueo,
+              filtros: {
+                busqueda: h.busqueda ?? null,
+                proveedor: filtroProveedor ? (h.filtros?.proveedores.find((p) => p.valor === filtroProveedor)?.etiqueta ?? filtroProveedor) : null,
+                categoria: filtroCategoria || null,
+                etiqueta: filtroEtiqueta || null,
+                modificados: soloModificados,
+              },
+            }}
+          />
+        </div>
+        </div>
       </div>
 
       {confirmarBloqueo && !bloqueado && (
