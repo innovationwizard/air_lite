@@ -107,8 +107,30 @@ async function montar() {
   return user;
 }
 
+it('los meses arrancan colapsados en una columna con lo que faltó; un click los abre y otro los cierra', async () => {
+  const user = await montar();
+  expect(screen.queryByText('Jun')).not.toBeInTheDocument();
+  const resumen = screen.getAllByTestId('falta-3m');
+  expect(resumen).toHaveLength(3);
+  expect(resumen[0]).toHaveTextContent('falta 569 !');     // 562 + 7, one critical month
+  expect(resumen[0].querySelector('span')!.className).toMatch(/text-red-700/);
+  expect(resumen[1]).toHaveTextContent('falta 10');        // 10, none critical
+  expect(resumen[1].querySelector('span')!.className).not.toMatch(/text-red-700/);
+  expect(resumen[2]).toHaveTextContent('—');
+
+  await user.click(screen.getByRole('button', { name: 'Ver los meses' }));
+  expect(screen.getByText('Jun')).toBeInTheDocument();
+  expect(screen.getByText('Ago')).toBeInTheDocument();
+  expect(screen.queryByTestId('falta-3m')).not.toBeInTheDocument();
+
+  await user.click(screen.getByRole('button', { name: 'Ocultar los meses' }));
+  expect(screen.queryByText('Jun')).not.toBeInTheDocument();
+  expect(screen.getAllByTestId('falta-3m')).toHaveLength(3);
+});
+
 it('el faltante crítico va en rojo con «!», el no crítico en gris', async () => {
-  await montar();
+  const user = await montar();
+  await user.click(screen.getByRole('button', { name: 'Ver los meses' }));
   const criticas = screen.getAllByTestId('falta-critica');
   expect(criticas).toHaveLength(1);
   expect(criticas[0]).toHaveTextContent('falta 562 !');

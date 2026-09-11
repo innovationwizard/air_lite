@@ -83,8 +83,10 @@ function Clientes({ c }: { c: FilaHistorial['clientes'] }) {
     return (
       <span title={`Un solo cliente concentra el ${Math.round(c.share * 100)} % de lo pedido en 3 meses (${c.n} clientes en total). Si ese cliente cambia, este número cambia.`}>
         <span className="text-gray-800">{c.principal}</span>
-        <span className="text-amber-800 font-medium"> · {Math.round(c.share * 100)} %</span>
-        <span className="text-gray-400"> de {c.n}</span>
+        <span className="whitespace-nowrap">
+          <span className="text-amber-800 font-medium"> · {Math.round(c.share * 100)} %</span>
+          <span className="text-gray-400"> de {c.n}</span>
+        </span>
       </span>
     );
   }
@@ -123,6 +125,11 @@ export function TablaRecomendacion({ area, mes, soloLectura, onCambio }: Props) 
   const [aviso, setAviso] = useState<string | null>(null);
   const [ultimaEdicion, setUltimaEdicion] = useState<Date | null>(null);
   const [verComoSeCalcula, setVerComoSeCalcula] = useState(false);
+  // The three month columns are the widest part of the row and the
+  // sparkline already carries the shape; collapsed by default (Jorge
+  // 2026-09-10), one click opens them. Collapsed, the cell keeps the one
+  // number the ranking is built on: units short over the three months.
+  const [verMeses, setVerMeses] = useState(false);
 
   const cargar = useCallback(async () => {
     setH(null); setError(null); setEdits({}); setGuardado({});
@@ -274,12 +281,26 @@ export function TablaRecomendacion({ area, mes, soloLectura, onCambio }: Props) 
             <tr className="text-left text-xs text-gray-500 border-b border-gray-200 align-bottom">
               <th className="py-2 pr-3 font-medium sticky left-0 bg-white">Código</th>
               <th className="py-2 pr-3 font-medium" title="Pedido de tu canal, últimos 6 meses">6 meses</th>
-              {mesesBase.map((m) => (
+              {verMeses ? mesesBase.map((m, i) => (
                 <th key={m} className="py-2 pr-3 font-medium text-right whitespace-nowrap"
                     title="Pedido por tu canal / entregado por el almacén. Lo que falta no se vuelve a pedir al mes siguiente; Odoo no registra el motivo.">
+                  {i === 0 && (
+                    <button type="button" onClick={() => setVerMeses(false)}
+                            className="mr-2 text-gray-400 hover:text-gray-700" title="Ocultar los meses"
+                            aria-label="Ocultar los meses">◂</button>
+                  )}
                   {mesCorto(m)}<span className="block font-normal text-gray-400">pedido / entregado</span>
                 </th>
-              ))}
+              )) : (
+                <th className="py-2 pr-3 font-medium text-right whitespace-nowrap"
+                    title="Lo que faltó entregar de lo pedido en los últimos 3 meses. Abrí para ver cada mes: pedido / entregado.">
+                  <button type="button" onClick={() => setVerMeses(true)}
+                          className="text-gray-700 hover:text-gray-900" aria-label="Ver los meses">
+                    {mesesBase.length ? `${mesCorto(mesesBase[0])}–${mesCorto(mesesBase[mesesBase.length - 1])}` : 'Meses'} ▸
+                  </button>
+                  <span className="block font-normal text-gray-400">faltó entregar</span>
+                </th>
+              )}
               <th className="py-2 pr-3 font-medium text-right whitespace-nowrap"
                   title={`Mismo mes en años anteriores, en tu canal. Ámbar cuando se aleja más de ${Math.round(DIVERGENCIA_ANIO_ANTERIOR * 100)} % de la recomendación.`}>
                 {mesCorto(mes)} años anteriores
@@ -317,7 +338,19 @@ export function TablaRecomendacion({ area, mes, soloLectura, onCambio }: Props) 
                     )}
                   </td>
                   <td className="py-2 pr-3"><Sparkline serie={f.serie} /></td>
-                  {f.meses3.map((m) => (
+                  {!verMeses && (() => {
+                    const falta3 = f.meses3.reduce((a, m) => a + m.falta, 0);
+                    const critica = f.meses3.some((m) => m.critica);
+                    return (
+                      <td className="py-2 pr-3 text-right tabular-nums whitespace-nowrap" data-testid="falta-3m"
+                          title={f.meses3.map((m) => `${mesCorto(m.mes)}: ${n(m.pedido)} / ${n(m.entregado)}${m.critica ? ' !' : ''}`).join(' · ')}>
+                        {falta3 > 0
+                          ? <span className={critica ? 'text-red-700 font-medium' : 'text-gray-500'}>falta {n(falta3)}{critica ? ' !' : ''}</span>
+                          : <span className="text-gray-300">—</span>}
+                      </td>
+                    );
+                  })()}
+                  {verMeses && f.meses3.map((m) => (
                     <td key={m.mes} className="py-2 pr-3 text-right tabular-nums whitespace-nowrap">
                       <span className="text-gray-800">{n(m.pedido)}</span>
                       <span className="text-gray-400"> / </span>
