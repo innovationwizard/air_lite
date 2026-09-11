@@ -1,6 +1,7 @@
 /**
  * Manual-quantity validation for the reabastecimiento write-backs (tránsito,
- * pendiente de tomar reserva, comercial), shared by the API routes
+ * sugerido por bodega, comercial — pendiente de tomar reserva stopped being a
+ * capture on 2026-09-11: it is fetched live from Odoo), shared by the API routes
  * (authoritative) and the live client (pre-flight, so the rejection is
  * explained without a round-trip).
  *

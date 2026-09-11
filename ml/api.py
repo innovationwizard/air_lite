@@ -5,6 +5,7 @@ backtest cycles and check status.
 """
 
 import hmac
+from datetime import datetime, timezone
 import logging
 import os
 import threading
@@ -17,6 +18,7 @@ from backtest_engine import run_backtest_cycle
 from purchase_scheduler import run_purchase_schedule_cycle
 from forecast_revenue import forecast_product as forecast_product_revenue
 from forecast_purchases_derived import forecast_purchases_derived
+from pendiente_reserva import SEQUENCE_CODES, agrupar, picking_types_por_bodega
 from reyma_factura_extract import PdfIlegible, extraer_de_bytes
 from reyma_factura_carga import (
     DESTINOS_VALIDOS, DatoInvalido, Mapas, destino_in_band, evaluar,
@@ -588,6 +590,13 @@ def _odoo_execute(model, method, *args, **kwargs):
     read-only). Esta función no impone eso por código: lo impone que ningún
     llamador de este archivo pida otra cosa.
     """
+    return _odoo_conectar()(model, method, *args, **kwargs)
+
+
+def _odoo_conectar():
+    """Autentica UNA vez y devuelve `execute(model, method, *args, **kwargs)`
+    — para un endpoint que hace varias lecturas seguidas y no quiere pagar
+    el `authenticate` en cada una. Mismas reglas que `_odoo_execute`."""
     if not all([_ODOO_URL, _ODOO_DB, _ODOO_USERNAME, _ODOO_API_KEY]):
         raise RuntimeError('Odoo no está configurado (ODOO_URL/ODOO_DB/ODOO_USERNAME/ODOO_API_KEY)')
     common = xmlrpc.client.ServerProxy(f'{_ODOO_URL}/xmlrpc/2/common', allow_none=True)
@@ -595,7 +604,11 @@ def _odoo_execute(model, method, *args, **kwargs):
     if not uid:
         raise RuntimeError('Odoo rechazó la autenticación')
     models = xmlrpc.client.ServerProxy(f'{_ODOO_URL}/xmlrpc/2/object', allow_none=True)
-    return models.execute_kw(_ODOO_DB, uid, _ODOO_API_KEY, model, method, list(args), kwargs)
+
+    def execute(model, method, *args, **kwargs):
+        return models.execute_kw(_ODOO_DB, uid, _ODOO_API_KEY, model, method, list(args), kwargs)
+
+    return execute
 
 
 @app.route('/reyma/productos/buscar', methods=['GET'])
@@ -678,6 +691,97 @@ def reyma_productos_buscar():
         return jsonify({'error': f'No se pudo consultar Odoo: {e}'}), 502
 
     return jsonify({'q': q, 'candidatos': de_reyma, 'otros': otros})
+
+
+@app.route('/reabastecimiento/pendiente-reserva', methods=['GET'])
+def reabastecimiento_pendiente_reserva():
+    """
+    «Pendiente de tomar reserva» EN VIVO desde Odoo, por bodega × producto —
+    la pantalla de Wilmer («Análisis de movimientos», favorito «Wilmer -
+    Reservas.», ir.filters 1166) agregada por producto, más un filtro de
+    origen (`location_id` = existencias de la bodega) que en 4ZAC/3PET
+    separa la demanda de las recepciones. Definición, el porqué del filtro
+    y por qué no se sincroniza: docstring de `pendiente_reserva.py`.
+
+    Query param: `bodegas` — códigos de `stock.warehouse` separados por coma
+    (`1CET,4ZAC,3PET`). Obligatorio: la página sabe qué bodegas están en
+    alcance (`bodega_map`) y este servicio no.
+
+    Cuatro lecturas a Odoo por request con UNA autenticación, ninguna por
+    producto: `stock.warehouse` (códigos → ids), `stock.picking.type` (OUT/INT
+    de esas bodegas), UN `read_group` de `stock.move` agrupado por (producto,
+    origen) sobre `state not in (cancel, done)` ∧ origen = existencias —
+    535 productos en 1.6 s el 2026-09-11 — y `product.product` para
+    traducir ids a SKU.
+
+    Respuesta (por SKU, la llave estable — el id de Odoo cambia por build):
+      { asOf, bodegas: {'1CET': {sku: {demanda, cantidad, pendiente}}, ...},
+        pickingTypes: {'1CET': [2, 5], ...} }
+    Un SKU ausente en su bodega = 0 CONOCIDO. Odoo caído = 502, y la
+    página lo muestra como «sin dato» (¿?), nunca como 0.
+
+    SOLO LECTURA (search_read / read_group) — ver `_odoo_execute`.
+    """
+    raw = (request.args.get('bodegas') or '').strip()
+    codigos = sorted({c.strip().upper() for c in raw.split(',') if c.strip()})
+    if not codigos:
+        return jsonify({'error': 'bodegas es obligatorio (códigos de stock.warehouse, separados por coma)'}), 400
+
+    try:
+        odoo = _odoo_conectar()
+        almacenes = odoo('stock.warehouse', 'search_read', [['code', 'in', codigos]],
+                         fields=['code', 'lot_stock_id'])
+        codigo_por_wh = {w['id']: w['code'] for w in almacenes}
+        # De dónde SALE el movimiento — `WH/Existencias`. Es lo que separa la
+        # demanda (sale de existencias) de una recepción en dos pasos
+        # (`Entrada → Existencias`, mismo tipo INT en 4ZAC/3PET). Ver el
+        # docstring de `pendiente_reserva.py`.
+        bodega_por_ubicacion = {w['lot_stock_id'][0]: w['code'] for w in almacenes if w.get('lot_stock_id')}
+        faltan = sorted(set(codigos) - set(codigo_por_wh.values()))
+        if faltan:
+            return jsonify({'error': f'bodegas desconocidas en Odoo: {", ".join(faltan)}'}), 400
+
+        tipos = odoo(
+            'stock.picking.type', 'search_read',
+            [['warehouse_id', 'in', list(codigo_por_wh)], ['sequence_code', 'in', list(SEQUENCE_CODES)]],
+            fields=['sequence_code', 'warehouse_id'],
+        )
+        tipos_por_bodega = picking_types_por_bodega(tipos, codigo_por_wh)
+        tipos = [t for ts in tipos_por_bodega.values() for t in ts]
+
+        grupos, sku_por_producto = [], {}
+        if tipos and bodega_por_ubicacion:
+            grupos = odoo(
+                'stock.move', 'read_group',
+                [['state', 'not in', ['cancel', 'done']],
+                 ['picking_type_id', 'in', tipos],
+                 ['location_id', 'in', list(bodega_por_ubicacion)]],
+                ['product_uom_qty:sum', 'quantity:sum'],
+                ['product_id', 'location_id'],
+                lazy=False,
+            )
+            # Se responde por SKU y no por id de producto: el id de Odoo cambia
+            # con cada build (2026-08-06) y el SKU es la única llave estable —
+            # la misma con la que el sync empareja `products`.
+            ids = sorted({g['product_id'][0] for g in grupos if g.get('product_id')})
+            for p in odoo('product.product', 'search_read', [['id', 'in', ids]],
+                          fields=['default_code'], context={'active_test': False}):
+                if p.get('default_code'):
+                    sku_por_producto[p['id']] = p['default_code']
+    except Exception as e:  # noqa: BLE001 — Odoo caído/timeout no debe tumbar el worker
+        logger.warning('reabastecimiento/pendiente-reserva: Odoo falló: %s', e)
+        return jsonify({'error': f'No se pudo consultar Odoo: {e}'}), 502
+
+    por_bodega = agrupar(grupos, bodega_por_ubicacion, sku_por_producto)
+    # Una bodega pedida sin tipos OUT/INT no tiene entrada en `agrupar`;
+    # que salga vacía y con su lista de tipos vacía, visible.
+    for codigo in codigos:
+        por_bodega.setdefault(codigo, {})
+    return jsonify({
+        'asOf': datetime.now(timezone.utc).isoformat(),
+        'bodegas': por_bodega,
+        'pickingTypes': tipos_por_bodega,
+    })
 
 
 @app.route('/reyma/factura/pendiente/reintentar', methods=['POST'])

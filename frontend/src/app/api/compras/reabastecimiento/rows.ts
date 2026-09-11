@@ -3,7 +3,8 @@
  *
  * Both the page (`GET /api/compras/reabastecimiento`) and the Carvajal xlsx
  * export read their numbers from here. That is deliberate: the override merge,
- * the pending-is-unknown-not-zero rule and the seasonal policy are business
+ * the live pendiente-de-tomar-reserva fetch (unknown when Odoo is silent,
+ * never zero) and the seasonal policy are business
  * rules, and this project has already paid for the same number being computed
  * two ways (the 2026-08-20 UoM bug shipped a page that disagreed with itself).
  * The engine module is likewise imported, never reimplemented.
@@ -22,7 +23,8 @@ import {
   type Tendencia, type Divergencia, type Alerta,
 } from '@/lib/compras/tendencia';
 import { fetchAll } from '@/lib/supabase/paginado';
-import { round1 } from './lib';
+import { fetchPendienteReserva, pendientePorSku } from '@/lib/compras/pendienteReserva';
+import { GENERAL_BODEGA, round1 } from './lib';
 
 /**
  * SEASONAL EXCEPTIONS — per-SKU, by explicit decision, NOT a rule.
@@ -73,6 +75,7 @@ interface InputRow {
   /** {'YYYY-MM': qty} over the 6 complete months. NULL = sync has not written it yet. */
   demanda_mensual: Record<string, number> | null;
   existencias: number; reserved: number;
+  /** Always NULL since 2026-07-30 (the sync never writes it) — the value is fetched live, see below. */
   pending_reserve: number | null;
   patio: number; transito: number;
   win: number; as_of: string;
@@ -94,6 +97,8 @@ interface SupplierGroupRef { id: string; display_name: string }
 interface SupplierGroupMemberRef { supplier_id: number; group_id: string }
 /** qty === null = a CLEAR entry: the manual capture was removed (20260813000001). */
 interface OverrideRow { product_id: number; qty: number | null; created_at: string }
+/** `bodega_map` — which Odoo warehouses make up a bodega; General is every in-scope one. */
+interface BodegaMapRow { odoo_warehouse_code: string; bodega: string; in_scope: boolean }
 /** A6.15 — una entrada futura de tránsito: cuánto y cuándo. */
 interface DetalleRow {
   product_id: number; fecha: string | null; qty: number; orden: string | null;
@@ -112,6 +117,13 @@ export interface LiveRow {
   /** Odoo product.template "Can be Purchased" — drives the solo-comprables filter. */
   purchaseOk: boolean;
   exist: number; existencias: number; reserved: number; patio: number;
+  /**
+   * Pendiente de tomar reserva — LIVE from Odoo at request time (2026-09-11,
+   * Wilmer's «Wilmer - Reservas.» filter: open delivery orders + internal
+   * transfers, Demanda − Cantidad). null = Odoo did not answer this request
+   * (→ flags.pendingUnknown); 0 = Odoo answered and nothing is open. Never
+   * typed by hand, never synced — see `lib/compras/pendienteReserva.ts`.
+   */
   pending: number | null;
   trans: number; transOverridden: boolean;
   adic: number; adicComercial: number; sugBodega: number | null;
@@ -269,6 +281,12 @@ export async function buildRows(
   rows: LiveRow[]; maxAsOf: string; monthStart: string; coberturaDias: number;
   groups: { id: string; displayName: string }[];
   /**
+   * Where the pendiente column came from on THIS request. `error` non-null
+   * means Odoo (or the ML service) did not answer: every row's `pending` is
+   * null and the page says so — the number is not stale, it is absent.
+   */
+  pendienteReserva: { asOf: string | null; codigos: string[]; error: string | null };
+  /**
    * Los canales comerciales, para rotular y ORDENAR sus columnas.
    *
    * Vienen de la tabla y no de una lista en el código a propósito: la
@@ -287,7 +305,17 @@ export async function buildRows(
     // solo lugar para que ambas no puedan discrepar.
     const monthStart = mesPorDefecto(new Date());
 
-    const [inputs, products, links, suppliers, transitoOv, pendingOv, comercial, aprobaciones, sugBodegaOv, detalleTr, cobertura,
+    // Which Odoo warehouses this bodega is — the live pendiente fetch needs
+    // the codes up front, so this small read goes first, alone.
+    const { data: bodegaMapData, error: bodegaMapError } =
+      await service.from('bodega_map').select('odoo_warehouse_code, bodega, in_scope').eq('in_scope', true);
+    if (bodegaMapError) throw new Error(bodegaMapError.message);
+    const codigosBodega = ((bodegaMapData as BodegaMapRow[] | null) ?? [])
+      .filter((b) => bodega === GENERAL_BODEGA || b.bodega === bodega)
+      .map((b) => b.odoo_warehouse_code)
+      .sort();
+
+    const [inputs, products, links, suppliers, transitoOv, pendienteLive, comercial, aprobaciones, sugBodegaOv, detalleTr, cobertura,
            supplierGroups, supplierGroupMembers, areasCom] =
       await Promise.all([
         // El desempate por columna única de cada consulta NO ES OPCIONAL —
@@ -309,10 +337,11 @@ export async function buildRows(
           service.from('transito_overrides').select('product_id, qty, created_at')
             .eq('bodega', bodega).order('created_at', { ascending: false }),
           { columna: 'id', ascending: false }),
-        fetchAll<OverrideRow>(() =>
-          service.from('pending_reserve_overrides').select('product_id, qty, created_at')
-            .eq('bodega', bodega).order('created_at', { ascending: false }),
-          { columna: 'id', ascending: false }),
+        // Pendiente de tomar reserva — live from Odoo, in parallel with the
+        // Supabase reads. Replaces the manual `pending_reserve_overrides`
+        // input (2026-07-30 → 2026-09-11): Wilmer's own Odoo filter, per
+        // request, never stored. Never throws — a failure is a value.
+        fetchPendienteReserva(codigosBodega),
         fetchAll<ComercialRow>(() =>
           service.from('comercial_forecast')
             .select('product_id, bodega, quantity, motivo, area, created_at')
@@ -398,7 +427,15 @@ export async function buildRows(
     for (const l of detallePorProducto.values()) {
       l.sort((a, b) => (a.fecha ?? '9999').localeCompare(b.fecha ?? '9999'));
     }
-    const pendingByProduct = latest(pendingOv);
+    // Live pendiente by SKU (the stable key across Odoo builds). When Odoo did
+    // not answer, the map is null and every row is UNKNOWN — never 0.
+    const pendingBySku = pendienteLive.ok ? pendientePorSku(pendienteLive.live, codigosBodega) : null;
+    const pendienteReserva = pendienteLive.ok
+      ? { asOf: pendienteLive.live.asOf, codigos: codigosBodega, error: null }
+      : { asOf: null, codigos: codigosBodega, error: pendienteLive.error };
+    if (!pendienteLive.ok) {
+      console.warn('[reabastecimiento/rows] pendiente de tomar reserva sin dato:', pendienteLive.error);
+    }
     // Suma de los seis canales, y sólo lo que es compromiso — ver
     // `consolidarComercial` arriba.
     const areasAprobadas = new Set(
@@ -408,7 +445,9 @@ export async function buildRows(
     let maxAsOf = '';
     const rows = inputs.map((r) => {
       const ref = productById.get(r.product_id);
-      const pending = pendingByProduct.get(r.product_id) ?? null;
+      // Absent from Odoo's answer = nothing open for this SKU = a KNOWN 0.
+      // No answer at all = unknown, and unknown subtracts nothing but flags.
+      const pending = pendingBySku === null ? null : round1(pendingBySku.get(ref?.sku ?? '') ?? 0);
       const existNet = r.existencias - r.reserved - (pending ?? 0);
       /**
        * Tránsito — dos capas, de la más específica a la más general:
@@ -545,7 +584,7 @@ export async function buildRows(
     classifyAbc(rows);
 
   return {
-    rows, maxAsOf, monthStart, coberturaDias, areasComerciales,
+    rows, maxAsOf, monthStart, coberturaDias, areasComerciales, pendienteReserva,
     groups: supplierGroups.map((g) => ({ id: g.id, displayName: g.display_name })),
   };
 }

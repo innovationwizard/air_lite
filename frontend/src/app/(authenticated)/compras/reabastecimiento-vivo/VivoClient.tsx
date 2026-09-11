@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   AlertTriangle, Boxes, ChevronDown, ChevronUp, ChevronsUpDown, CloudOff, ListFilter, Loader2, PackageCheck,
-  Pencil, RefreshCw, Search, TrendingUp, X,
+  Pencil, Radio, RefreshCw, Search, TrendingUp, X,
 } from 'lucide-react';
 import { MAX_MANUAL_QTY } from '@/lib/compras/qty';
 import { type Tendencia, type Alerta, SIN_REFERENCIA_ANIO_ANTERIOR } from '@/lib/compras/tendencia';
@@ -30,9 +30,12 @@ import {
  * Live client for /compras/reabastecimiento-vivo.
  *
  * Rows come computed from the API (engine applied server-side). Inline edits
- * (Tránsito, Pendiente) recompute locally with the SAME imported engine for
- * instant feedback, POST the entry (append-only), then silently refetch so the
- * server stays the source of truth.
+ * (Tránsito) recompute locally with the SAME imported engine for instant
+ * feedback, POST the entry (append-only), then silently refetch so the
+ * server stays the source of truth. Pendiente de tomar reserva is NOT
+ * editable any more (2026-09-11): it comes live from Odoo on every load —
+ * Wilmer's own «Wilmer - Reservas.» filter — and ¿? means Odoo did not
+ * answer, never "not typed yet".
  */
 
 /**
@@ -92,7 +95,7 @@ const COL_TIP = {
     + 'A = acumula el primer 50% del ordenado · B = siguiente 30% · C = siguiente 15% (y la cola). '
     + 'D = menos de 10 unidades ordenadas en 3 meses, sin importar el ranking.',
   exist:
-    'Existencias − reservado − pendiente de tomar reserva (captura manual). '
+    'Existencias − reservado − pendiente de tomar reserva (en vivo desde Odoo). '
     + 'NO incluye patio ni tránsito.',
   patio:
     'Solo 1CET/Entrada: furgones en el patio de Bodega Central. '
@@ -106,9 +109,11 @@ const COL_TIP = {
     + 'Editable: tu valor manual reemplaza al sincronizado (p. ej. el mensual de Carvajal). '
     + 'El botón ✕ quita tu captura y vuelve al valor sincronizado.',
   pend:
-    'Pendiente de tomar reserva — captura manual (no existe en ningún sistema). '
-    + '¿? significa sin dato, no cero. Resta de la exist. neta. '
-    + 'El botón ✕ quita la captura y vuelve a ¿? (sin dato).',
+    'Pendiente de tomar reserva — EN VIVO desde Odoo en cada carga, con tu mismo filtro '
+    + '«Wilmer - Reservas.»: entregas y traslados internos abiertos que SALEN de las existencias '
+    + 'de la bodega, Demanda − Cantidad reservada (todos los estados no finales, incluido borrador). '
+    + 'Resta de la exist. neta. ¿? significa que Odoo no respondió en esta carga, no cero; '
+    + '0 significa que Odoo respondió y no hay nada abierto.',
   adic: 'TOTAL que entra al pedido: forecast comercial del mes en captura (sólo compra '
     + 'extraordinaria, sumando los canales) más lo que pidió la bodega. El desglose por '
     + 'canal está en las columnas siguientes.',
@@ -161,6 +166,7 @@ interface ApiRow {
   /** Odoo product.template "Can be Purchased" — drives el filtro «Solo comprables». */
   purchaseOk: boolean;
   exist: number; existencias: number; reserved: number; patio: number;
+  /** Live from Odoo this load. null = Odoo did not answer (flags.pendingUnknown); 0 = nothing open. */
   pending: number | null;
   trans: number; transOverridden: boolean;
   adic: number; adicComercial: number; sugBodega: number | null;
@@ -194,6 +200,8 @@ interface ApiMeta {
     id: string; status: string; started_at: string; finished_at: string | null;
     counts?: { data_horizon?: string | null };
   } | null;
+  /** Provenance of the live pendiente column — `error` set = every row is ¿? and this says why. */
+  pendienteReserva?: { asOf: string | null; codigos: string[]; error: string | null };
 }
 interface Tiendas {
   porTienda: { tienda: string; f6: number; f3: number }[];
@@ -265,14 +273,15 @@ export function VivoClient() {
 
   /**
    * Optimistic local recompute with the imported engine, then persist +
-   * refetch. qty === null CLEARS the manual capture (pendiente → ¿?,
-   * tránsito → valor sincronizado); the client can't compute that revert
-   * locally (it doesn't hold the synced tránsito), so clears skip the
-   * optimistic step and let the silent refetch repaint.
+   * refetch. qty === null CLEARS the manual capture (tránsito → valor
+   * sincronizado); the client can't compute that revert locally (it doesn't
+   * hold the synced tránsito), so clears skip the optimistic step and let
+   * the silent refetch repaint. Only tránsito is editable now — pendiente de
+   * tomar reserva stopped being a capture on 2026-09-11 (see the header).
    */
   const commitEdit = useCallback(async (
     row: ApiRow,
-    kind: 'transito' | 'pendiente',
+    kind: 'transito',
     qty: number | null,
   ) => {
     setSaveError(null);
@@ -287,15 +296,12 @@ export function VivoClient() {
       if (!prev) return prev;
       const rows = prev.rows.map((r) => {
         if (r.productId !== row.productId) return r;
-        const pending = kind === 'pendiente' ? qty : r.pending;
-        const trans = kind === 'transito' ? qty : r.trans;
-        const exist = r.existencias - r.reserved - (pending ?? 0);
-        const er = engineRowOf(r, exist, trans);
+        const trans = qty;
+        const er = engineRowOf(r, r.exist, trans);
         return {
-          ...r, pending, trans, exist,
-          transOverridden: kind === 'transito' ? true : r.transOverridden,
+          ...r, trans,
+          transOverridden: true,
           doh: dohOf(er), sug: sugerido(er, trans),
-          flags: { ...r.flags, pendingUnknown: pending === null },
         };
       });
       return { ...prev, rows };
@@ -492,17 +498,16 @@ export function VivoClient() {
         />
         <ProximaEntrada detalle={r.transitoDetalle} manual={r.transOverridden} />
       </td>
-      <td className="px-3 py-2 border-b border-gray-100 text-right">
-        <QtyInput
-          value={r.pending}
-          edited={r.pending !== null}
-          unknown={r.flags.pendingUnknown}
-          label={`Pendiente de tomar reserva ${r.cod}`}
-          onCommit={(v) => commitEdit(r, 'pendiente', v)}
-          onClear={r.pending !== null
-            ? () => commitEdit(r, 'pendiente', null) : undefined}
-          clearTip="Quitar captura manual — vuelve a ¿? (sin dato)"
-        />
+      {/* Live from Odoo — read-only on purpose. A box here would invite
+          typing a number that Odoo already knows better and changes by the
+          minute. ¿? = Odoo did not answer this load; 0 = nothing open. */}
+      <td className="px-3 py-2 border-b border-gray-100 text-right"
+          title={r.flags.pendingUnknown
+            ? 'Sin dato: Odoo no respondió en esta carga — no es cero'
+            : `En vivo desde Odoo: entregas y traslados abiertos sin reservar (${r.cod})`}>
+        {r.flags.pendingUnknown
+          ? <span className="text-amber-600 font-semibold">¿?</span>
+          : <span className={r.pending ? 'text-gray-800' : 'text-gray-400'}>{fmt(r.pending ?? 0)}</span>}
       </td>
       <td className="px-3 py-2 border-b border-gray-100 text-right text-gray-500">{fmt(r.adic)}</td>
       {/* QUIÉN pidió CUÁNTO — una columna por canal.
@@ -630,6 +635,16 @@ export function VivoClient() {
       {(error || saveError) && (
         <div className="mb-4 text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
           {error ?? saveError}
+        </div>
+      )}
+      {/* The live pendiente column failed for THIS load: say it once, up
+          here, so 400 rows of ¿? are not a mystery. Exist. neta and the
+          Sugerido then run WITHOUT the subtraction — visibly, not silently. */}
+      {payload?.meta.pendienteReserva?.error && (
+        <div className="mb-4 text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+          <strong>Pendiente de tomar reserva sin dato en esta carga</strong> — Odoo no respondió
+          ({payload.meta.pendienteReserva.error}). La exist. neta y el Sugerido se calcularon sin
+          restarlo. Recargá la página para volver a intentarlo.
         </div>
       )}
 
@@ -780,7 +795,7 @@ export function VivoClient() {
                     <Th tip={COL_TIP.trans} sortKey="trans" orden={orden} onSort={onSort}
                         filtroKey="trans" rango={rangos.trans} onRango={onRango}><span className="inline-flex items-center gap-1">Tránsito <Pencil size={11} /></span></Th>
                     <Th tip={COL_TIP.pend} sortKey="pending" orden={orden} onSort={onSort}
-                        filtroKey="pending" rango={rangos.pending} onRango={onRango}><span className="inline-flex items-center gap-1">Pend. reserva <Pencil size={11} /></span></Th>
+                        filtroKey="pending" rango={rangos.pending} onRango={onRango}><span className="inline-flex items-center gap-1">Pend. reserva <Radio size={11} /></span></Th>
                     <Th tip={COL_TIP.adic} sortKey="adic" orden={orden} onSort={onSort}
                         filtroKey="adic" rango={rangos.adic} onRango={onRango}>Adic.</Th>
                     {/* Sin `sortKey` ni `filtroKey` a propósito: `ClaveOrden` es

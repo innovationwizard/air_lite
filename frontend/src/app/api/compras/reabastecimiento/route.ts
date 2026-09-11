@@ -12,17 +12,20 @@ export const dynamic = 'force-dynamic';
  *
  * The LIVE replenishment view: reads synced Odoo inputs
  * (`reabastecimiento_inputs`), merges the three manual override streams
- * (comercial_forecast, transito_overrides, pending_reserve_overrides — latest
- * entry per product×bodega applies), and computes Sugerido/DOH with the SAME
+ * (comercial_forecast, transito_overrides, sugerido_bodega — latest entry per
+ * product×bodega applies), fetches pendiente de tomar reserva LIVE from Odoo,
+ * and computes Sugerido/DOH with the SAME
  * engine module the xlsx parity page uses (imported, never reimplemented).
  *
  * Availability semantics (parity with the workbook, manifest §3):
- *   engine.exist = existencias(on-hand) − reserved − pending(manual, 0 if none)
+ *   engine.exist = existencias(on-hand) − reserved − pending(live from Odoo)
  *   patio is returned as its own column (visible, NOT in the engine math —
  *   the workbook's Existencias column excludes patio; folding it in is a
  *   Wilmer-facing decision, not a silent change).
- *   pending === null  → unknown (no manual entry, or the capture was cleared
- *   with a qty-null entry — 20260813000001) → flags.pendingUnknown.
+ *   pending === null  → Odoo did not answer THIS request → flags.pendingUnknown
+ *   and meta.pendienteReserva.error says why. (Until 2026-09-11 this was a
+ *   manual capture, `pending_reserve_overrides`; see rows.ts / the
+ *   `lib/compras/pendienteReserva.ts` header for why it became a live fetch.)
  *
  * RBAC: defense-in-depth — middleware `check_route_access` (route_permissions,
  * migration 20260724000003) + in-handler requireAuth(CAN_VIEW_COMPRAS).
@@ -47,7 +50,7 @@ export async function GET(request: Request) {
 
     // Rows come from the SHARED builder the xlsx export also uses — see rows.ts.
     // tiendas comes from the SHARED lib.ts builder — the snapshot route uses it too.
-    const [{ rows, maxAsOf, monthStart, coberturaDias, groups, areasComerciales }, tiendas, lastSync] = await Promise.all([
+    const [{ rows, maxAsOf, monthStart, coberturaDias, groups, areasComerciales, pendienteReserva }, tiendas, lastSync] = await Promise.all([
       buildRows(service, bodega),
       buildTiendas(service),
       service.from('sync_runs').select('id, status, started_at, finished_at, counts')
@@ -71,6 +74,9 @@ export async function GET(request: Request) {
         // Days of demand the Sugerido covers for this bodega (Wilmer 2026-08-21:
         // Zacapa y Petén a 15). Reported so the page can say it out loud.
         coberturaDias,
+        // Live-fetch provenance for the pendiente column: when `error` is
+        // set, every row's pending is null and the page must say so.
+        pendienteReserva,
       },
     });
   } catch (e) {
