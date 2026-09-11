@@ -15,7 +15,6 @@ function row(over: Record<string, unknown>) {
     abc: 'A', purchaseOk: true,
     exist: over.exist ?? 0, existencias: over.exist ?? 0, reserved: 0, patio: 0,
     pending: null, trans: 0, transOverridden: false,
-    destino: null, destinoProvisional: false,
     adic: 0, adicComercial: 0, sugBodega: null,
     transitoDetalle: [],
     p6: over.p6 ?? 0, p3: over.p3 ?? 0, h: 0, win: 10,

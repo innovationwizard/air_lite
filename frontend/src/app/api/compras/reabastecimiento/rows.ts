@@ -20,11 +20,8 @@ import {
   evaluarTendencia, evaluarDivergencia, evaluarAlerta, tieneReferenciaAnioAnterior,
   type Tendencia, type Divergencia, type Alerta,
 } from '@/lib/compras/tendencia';
-import {
-  type DestinoDeclarado, destinoAfectaFila, transitoSegunDestino, ultimaPorProducto,
-} from '@/lib/compras/destino';
 import { fetchAll } from '@/lib/supabase/paginado';
-import { GENERAL_BODEGA, round1 } from './lib';
+import { round1 } from './lib';
 
 /**
  * SEASONAL EXCEPTIONS — per-SKU, by explicit decision, NOT a rule.
@@ -100,8 +97,6 @@ interface OverrideRow { product_id: number; qty: number | null; created_at: stri
 interface DetalleRow {
   product_id: number; fecha: string | null; qty: number; orden: string | null;
 }
-/** W15-A — `destino` null = declaración borrada. */
-interface DestinoRow { product_id: number; destino: string | null; created_at: string }
 interface ComercialRow {
   product_id: number; bodega: string | null; quantity: number;
   motivo: string; area: string; created_at: string;
@@ -118,10 +113,6 @@ export interface LiveRow {
   exist: number; existencias: number; reserved: number; patio: number;
   pending: number | null;
   trans: number; transOverridden: boolean;
-  /** W15-A — destino final declarado a mano (null = sin declarar). */
-  destino: string | null;
-  /** W15-A — la declaración está cambiando lo que se ve en ESTA bodega. */
-  destinoProvisional: boolean;
   adic: number; adicComercial: number; sugBodega: number | null;
   /**
    * Forecast comercial que NO entra al pedido: `temporada` + `critico`, que
@@ -263,7 +254,7 @@ export async function buildRows(
     const monthStart = mesPorDefecto(new Date());
 
     const [inputs, products, links, suppliers, transitoOv, pendingOv, comercial, sugBodegaOv, detalleTr, cobertura,
-           destinoDecl, supplierGroups, supplierGroupMembers, areasCom] =
+           supplierGroups, supplierGroupMembers, areasCom] =
       await Promise.all([
         // El desempate por columna única de cada consulta NO ES OPCIONAL —
         // ver el comentario de `fetchAll` en ./lib.ts: sin él el paginado
@@ -310,13 +301,6 @@ export async function buildRows(
         service.from('bodega_cobertura').select('dias')
           .eq('bodega', bodega).order('created_at', { ascending: false })
           .limit(1).maybeSingle(),
-        // W15-A — la declaración es GLOBAL AL PRODUCTO, no por bodega: viendo
-        // San José hay que saber que el producto fue declarado a Zacapa, o el
-        // tránsito no se puede mover de una vista a otra.
-        fetchAll<DestinoRow>(() =>
-          service.from('transito_destino').select('product_id, destino, created_at')
-            .order('created_at', { ascending: false }),
-          { columna: 'id', ascending: false }),
         // Grupos de proveedores (2026-09-04) — ver rows.ts §provGroupId abajo.
         fetchAll<SupplierGroupRef>(() =>
           service.from('supplier_groups').select('id, display_name'), 'id'),
@@ -374,7 +358,6 @@ export async function buildRows(
       l.sort((a, b) => (a.fecha ?? '9999').localeCompare(b.fecha ?? '9999'));
     }
     const pendingByProduct = latest(pendingOv);
-    const destinoByProduct = ultimaPorProducto(destinoDecl);
     // Suma de los seis canales, y sólo lo que es compromiso — ver
     // `consolidarComercial` arriba.
     const comercialByProduct = consolidarComercial(comercial, bodega);
@@ -385,23 +368,27 @@ export async function buildRows(
       const pending = pendingByProduct.get(r.product_id) ?? null;
       const existNet = r.existencias - r.reserved - (pending ?? 0);
       /**
-       * Tránsito — tres capas, de la más específica a la más general:
+       * Tránsito — dos capas, de la más específica a la más general:
        *
        *   1. `transito_overrides` — la CANTIDAD que él teclea, ya por
        *      (producto × bodega). Manda sobre todo: es la herramienta más
        *      expresiva y no se puede pisar con la menos expresiva.
-       *   2. W15-A — el DESTINO declarado a mano mueve el tránsito
-       *      sincronizado a una sola bodega (y lo saca de las otras).
-       *   3. el tránsito sincronizado tal como llega — que hoy es global y
-       *      está replicado en las tres bodegas (W15-B lo corrige de raíz).
+       *   2. el tránsito sincronizado, ya POR BODEGA: `sync_transit()` lo
+       *      atribuye por la sucursal de la orden de compra (c67ba1f,
+       *      2026-09-08), así que cada vista ve sólo el suyo.
+       *
+       * Hubo una capa intermedia —«Destino final» declarado a mano, W15-A—
+       * que movía el tránsito replicado a una sola bodega. Se retiró el
+       * 2026-09-10 a pedido de Wilmer: con el tránsito ya atribuido por
+       * sucursal, verlo bodega por bodega con el filtro de arriba la
+       * reemplaza. La tabla `transito_destino` queda como historial; nadie
+       * la lee.
        *
        * undefined (sin entrada) y null (borrado) caen igual a la capa de
        * abajo; sólo un número real hace override.
        */
-      const destino: DestinoDeclarado = destinoByProduct.get(r.product_id) ?? null;
-      const transSync = transitoSegunDestino(bodega, destino, r.transito, GENERAL_BODEGA);
       const transOverride = transitoByProduct.get(r.product_id) ?? null;
-      const trans = transOverride ?? transSync;
+      const trans = transOverride ?? r.transito;
       const comercialFila = comercialByProduct.get(r.product_id);
       const adicComercial = comercialFila?.directo ?? 0;
       const adicRevision = comercialFila?.aRevision ?? 0;
@@ -468,12 +455,6 @@ export async function buildRows(
         pending,
         trans: round1(trans),
         transOverridden: transOverride !== null,
-        // W15-A — `destino` es lo declarado (null = sin declarar).
-        // `destinoProvisional` marca las filas donde esa declaración está
-        // cambiando lo que se ve, para poder rotularlas en pantalla: un número
-        // equivocado que nadie ve es un bug; uno rotulado es un instrumento.
-        destino,
-        destinoProvisional: destinoAfectaFila(bodega, destino, GENERAL_BODEGA),
         adic: round1(adic),
         // Las dos fuentes viajan separadas a la pantalla: un aditivo que no
         // dice de dónde salió es un número que nadie puede defender.

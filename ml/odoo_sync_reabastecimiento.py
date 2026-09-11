@@ -910,6 +910,264 @@ def sync_velocity(execute, bodega_codes, wh_ids_by_code, issues, uom_ctx):
     return result
 
 
+# ── Forecast comercial L2 · demand history per commercial channel ────────────
+# Plan: docs/compras/FORECAST_COMERCIAL_L2_BUILD_PLAN_2026-09-10.md (Phase 1)
+# Spec: docs/compras/FORECAST_COMERCIAL_L2_SPEC_RESEARCH_2026-09-10.md
+#
+# The channel leader's form needs, per SKU and for THEIR channel: requested
+# and delivered per complete month, the same month in prior years, and who
+# buys it (customer concentration). None of that existed anywhere — every
+# velocity number in the system is per bodega. This step fills
+# `comercial_demanda_canal` at the grain area x product.
+#
+# Which orders belong to which channel is DATA (`comercial_area_reglas`), not
+# constants: a channel was added three days after the first four were seeded,
+# and Telemarketing appeared in Odoo while this was being designed. Each rule
+# is one Odoo domain on the order's team (optionally restricted to, or
+# excluding, sucursales); an area is the union of its rules.
+#
+# Requested = `product_uom_qty`, delivered = `qty_delivered`, both stored on
+# the line, same ORDERED_STATES as the engine. Measured 2026-09-10: in a closed
+# month the difference is cancelled stock moves — lost sales, not pending —
+# and unmet demand does NOT re-order the next month (median 0.90x). The
+# current month is never included: it is unsettled (37k units still open on
+# Sep 10 vs 690 for August).
+#
+# Odoo cannot read_group sale.order.line by `order_id.team_id` (not stored on
+# the line — measured: "Property name 'team_id' has to be used on a property
+# field"), but it CAN filter by it in the domain, so it is one read_group per
+# rule x month, grouped by product x line-UoM and folded to the stock UoM
+# (the 2026-08-20 bug: raw line quantities mix fardos with loose units).
+
+# How many months around today the prior-year same-months are kept for: the
+# capture horizon is the current month + 2 (lib/comercial/forecast.ts
+# MESES_HORIZONTE), plus one more so the month that opens at the next month
+# change is already there when the hourly run has not caught up.
+HORIZONTE_MESES_ANIO_ANTERIOR = 4
+ANIOS_ANTERIORES = 2
+# Odoo went live in October 2024 (September 2024 has 90 orders — ramp-up).
+# A prior-year month before this has no data and is not a zero.
+PRIMER_MES_ODOO = '2024-10'
+# Customer concentration window: the last N complete months.
+CLIENTES_MESES = 3
+SIN_ASIGNAR = '_sin_asignar'
+
+
+def load_area_reglas(issues):
+    """[{area, odoo_team_id, sucursal_ids, excluir_sucursal_ids}] for ACTIVE
+    areas. Empty -> error issue (nothing can be attributed)."""
+    activas = {a['slug'] for a in
+               sb_get_all('comercial_areas?select=slug,activa&activa=eq.true')}
+    rows = sb_get_all('comercial_area_reglas?select=area,odoo_team_id,sucursal_ids,excluir_sucursal_ids')
+    reglas = [r for r in rows if r['area'] in activas]
+    if not reglas:
+        issues.add('error', 'comercial', 'comercial_area_reglas is empty — no channel demand can be attributed')
+    huerfanas = sorted(activas - {r['area'] for r in reglas})
+    if huerfanas:
+        issues.add('warning', 'comercial',
+                   f'active areas without an Odoo rule (their leaders will see no history): {huerfanas}')
+    return reglas
+
+
+def regla_domain(regla):
+    """Odoo domain (on sale.order.line, via order_id) for one rule."""
+    dom = [['order_id.team_id', '=', regla['odoo_team_id']]]
+    if regla.get('sucursal_ids'):
+        dom.append(['order_id.location_id', 'in', list(regla['sucursal_ids'])])
+    if regla.get('excluir_sucursal_ids'):
+        dom.append(['order_id.location_id', 'not in', list(regla['excluir_sucursal_ids'])])
+    return dom
+
+
+def meses_anio_anterior(today, horizonte=HORIZONTE_MESES_ANIO_ANTERIOR,
+                        anios=ANIOS_ANTERIORES, primer_mes=PRIMER_MES_ODOO):
+    """{horizon month label: [prior-year month labels that exist in Odoo]},
+    horizon = the current month and the next `horizonte`-1. Months before
+    Odoo's first month are omitted, never zero-filled."""
+    out = {}
+    first = today.replace(day=1)
+    for k in range(horizonte):
+        y, m = first.year, first.month + k
+        while m > 12:
+            y += 1
+            m -= 12
+        label = f'{y:04d}-{m:02d}'
+        out[label] = [f'{y - a:04d}-{m:02d}' for a in range(1, anios + 1)
+                      if f'{y - a:04d}-{m:02d}' >= primer_mes]
+    return out
+
+
+def month_bounds(label):
+    """('YYYY-MM-01', 'YYYY-MM+1-01') for a 'YYYY-MM' label."""
+    y, m = int(label[:4]), int(label[5:7])
+    y2, m2 = (y + 1, 1) if m == 12 else (y, m + 1)
+    return f'{y:04d}-{m:02d}-01', f'{y2:04d}-{m2:02d}-01'
+
+
+def concentracion(por_cliente):
+    """{customer name: qty} -> (n customers, top name, top share). Customers
+    with zero or negative folded qty (returns) do not count."""
+    pos = {c: q for c, q in por_cliente.items() if q > 0}
+    if not pos:
+        return 0, None, None
+    total = sum(pos.values())
+    top, qty = max(pos.items(), key=lambda kv: kv[1])
+    return len(pos), top, round(qty / total, 4)
+
+
+def check_particion(por_area_mes, general_mensual, issues):
+    """Σ areas (incl. `_sin_asignar`) per month must equal the General bucket
+    of demanda_mensual (same lines, same states, no warehouse filter). A
+    mismatch means the rules overlap or leak, and every leader would be
+    looking at a different number than Wilmer for the same month."""
+    ok = True
+    for label, total_general in general_mensual.items():
+        suma = sum(por_area_mes.get(area, {}).get(label, 0.0) for area in por_area_mes)
+        if abs(suma - total_general) > max(1.0, abs(total_general) * 1e-4):
+            ok = False
+            issues.add('warning', 'comercial',
+                       f'{label}: channels sum to {suma:.1f} but General demanda_mensual is '
+                       f'{total_general:.1f} — the area rules overlap or leak; do not trust '
+                       f'per-channel history until comercial_area_reglas is fixed')
+    return ok
+
+
+def assemble_demanda_canal(por_area, buckets_labels, anios_anteriores, clientes,
+                           product_map, sync_id, issues):
+    """Rows for comercial_demanda_canal. Explicit zeros for every bucket month;
+    prior-year months only where Odoo has data."""
+    as_of = datetime.now(timezone.utc).isoformat()
+    rows, unmapped = [], set()
+    ly_labels = sorted({m for ms in anios_anteriores.values() for m in ms})
+    for area, por_mes in por_area.items():
+        pids = set()
+        for totals in por_mes.values():
+            pids |= set(totals['pedido']) | set(totals['entregado'])
+        for opid in pids:
+            sb_pid = product_map.get(str(opid))
+            if not sb_pid:
+                unmapped.add(opid)
+                continue
+            ped = {l: round(por_mes.get(l, {}).get('pedido', {}).get(opid, 0.0), 4) for l in buckets_labels}
+            ent = {l: round(por_mes.get(l, {}).get('entregado', {}).get(opid, 0.0), 4) for l in buckets_labels}
+            ly = {l: {'pedido': round(por_mes.get(l, {}).get('pedido', {}).get(opid, 0.0), 4),
+                      'entregado': round(por_mes.get(l, {}).get('entregado', {}).get(opid, 0.0), 4)}
+                  for l in ly_labels if l in por_mes}
+            n, top, share = concentracion(clientes.get(area, {}).get(opid, {}))
+            rows.append({
+                'area': area, 'product_id': sb_pid,
+                'pedido_mensual': ped, 'entregado_mensual': ent,
+                'mismo_mes_anios_anteriores': ly,
+                'clientes_3m': n, 'cliente_principal': (top or '')[:160] or None,
+                'cliente_principal_share': share,
+                'as_of': as_of, 'source_sync_id': sync_id,
+            })
+    if unmapped:
+        issues.add('warning', 'comercial',
+                   f'{len(unmapped)} Odoo products with channel demand have no Supabase products '
+                   f'row — rows skipped (ids sample: {sorted(unmapped)[:10]})')
+    return rows
+
+
+def sync_demanda_canal(execute, issues, uom_ctx, product_map, sync_id, velocity):
+    """Requested/delivered per area x product x month, prior-year same months,
+    customer concentration, and the unassigned bucket. Returns the rows."""
+    today = datetime.now(timezone.utc).date()
+    reglas = load_area_reglas(issues)
+    if not reglas:
+        return []
+    factors, stock_uom = uom_ctx
+    buckets = month_buckets(today)
+    bucket_labels = [b[0] for b in buckets]
+    anios_ant = meses_anio_anterior(today)
+    ly_labels = sorted({m for ms in anios_ant.values() for m in ms})
+    # Every month queried the same way; prior-year months that fall inside the
+    # 6-bucket window are simply read from the buckets (dedupe).
+    meses = sorted(set(bucket_labels) | set(ly_labels))
+    issues.add('info', 'comercial',
+               f'demanda por canal: {len(reglas)} rules over {sorted({r["area"] for r in reglas})}; '
+               f'months {meses[0]}..{meses[-1]} ({len(meses)} distinct); prior-year months per '
+               f'horizon month: {anios_ant}; customers over the last {CLIENTES_MESES} complete months; '
+               f'states={ORDERED_STATES}; quantities folded to the stock UoM')
+
+    base = [['state', 'in', ORDERED_STATES], ['display_type', '=', False]]
+    unconverted_total = 0
+
+    def grouped(domain, qty_key, extra_key=None):
+        nonlocal unconverted_total
+        groupby = ['product_id', 'product_uom'] + ([extra_key] if extra_key else [])
+        groups = execute('sale.order.line', 'read_group', domain, [qty_key], groupby,
+                         lazy=False, limit=200000)
+        totals, unconverted = fold_uom_groups(groups, factors, stock_uom,
+                                              qty_key, 'product_uom', extra_key=extra_key)
+        unconverted_total += unconverted
+        return totals
+
+    # area -> month label -> {'pedido': {opid: qty}, 'entregado': {opid: qty}}
+    por_area = defaultdict(lambda: defaultdict(lambda: {'pedido': defaultdict(float),
+                                                        'entregado': defaultdict(float)}))
+    clientes = defaultdict(lambda: defaultdict(lambda: defaultdict(float)))
+    ventana_clientes = bucket_labels[-CLIENTES_MESES:]
+    c_start, _ = month_bounds(ventana_clientes[0])
+    _, c_end = month_bounds(ventana_clientes[-1])
+
+    for regla in reglas:
+        area = regla['area']
+        rd = regla_domain(regla)
+        for label in meses:
+            s, e = month_bounds(label)
+            dom = base + rd + [['order_id.date_order', '>=', s], ['order_id.date_order', '<', e]]
+            for opid, q in grouped(dom, 'product_uom_qty').items():
+                por_area[area][label]['pedido'][opid] += q
+            for opid, q in grouped(dom, 'qty_delivered').items():
+                por_area[area][label]['entregado'][opid] += q
+        dom_c = base + rd + [['order_id.date_order', '>=', c_start], ['order_id.date_order', '<', c_end]]
+        for (opid, cliente), q in grouped(dom_c, 'product_uom_qty', extra_key='order_partner_id').items():
+            clientes[area][opid][cliente or '?'] += q
+        logger.info('demanda canal %s (team %s): done', area, regla['odoo_team_id'])
+
+    # Demand no rule claims: reported, never dropped. Today that is the
+    # residual `Sales` team and `Point of Sale`; tomorrow, any team someone
+    # creates in Odoo.
+    equipos = sorted({r['odoo_team_id'] for r in reglas})
+    dom_sin = [['order_id.team_id', 'not in', equipos]]
+    for label in bucket_labels:
+        s, e = month_bounds(label)
+        dom = base + dom_sin + [['order_id.date_order', '>=', s], ['order_id.date_order', '<', e]]
+        for opid, q in grouped(dom, 'product_uom_qty').items():
+            por_area[SIN_ASIGNAR][label]['pedido'][opid] += q
+        for opid, q in grouped(dom, 'qty_delivered').items():
+            por_area[SIN_ASIGNAR][label]['entregado'][opid] += q
+    w_start, _ = month_bounds(bucket_labels[0])
+    _, w_end = month_bounds(bucket_labels[-1])
+    equipos_sin = execute('sale.order', 'read_group',
+                          [['state', 'in', ORDERED_STATES], ['team_id', 'not in', equipos],
+                           ['date_order', '>=', w_start], ['date_order', '<', w_end]],
+                          ['id:count'], ['team_id'], lazy=False)
+    total_sin = sum(sum(m['pedido'].values()) for m in por_area[SIN_ASIGNAR].values())
+    issues.add('info', 'comercial',
+               f'unassigned demand over {bucket_labels[0]}..{bucket_labels[-1]}: {total_sin:.0f} units in '
+               f'{sum(g["__count"] for g in equipos_sin)} orders, by team: '
+               + ', '.join(f'{(g["team_id"] or [None, "(none)"])[1]}={g["__count"]}' for g in equipos_sin))
+
+    # Partition self-check against the General bucket of demanda_mensual.
+    por_area_mes = {area: {l: sum(m[l]['pedido'].values()) for l in bucket_labels if l in m}
+                    for area, m in por_area.items()}
+    general = velocity.get(GENERAL_BODEGA, {})
+    general_mensual = {l: sum(v['demanda_mensual'].get(l, 0.0) for v in general.values())
+                       for l in bucket_labels}
+    check_particion(por_area_mes, general_mensual, issues)
+
+    if unconverted_total:
+        issues.add('warning', 'comercial',
+                   f'{unconverted_total} channel sale groups with no resolvable UoM — summed as-is '
+                   f'and reported (never dropped)')
+    rows = assemble_demanda_canal(por_area, bucket_labels, anios_ant, clientes,
+                                  product_map, sync_id, issues)
+    logger.info('demanda canal: %d rows over %d areas', len(rows), len(por_area))
+    return rows
+
+
 SPANISH_MONTHS = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
                   'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
 # Decision 2026-07-29 (Wilmer/David/Jorge): 2023-2025 only — 2021-22 are
@@ -1477,6 +1735,9 @@ def main():
         seasonal = sync_seasonal(execute, sku_to_opid, issues)
         transit, transito_detalle = sync_transit(execute, issues, bodega_codes)
         invoiced, tiendas = sync_invoiced(execute, bodega_codes, issues, uom_ctx)
+        # Forecast comercial L2 — per-channel history. Needs `velocity` for the
+        # partition self-check against General's demanda_mensual.
+        canal_rows = sync_demanda_canal(execute, issues, uom_ctx, product_map, sync_id, velocity)
 
         rows = assemble_inputs(product_map, stock, velocity, transit, seasonal,
                                invoiced, sync_id, issues)
@@ -1506,6 +1767,8 @@ def main():
             'transit_por_bodega': {b: len(v) for b, v in sorted(transit.items())}, 'issues': len(issues.rows),
             'invoiced_rows': sum(1 for r in rows if r['f6'] or r['f3']),
             'tienda_rows': len(tienda_rows),
+            'demanda_canal_rows': len(canal_rows),
+            'demanda_canal_areas': sorted({r['area'] for r in canal_rows}),
             'data_horizon': horizon or None,
         }
         logger.info('assembled: %s', counts)
@@ -1519,6 +1782,8 @@ def main():
                           on_conflict='product_id,bodega')
         sb_insert_batched('invoiced_tiendas', tienda_rows,
                           on_conflict='product_id,tienda')
+        sb_insert_batched('comercial_demanda_canal', canal_rows,
+                          on_conflict='area,product_id')
 
         # A6.15 — la tabla de detalle se REEMPLAZA entera: es un espejo de
         # Odoo, no una captura de nadie. Borrar primero y escribir después es
@@ -1561,6 +1826,22 @@ def main():
             if stale_t:
                 issues.add('info', 'sales',
                            f'{len(stale_t)} filas de tiendas purgadas (sin facturación en esta '
+                           f'corrida — instantáneas viejas no deben sobrevivir)')
+        # Same purge for the per-channel history: a product that stopped selling
+        # in a channel must not keep last month's row forever. Threshold from
+        # THESE rows' own as_of, not `run_start`: the channel step runs before
+        # assemble_inputs, so its timestamps are earlier — measured on the
+        # first live run (2026-09-10): purging on run_start deleted all 3,731
+        # rows the same run had just written.
+        canal_start = min(r['as_of'] for r in canal_rows) if canal_rows else None
+        if canal_start:
+            stale_c = sb_request(
+                'DELETE',
+                f'comercial_demanda_canal?as_of=lt.{urllib.parse.quote(canal_start)}',
+                prefer='return=representation') or []
+            if stale_c:
+                issues.add('info', 'comercial',
+                           f'{len(stale_c)} filas de demanda por canal purgadas (sin ventas en esta '
                            f'corrida — instantáneas viejas no deben sobrevivir)')
         for issue in issues.rows:
             issue['sync_id'] = sync_id

@@ -1,6 +1,6 @@
 /**
  * Bodega display order and labels — shared between VivoClient.tsx (the tab
- * strip, the destino dropdown) and the proof-of-status PDF header, so the
+ * strip) and the proof-of-status PDF header, so the
  * canonical order/labels can't drift between the screen and the printed
  * record. The underlying identifier stays 'San Jose VN' everywhere else
  * (API params, DB, filters, the Carvajal export) — this only changes what a

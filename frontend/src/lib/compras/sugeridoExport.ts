@@ -67,7 +67,6 @@ export interface FilaExport {
   doh: number;
   trans: number;
   transOverridden: boolean;
-  destino: string | null;
   /** null = «¿?», sin dato. NUNCA se escribe como 0 (regla 20260813000001). */
   pending: number | null;
   adic: number;
@@ -265,7 +264,6 @@ export const COLUMNAS_SUGERIDO: readonly {
     // de saberlo.
     valor: (f) => (f.transOverridden ? 'Sí' : ''),
   },
-  { header: 'Destino final', width: 14, type: 'text', valor: (f) => f.destino ?? '' },
   // VACÍO = «¿?», sin dato. Escribirlo como 0 diría que sabemos que no hay
   // nada pendiente de tomar reserva, que es justo lo que no sabemos.
   { header: 'Pend. reserva', width: 13, type: 'number', valor: (f) => f.pending },
@@ -431,11 +429,6 @@ export function construirHojaOrigen(
       '⚠ Bolsas mal medidas',
       'Mario reportó que los códigos de bolsa están mal medidos en Odoo '
       + '(un pedido chico sugiere casi un furgón). La remedición sigue pendiente (O7).',
-    ],
-    [
-      '⚠ Destino final',
-      'Sólo admite UN destino por producto. Un furgón que descarga en varias bodegas '
-      + 'no se puede representar todavía, y ahí el tránsito queda mal.',
     ],
     [null, null],
     [

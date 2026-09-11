@@ -29,8 +29,12 @@ export interface SnapshotFila {
   exist: number; existencias: number; reserved: number; patio: number;
   pending: number | null;
   trans: number; transOverridden: boolean;
-  destino: string | null;
-  destinoProvisional: boolean;
+  /**
+   * «Destino final» (W15-A) se retiró de la página el 2026-09-10. Los snapshots
+   * congelados antes de esa fecha todavía traen estos dos campos; los nuevos no.
+   */
+  destino?: string | null;
+  destinoProvisional?: boolean;
   adic: number; adicComercial: number; sugBodega: number | null;
   transitoDetalle: { fecha: string | null; qty: number; orden: string | null }[];
   p6: number; p3: number; h: number; win: number;

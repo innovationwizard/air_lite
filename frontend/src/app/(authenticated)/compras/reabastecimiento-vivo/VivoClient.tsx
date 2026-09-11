@@ -137,11 +137,6 @@ const COL_TIP = {
     + 'NO cambia el Sugerido — la decisión sigue siendo suya. '
     + 'El mes en curso no cuenta (está incompleto). '
     + '¿? = todavía no se puede evaluar (falta la serie mensual); no significa "sin tendencia".',
-  destino: 'DÓNDE SE QUEDA de verdad este tránsito. Declararlo lo saca de las otras '
-    + 'bodegas y se lo da entera a la que elijas — por eso el Sugerido de las demás sube. '
-    + '⚠️ PROVISIONAL: sólo admite UN destino por producto, así que un furgón que descarga '
-    + 'en varias bodegas NO se puede representar y el número queda mal. Es a propósito: '
-    + 'sirve para acordar cómo debe funcionar de verdad. Vacío = sin declarar.',
   gap: 'Facturado 3m − Ordenado 3m, en % de lo ordenado. '
     + 'Un delta grande no es un error: son perímetros distintos. '
     + 'Lo facturado en tiendas se muestra aparte, abajo, y NUNCA se suma a una bodega.',
@@ -168,10 +163,6 @@ interface ApiRow {
   exist: number; existencias: number; reserved: number; patio: number;
   pending: number | null;
   trans: number; transOverridden: boolean;
-  /** W15-A — destino final declarado a mano (null = sin declarar). */
-  destino: string | null;
-  /** W15-A — esa declaración está cambiando lo que se ve en esta bodega. */
-  destinoProvisional: boolean;
   adic: number; adicComercial: number; sugBodega: number | null;
   /** Proyección comercial a revisión (temporada + crítico) — se muestra, no se suma. */
   adicRevision: number;
@@ -327,20 +318,12 @@ export function VivoClient() {
   }, [bodega, load]);
 
   /**
-   * W15-A — declarar (o borrar) el destino final. Append-only.
-   *
-   * No hay recálculo optimista: mover el tránsito de una bodega a otra cambia
-   * filas de OTRAS vistas, y el cliente sólo tiene la suya. El refetch
-   * silencioso repinta con la verdad del servidor, que es la misma regla que
-   * ya gobierna el clear de tránsito.
-   */
-  /**
    * A4.17 — el pedido adicional que mandó el encargado del CD.
    *
    * Sin recálculo optimista: el aditivo entra al Sugerido por el motor del
    * SERVIDOR, y recalcularlo acá sería la segunda implementación de la fórmula
    * que este módulo existe para evitar. El refetch silencioso repinta con la
-   * verdad del servidor, igual que el clear de tránsito y que el destino.
+   * verdad del servidor, igual que el clear de tránsito.
    */
   const commitSugBodega = useCallback(async (row: ApiRow, qty: number | null) => {
     setSaveError(null);
@@ -358,25 +341,6 @@ export function VivoClient() {
     } catch (e) {
       setSaveError(
         `No se guardó el sugerido de bodega (${row.cod}): ${e instanceof Error ? e.message : e}`);
-      load(bodega, true);
-    }
-  }, [bodega, load]);
-
-  const commitDestino = useCallback(async (row: ApiRow, destino: string | null) => {
-    setSaveError(null);
-    try {
-      const res = await fetch('/api/compras/reabastecimiento/destino', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ productId: row.productId, vistaBodega: bodega, destino }),
-      });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body.error ?? `HTTP ${res.status}`);
-      }
-      load(bodega, true);
-    } catch (e) {
-      setSaveError(`No se guardó el destino de ${row.cod}: ${e instanceof Error ? e.message : e}`);
       load(bodega, true);
     }
   }, [bodega, load]);
@@ -402,12 +366,6 @@ export function VivoClient() {
       setCoberturaGuardando(false);
     }
   }, [bodega, load]);
-
-  /** Bodegas físicas — General es la suma, no un lugar donde algo se quede. */
-  const destinos = useMemo(
-    () => ordenarBodegas((payload?.bodegas ?? []).filter((b) => b !== 'General')),
-    [payload],
-  );
 
   // Grupos de proveedores (2026-09-04) — solo los que tienen al menos una fila
   // visible en ESTA bodega, para no ensuciar el filtro con grupos vacíos acá.
@@ -532,22 +490,7 @@ export function VivoClient() {
             ? () => commitEdit(r, 'transito', null) : undefined}
           clearTip="Quitar captura manual — vuelve al tránsito sincronizado"
         />
-        {r.destinoProvisional && (
-          <span
-            title={`Tránsito provisional — declarado con destino ${r.destino}. `
-              + 'Si el furgón descarga en varias bodegas, este número está mal.'}
-            className="ml-1 text-[10px] font-bold text-indigo-600 cursor-help"
-          >~</span>
-        )}
         <ProximaEntrada detalle={r.transitoDetalle} manual={r.transOverridden} />
-      </td>
-      <td className="px-3 py-2 border-b border-gray-100 text-right">
-        <DestinoSelect
-          value={r.destino}
-          opciones={destinos}
-          label={`Destino final ${r.cod}`}
-          onChange={(d) => commitDestino(r, d)}
-        />
       </td>
       <td className="px-3 py-2 border-b border-gray-100 text-right">
         <QtyInput
@@ -627,7 +570,7 @@ export function VivoClient() {
       </td>
     </tr>
   );
-  }, [commitEdit, commitDestino, commitSugBodega, destinos, areas]);
+  }, [commitEdit, commitSugBodega, areas]);
 
   return (
     <div className="p-6 max-w-[1240px] mx-auto">
@@ -836,7 +779,6 @@ export function VivoClient() {
                         filtroKey="doh" rango={rangos.doh} onRango={onRango}>DOH</Th>
                     <Th tip={COL_TIP.trans} sortKey="trans" orden={orden} onSort={onSort}
                         filtroKey="trans" rango={rangos.trans} onRango={onRango}><span className="inline-flex items-center gap-1">Tránsito <Pencil size={11} /></span></Th>
-                    <Th tip={COL_TIP.destino}><span className="inline-flex items-center gap-1">Destino final <Pencil size={11} /></span></Th>
                     <Th tip={COL_TIP.pend} sortKey="pending" orden={orden} onSort={onSort}
                         filtroKey="pending" rango={rangos.pending} onRango={onRango}><span className="inline-flex items-center gap-1">Pend. reserva <Pencil size={11} /></span></Th>
                     <Th tip={COL_TIP.adic} sortKey="adic" orden={orden} onSort={onSort}
@@ -1233,37 +1175,6 @@ function RangoFiltro({
         </>
       )}
     </span>
-  );
-}
-
-/**
- * W15-A — «Destino final», la sonda deliberada.
- *
- * Sabe que está mal y lo dice: un furgón puede descargar en San José, Zacapa y
- * Petén, y aquí sólo cabe un destino. Se construyó así a propósito (Jorge,
- * Q26, 2026-08-27) para que el límite aparezca en la práctica y podamos
- * diseñar lo correcto sobre algo observado y no sobre una suposición.
- *
- * Vacío = sin declarar, nunca un destino por omisión.
- */
-function DestinoSelect({ value, opciones, label, onChange }: {
-  value: string | null;
-  opciones: string[];
-  label: string;
-  onChange: (destino: string | null) => void;
-}) {
-  return (
-    <select
-      value={value ?? ''}
-      aria-label={label}
-      onChange={(e) => onChange(e.target.value === '' ? null : e.target.value)}
-      className={`text-xs rounded-md border px-1.5 py-1 max-w-[120px] focus:outline-none focus:ring-2 focus:ring-teal-600 ${
-        value ? 'border-indigo-400 text-indigo-800 bg-indigo-50/50' : 'border-gray-200 text-gray-500'
-      }`}
-    >
-      <option value="">— sin declarar —</option>
-      {opciones.map((b) => <option key={b} value={b}>{BODEGA_LABEL[b] ?? b}</option>)}
-    </select>
   );
 }
 

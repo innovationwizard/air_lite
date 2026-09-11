@@ -198,8 +198,8 @@ function FilaBlock({ f }: { f: SnapshotFila }) {
       </Text>
       <Text style={styles.statLine}>
         Sugerido {n(f.sug)} · Adicional {n(f.adic)} (comercial {n(f.adicComercial)}) ·
-        {' '}Sugerido bodega {f.sugBodega === null ? '—' : n(f.sugBodega)} ·
-        {' '}Destino {f.destino ?? 'sin declarar'}{f.destinoProvisional ? ' (provisional)' : ''}
+        {' '}Sugerido bodega {f.sugBodega === null ? '—' : n(f.sugBodega)}
+        {f.destino ? ` · Destino ${f.destino}${f.destinoProvisional ? ' (provisional)' : ''}` : ''}
       </Text>
       <Text style={styles.statLine}>
         Prom. 6m {n(f.p6)} · Prom. 3m {n(f.p3)} · Mismo mes año anterior {n(f.h)} · Ventana {f.win} ·

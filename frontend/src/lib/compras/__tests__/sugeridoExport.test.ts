@@ -17,7 +17,7 @@ function fila(over: Partial<FilaExport> = {}): FilaExport {
   return {
     cod: '77205049', desc: 'BANDEJA TERMICA', prov: 'Carvajal', abc: 'A',
     exist: 100, patio: 0, doh: 2.3, trans: 0, transOverridden: false,
-    destino: null, pending: null, adic: 0, p6: 500, p3: 600,
+    pending: null, adic: 0, p6: 500, p3: 600,
     mtd: 120, mtdRitmo: 640, tendencia: SIN_TENDENCIA, alerta: SIN_ALERTA,
     sugBodega: null, sug: 1000, volM3: 0.0042,
     ...over,
