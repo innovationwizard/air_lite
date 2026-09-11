@@ -240,7 +240,9 @@ it('editar una celda la guarda al salir; un 0 la limpia; pasar sin editar no esc
   await user.type(input, '1800');
   await user.tab();
   await waitFor(() => expect(puts).toHaveLength(1));
-  expect(puts[0].body).toEqual({ month: '2026-10-01', filas: [{ productId: 1, quantity: 1800, motivo: 'base' }] });
+  // 1800 is not the app's 2030: recorded as `ajustado`, so «Modificados» is a fact
+  expect(puts[0].body).toEqual({ month: '2026-10-01', filas: [{ productId: 1, quantity: 1800, motivo: 'ajustado' }] });
+  await waitFor(() => expect(screen.getAllByTestId('motivo-guardado')[0]).toHaveTextContent('ajustado'));
 
   // tab through the next input without touching it: nothing is written
   await user.tab();
@@ -251,7 +253,7 @@ it('editar una celda la guarda al salir; un 0 la limpia; pasar sin editar no esc
   await user.type(otro, '0');
   await user.tab();
   await waitFor(() => expect(puts).toHaveLength(2));
-  expect(puts[1].body.filas).toEqual([{ productId: 2, quantity: 0, motivo: 'base' }]);
+  expect(puts[1].body.filas).toEqual([{ productId: 2, quantity: 0, motivo: 'ajustado' }]);
 });
 
 it('un canal sin historial muestra el formulario y ningún número', async () => {
@@ -414,4 +416,18 @@ describe('«Bloquear cambios»', () => {
     await waitFor(() => expect(bloqueos.some((b) => b.method === 'DELETE' && b.url.includes('area=supermercados') && b.url.includes('month=2026-10-01'))).toBe(true));
     await waitFor(() => expect(screen.queryByTestId('bloqueados')).not.toBeInTheDocument());
   });
+});
+
+it('«Modificados» pregunta al servidor y el aprobado tal cual queda marcado como tal', async () => {
+  const user = await montar();
+  await user.click(screen.getByRole('button', { name: /Aprobar todo \(3\)/ }));
+  await waitFor(() => expect(screen.getByText(/Se guardaron 3 códigos/)).toBeInTheDocument());
+  // approved as-is -> 'tal cual'; the hand-added code keeps its reason
+  const marcas = screen.getAllByTestId('motivo-guardado').map((e) => e.textContent);
+  expect(marcas).toEqual(['tal cual', 'tal cual', 'Compra por temporada']);
+
+  await user.click(screen.getByRole('button', { name: 'Modificados' }));
+  await waitFor(() => expect(gets.some((u) => u.includes('modificados=1'))).toBe(true));
+  expect(screen.getByRole('button', { name: 'Modificados' })).toHaveAttribute('aria-pressed', 'true');
+  expect(screen.getByRole('heading', { name: /para modificados/ })).toBeInTheDocument();
 });

@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { etiquetaMes, type Motivo } from '@/lib/comercial/forecast';
+import { MOTIVOS, esBase, etiquetaMes, type Motivo } from '@/lib/comercial/forecast';
 import type { BloqueoResumen } from './types';
 import {
   ETIQUETA_TEXTO, FALTA_CRITICA, DIVERGENCIA_ANIO_ANTERIOR, TOP_N, type Etiqueta, type Recomendacion,
@@ -51,7 +51,7 @@ export interface Historial {
   totalCanal?: number;
   busqueda?: string | null;
   filtros?: {
-    proveedor: string | null; categoria: string | null;
+    proveedor: string | null; categoria: string | null; modificados?: boolean;
     proveedores: { valor: string; etiqueta: string; grupo: boolean }[];
     categorias: string[];
   };
@@ -142,6 +142,7 @@ export function TablaRecomendacion({ area, mes, soloLectura, onCambio, bloqueo =
   const [edits, setEdits] = useState<Record<number, string>>({});
   // productId -> quantity saved in THIS session (✓), or 0 for cleared.
   const [guardado, setGuardado] = useState<Record<number, number>>({});
+  const [motivoGuardado, setMotivoGuardado] = useState<Record<number, Motivo>>({});
   const [guardando, setGuardando] = useState(false);
   const [aviso, setAviso] = useState<string | null>(null);
   const [ultimaEdicion, setUltimaEdicion] = useState<Date | null>(null);
@@ -170,6 +171,8 @@ export function TablaRecomendacion({ area, mes, soloLectura, onCambio, bloqueo =
   // over the channel's whole history, like the search (Jorge 2026-09-11).
   const [filtroProveedor, setFiltroProveedor] = useState('');
   const [filtroCategoria, setFiltroCategoria] = useState('');
+  // «Modificados»: only rows whose saved number is the leader's own (server-side).
+  const [soloModificados, setSoloModificados] = useState(false);
 
   const cargar = useCallback(async () => {
     setError(null);
@@ -178,6 +181,7 @@ export function TablaRecomendacion({ area, mes, soloLectura, onCambio, bloqueo =
         busquedaServidor ? `&q=${encodeURIComponent(busquedaServidor)}` : '',
         filtroProveedor ? `&proveedor=${encodeURIComponent(filtroProveedor)}` : '',
         filtroCategoria ? `&categoria=${encodeURIComponent(filtroCategoria)}` : '',
+        soloModificados ? '&modificados=1' : '',
       ].join('');
       const r = await fetch(`/api/comercial/historial?area=${encodeURIComponent(area)}&mes=${encodeURIComponent(mes)}${extra}`);
       const j = await r.json();
@@ -186,12 +190,12 @@ export function TablaRecomendacion({ area, mes, soloLectura, onCambio, bloqueo =
     } catch (e) {
       setError(e instanceof Error ? e.message : 'No se pudo cargar el historial');
     }
-  }, [area, mes, busquedaServidor, filtroProveedor, filtroCategoria]);
+  }, [area, mes, busquedaServidor, filtroProveedor, filtroCategoria, soloModificados]);
 
   // A new area or month is a new table: forget edits and ✓s. A search is not.
   useEffect(() => {
-    setH(null); setEdits({}); setGuardado({}); setBusqueda(''); setBusquedaServidor('');
-    setFiltroProveedor(''); setFiltroCategoria('');
+    setH(null); setEdits({}); setGuardado({}); setMotivoGuardado({}); setBusqueda(''); setBusquedaServidor('');
+    setFiltroProveedor(''); setFiltroCategoria(''); setSoloModificados(false);
   }, [area, mes]);
   useEffect(() => { cargar(); }, [cargar]);
   // Search with a brake: the server is asked after the typing pauses.
@@ -208,9 +212,17 @@ export function TablaRecomendacion({ area, mes, soloLectura, onCambio, bloqueo =
     return f.recomendacion ? String(f.recomendacion.valor) : '';
   }, [edits, guardado]);
 
-  /** A code captured by hand keeps its reason; an approved recommendation is `base`. */
-  const motivoDe = (f: FilaHistorial): Motivo =>
-    f.capturado && f.capturado.motivo !== 'base' ? f.capturado.motivo : 'base';
+  /**
+   * The reason a saved row carries. A code added by hand keeps its own
+   * reason. Otherwise: the app's number as-is is `base`; any other number is
+   * `ajustado` — recorded now, so «Modificados» does not depend on where the
+   * recommendation drifts to after the next sync.
+   */
+  const motivoDe = (f: FilaHistorial, q: number): Motivo => {
+    if (f.capturado && !esBase(f.capturado.motivo)) return f.capturado.motivo;
+    if (f.recomendacion === null) return 'ajustado';
+    return q === f.recomendacion.valor ? 'base' : 'ajustado';
+  };
 
   async function enviar(filas: { productId: number; quantity: number; motivo: Motivo }[]) {
     const r = await fetch('/api/comercial/forecast', {
@@ -232,8 +244,9 @@ export function TablaRecomendacion({ area, mes, soloLectura, onCambio, bloqueo =
     if (!(f.productId in edits)) return;
     setGuardando(true); setAviso(null);
     try {
-      await enviar([{ productId: f.productId, quantity: q, motivo: motivoDe(f) }]);
+      await enviar([{ productId: f.productId, quantity: q, motivo: motivoDe(f, q) }]);
       setGuardado((g) => ({ ...g, [f.productId]: q }));
+      setMotivoGuardado((m) => ({ ...m, [f.productId]: motivoDe(f, q) }));
       setEdits((e) => Object.fromEntries(Object.entries(e).filter(([k]) => Number(k) !== f.productId)));
       setUltimaEdicion(new Date());
       onCambio?.();
@@ -249,7 +262,7 @@ export function TablaRecomendacion({ area, mes, soloLectura, onCambio, bloqueo =
     const filas = visibles
       .map((f) => ({ f, texto: valorDe(f).trim() }))
       .filter(({ texto }) => texto !== '' && Number.isFinite(Number(texto)) && Number(texto) > 0)
-      .map(({ f, texto }) => ({ productId: f.productId, quantity: Number(texto), motivo: motivoDe(f) }));
+      .map(({ f, texto }) => ({ productId: f.productId, quantity: Number(texto), motivo: motivoDe(f, Number(texto)) }));
     if (filas.length === 0) { setAviso('No hay nada que aprobar'); return; }
     setGuardando(true); setAviso(null);
     try {
@@ -257,6 +270,11 @@ export function TablaRecomendacion({ area, mes, soloLectura, onCambio, bloqueo =
       setGuardado((g) => {
         const nuevo = { ...g };
         for (const x of filas) nuevo[x.productId] = x.quantity;
+        return nuevo;
+      });
+      setMotivoGuardado((m) => {
+        const nuevo = { ...m };
+        for (const x of filas) nuevo[x.productId] = x.motivo;
         return nuevo;
       });
       setEdits({});
@@ -319,11 +337,12 @@ export function TablaRecomendacion({ area, mes, soloLectura, onCambio, bloqueo =
 
   if (error) return <div className="text-sm text-red-700">{error}</div>;
   if (!h) return <div className="text-sm text-gray-500">Cargando el historial del canal…</div>;
-  const buscando = !!h.busqueda || !!filtroProveedor || !!filtroCategoria;
+  const buscando = !!h.busqueda || !!filtroProveedor || !!filtroCategoria || soloModificados;
   const filtroTexto = [
     h.busqueda ? `«${h.busqueda}»` : '',
     filtroProveedor ? (h.filtros?.proveedores.find((p) => p.valor === filtroProveedor)?.etiqueta ?? '') : '',
     filtroCategoria || '',
+    soloModificados ? 'modificados' : '',
   ].filter(Boolean).join(' · ');
 
   if (!h.historialDisponible) {
@@ -487,11 +506,23 @@ export function TablaRecomendacion({ area, mes, soloLectura, onCambio, bloqueo =
               </button>
             ))}
         </div>
+        {!soloLectura && (
+          <button
+            type="button" onClick={() => setSoloModificados((v) => !v)} aria-pressed={soloModificados}
+            title="Sólo los códigos cuyo número es tuyo: recomendaciones que cambiaste y códigos agregados a mano. Lo aprobado tal cual no aparece."
+            className={`px-2.5 py-1 text-xs rounded-full border ${
+              soloModificados ? 'bg-amber-800 text-white border-amber-800' : 'bg-white text-amber-800 border-amber-300 hover:bg-amber-50'}`}
+          >
+            Modificados
+          </button>
+        )}
         {visibles.length === 0 && (
           <span className="text-xs text-gray-500" data-testid="sin-resultados">
-            {buscando
-              ? 'Ningún código de tu canal coincide. Si es un producto que tu canal nunca pidió, agregalo abajo.'
-              : 'Ninguna fila con ese filtro.'}
+            {soloModificados && !h.busqueda && !filtroProveedor && !filtroCategoria
+              ? 'Todavía no modificaste ningún número: todo lo cargado es la recomendación tal cual.'
+              : buscando
+                ? 'Ningún código de tu canal coincide. Si es un producto que tu canal nunca pidió, agregalo abajo.'
+                : 'Ninguna fila con ese filtro.'}
           </span>
         )}
       </div>
@@ -659,6 +690,17 @@ export function TablaRecomendacion({ area, mes, soloLectura, onCambio, bloqueo =
                       <span className="inline-block w-4 ml-1 text-emerald-700" aria-label={ok ? 'guardado' : undefined}>
                         {ok ? '✓' : (f.capturado ? <span className="text-gray-300" title="Ya cargado antes">·</span> : '')}
                       </span>
+                      {(() => {
+                        const m = motivoGuardado[f.productId] ?? f.capturado?.motivo;
+                        if (!m || (f.productId in guardado && guardado[f.productId] === 0)) return null;
+                        return (
+                          <span className={`block text-[10px] ${m === 'base' ? 'text-gray-400' : 'text-amber-800'}`}
+                                data-testid="motivo-guardado">
+                            {m === 'base' ? 'tal cual' : m === 'ajustado' ? 'ajustado'
+                              : (MOTIVOS.find((x) => x.valor === m)?.etiqueta ?? m)}
+                          </span>
+                        );
+                      })()}
                     </td>
                   )}
                 </tr>

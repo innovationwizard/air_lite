@@ -19,7 +19,7 @@
  * sólo cuando su suma supera la proyección de compras. Fundirlos con el primero
  * borraría la única distinción que la reunión mensual necesita.
  */
-export type Motivo = 'extraordinaria' | 'temporada' | 'critico' | 'base';
+export type Motivo = 'extraordinaria' | 'temporada' | 'critico' | 'base' | 'ajustado';
 
 /**
  * `base` (Level 2, 2026-09-10) is the APPROVED RECOMMENDATION: the leader
@@ -54,13 +54,29 @@ export const MOTIVOS: { valor: Motivo; etiqueta: string; ayuda: string; manual: 
     ayuda: 'No entra sola al pedido; se compara en la reunión.',
     manual: false,
   },
+  {
+    // 2026-09-11: recorded at save time when the quantity differs from the
+    // recommendation, so «Modificados» is a fact, not a live comparison.
+    valor: 'ajustado',
+    etiqueta: 'Recomendación ajustada',
+    ayuda: 'El canal cambió el número de la app. No entra sola al pedido; se compara en la reunión.',
+    manual: false,
+  },
 ];
 
 export const MOTIVOS_VALIDOS: Motivo[] = MOTIVOS.map((m) => m.valor);
 
-/** An approved recommendation: shown beside the others, summed into nothing. */
+/**
+ * An approved (`base`) or adjusted (`ajustado`) recommendation: the leader's
+ * number over the app's baseline. Shown beside the others, summed into nothing.
+ */
 export function esBase(m: Motivo): boolean {
-  return m === 'base';
+  return m === 'base' || m === 'ajustado';
+}
+
+/** The leader's number is their own, not the app's as-is: everything but `base`. */
+export function esModificado(m: Motivo): boolean {
+  return m !== 'base';
 }
 
 /** Suma directo al pedido, sin pasar por la reunión. */

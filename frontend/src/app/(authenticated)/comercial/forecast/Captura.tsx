@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { MOTIVOS, MAX_CODIGOS_POR_MES, etiquetaMes, type Motivo } from '@/lib/comercial/forecast';
+import { MOTIVOS, MAX_CODIGOS_POR_MES, esBase, etiquetaMes, type Motivo } from '@/lib/comercial/forecast';
 import type { Datos, Producto } from './types';
 
 /**
@@ -25,7 +25,7 @@ export function Captura({ datos, mes, onCambio, bloqueado = false }: {
 
   // Only what was added BY HAND: the approved recommendations (`base`) live
   // in the table above, and the 50-code cap counts manual codes only (Q3).
-  const mias = datos.filas.filter((f) => f.month === mes && f.motivo !== 'base');
+  const mias = datos.filas.filter((f) => f.month === mes && !esBase(f.motivo));
   const nombre = (id: number) => datos.productos.find((p) => p.id === id);
 
   // Búsqueda con freno: no una petición por tecla.

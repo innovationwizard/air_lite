@@ -3,7 +3,7 @@ import { requireAuth } from '@/lib/auth/server';
 import { CAN_VIEW_FORECAST_COMERCIAL } from '@/lib/auth/roles';
 import { createServiceRoleClient } from '@/lib/supabase/server';
 import { fetchAll } from '@/lib/supabase/paginado';
-import { mesDentroDelHorizonte, mesPorDefecto, mesesAbiertos } from '@/lib/comercial/forecast';
+import { esModificado, mesDentroDelHorizonte, mesPorDefecto, mesesAbiertos } from '@/lib/comercial/forecast';
 import { TOP_N, bodegaQueSirve } from '@/lib/comercial/recomendacion';
 import { cargarContexto, cargarDemanda, cargarForecastCompras, computarFilas, type CapturaRow } from './lib';
 
@@ -97,8 +97,13 @@ export async function GET(request: Request) {
   // a filter never hides the other filter's choices.
   const proveedor = url.searchParams.get('proveedor') ?? '';
   const categoria = url.searchParams.get('categoria') ?? '';
+  // `modificados=1`: only rows whose saved number is the leader's own — an
+  // adjusted recommendation or a hand-added code — never one approved as-is.
+  // A fact recorded at save time (motivo), not a live comparison.
+  const modificados = url.searchParams.get('modificados') === '1';
   const filas = todas.filter((f) =>
-    (!q || normalizar(f.sku).includes(q) || normalizar(f.nombre).includes(q))
+    (!modificados || (f.capturado !== null && esModificado(f.capturado.motivo)))
+    && (!q || normalizar(f.sku).includes(q) || normalizar(f.nombre).includes(q))
     && (!proveedor || (proveedor.startsWith('group:')
       ? f.proveedor.grupoId === proveedor.slice('group:'.length)
       : String(f.proveedor.id) === proveedor.replace(/^sup:/, '')))
@@ -115,7 +120,7 @@ export async function GET(request: Request) {
   return NextResponse.json({
     ...meta, historialDisponible: true, asOf, busqueda: q || null,
     filtros: {
-      proveedor: proveedor || null, categoria: categoria || null,
+      proveedor: proveedor || null, categoria: categoria || null, modificados,
       proveedores: [
         ...[...grupos].sort(porNombre).map(([id, nombre]) => ({ valor: `group:${id}`, etiqueta: nombre, grupo: true })),
         ...[...proveedores].sort(porNombre).map(([id, nombre]) => ({ valor: `sup:${id}`, etiqueta: nombre, grupo: false })),

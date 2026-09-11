@@ -1,5 +1,5 @@
 import {
-  sumaDirecto, esBase, MOTIVOS, MOTIVOS_VALIDOS, mesesAbiertos, mesDentroDelHorizonte,
+  sumaDirecto, esBase, esModificado, MOTIVOS, MOTIVOS_VALIDOS, mesesAbiertos, mesDentroDelHorizonte,
   primerDiaMes, etiquetaMes, cicloDelMes, mesPorDefecto, estadoCiclo, consolidar,
   MAX_CODIGOS_POR_MES, type FilaForecast,
 } from '../forecast';
@@ -21,6 +21,15 @@ describe('motivos', () => {
     // The capture form's radio never offers it: the table writes it.
     expect(MOTIVOS.filter((m) => m.manual).map((m) => m.valor))
       .toEqual(['extraordinaria', 'temporada', 'critico']);
+  });
+
+  it('ajustado es la recomendacion cambiada por el canal: inerte como base, y «modificado»', () => {
+    expect(MOTIVOS_VALIDOS).toContain('ajustado');
+    expect(sumaDirecto('ajustado')).toBe(false);
+    expect(esBase('ajustado')).toBe(true);
+    expect(esModificado('base')).toBe(false);
+    expect(esModificado('ajustado')).toBe(true);
+    expect(esModificado('temporada')).toBe(true);
   });
 });
 
