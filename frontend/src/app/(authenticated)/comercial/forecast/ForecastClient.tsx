@@ -68,7 +68,9 @@ export function ForecastClient() {
       {mes && <BannerCiclo mes={mes} />}
 
       <div className="flex flex-wrap gap-2">
-        {d.mesesAbiertos.map((m) => (
+        {/* Readers also get the month that just closed: that is where
+            «qué pidió cada canal contra qué vendió» gets answered. */}
+        {(capturando ? d.mesesAbiertos : (d.mesesVista ?? d.mesesAbiertos)).map((m) => (
           <button
             key={m}
             onClick={() => setMes(m)}
@@ -76,7 +78,7 @@ export function ForecastClient() {
               mes === m ? 'bg-gray-900 text-white border-gray-900'
                         : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'}`}
           >
-            {etiquetaMes(m)}
+            {etiquetaMes(m)}{m === d.mesCerrado ? ' · cerrado' : ''}
           </button>
         ))}
       </div>
@@ -101,7 +103,10 @@ export function ForecastClient() {
                 {d.areas.map((a) => <option key={a.slug} value={a.slug}>{a.nombre}</option>)}
               </select>
             </label>
-            {areaVista && <TablaRecomendacion area={areaVista} mes={mes} soloLectura />}
+            {areaVista && d.mesesAbiertos.includes(mes) && <TablaRecomendacion area={areaVista} mes={mes} soloLectura />}
+            {areaVista && !d.mesesAbiertos.includes(mes) && (
+              <p className="text-xs text-gray-500">La tabla por canal es para los meses abiertos; para un mes cerrado, el consolidado de arriba muestra lo capturado contra lo real.</p>
+            )}
           </section>
         </>
       )}

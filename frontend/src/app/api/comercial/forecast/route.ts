@@ -3,9 +3,10 @@ import { requireAuth } from '@/lib/auth/server';
 import { CAN_VIEW_FORECAST_COMERCIAL, CAN_CAPTURE_FORECAST, isAuthorized } from '@/lib/auth/roles';
 import { createServiceRoleClient } from '@/lib/supabase/server';
 import {
-  MAX_CODIGOS_POR_MES, MOTIVOS_VALIDOS, esBase, mesDentroDelHorizonte, mesesAbiertos,
+  MAX_CODIGOS_POR_MES, MOTIVOS_VALIDOS, esBase, mesDentroDelHorizonte, mesesAbiertos, primerDiaMes,
   type Motivo,
 } from '@/lib/comercial/forecast';
+import { cargarContexto, cargarDemanda, computarFilas, mesAnterior, type CapturaRow } from '../historial/lib';
 
 export const dynamic = 'force-dynamic';
 
@@ -86,15 +87,75 @@ export async function GET() {
         .select('product_id, p3').eq('bodega', 'General').in('product_id', ids)).data ?? []
     : [];
 
-  return NextResponse.json({
+  const hoy = new Date();
+  const base = {
     filas: filas ?? [],
     productos,
     proyeccion,
     areas: areas ?? [],
     miArea: auth.area,
     puedeCapturar: isAuthorized(auth.role, CAN_CAPTURE_FORECAST),
-    mesesAbiertos: mesesAbiertos(new Date()),
-  });
+    mesesAbiertos: mesesAbiertos(hoy),
+  };
+  if (soloMias) return NextResponse.json(base);
+
+  // NIVEL 2 — what the consolidated view needs beside each capture: the
+  // app's recommendation per area for the same product and month, the real
+  // requested/delivered once a month has closed, and the demand no channel
+  // owns. Computed with the same lib the leader's table uses, so the two
+  // screens cannot disagree about a number.
+  const consolidado = await contextoConsolidado(db, ids, hoy);
+  return NextResponse.json({ ...base, ...consolidado });
+}
+
+/**
+ * For every active area: recommendation per (month, product) for the months
+ * the readers can look at, and the real series per product; plus the
+ * unassigned bucket totals per month. Restricted to the captured products,
+ * which is all the consolidated table shows.
+ */
+async function contextoConsolidado(
+  db: ReturnType<typeof createServiceRoleClient>, productIds: number[], hoy: Date,
+) {
+  // The closed previous month is viewable too: that is where "what did the
+  // channel forecast vs what really happened" gets answered.
+  const mesCerrado = mesAnterior(primerDiaMes(hoy));
+  const mesesVista = [mesCerrado, ...mesesAbiertos(hoy)];
+  const recomendaciones: Record<string, Record<string, Record<number, number>>> = {};
+  const reales: Record<string, Record<number, Record<string, { pedido: number; entregado: number }>>> = {};
+  const sinAsignar: Record<string, number> = {};
+  if (productIds.length === 0) return { mesesVista, mesCerrado, recomendaciones, reales, sinAsignar };
+
+  const ctx = await cargarContexto(db);
+  const quiero = new Set(productIds);
+  const areas = [...ctx.areas.values()];
+  const demandas = await Promise.all(areas.map((a) => cargarDemanda(db, a.slug)));
+  for (let i = 0; i < areas.length; i++) {
+    const a = areas[i];
+    const demanda = demandas[i].filter((d) => quiero.has(d.product_id));
+    const capturas: CapturaRow[] = [];   // recommendations do not depend on captures
+    recomendaciones[a.slug] = {};
+    reales[a.slug] = {};
+    for (const d of demanda) {
+      const serie: Record<string, { pedido: number; entregado: number }> = {};
+      for (const m of Object.keys(d.pedido_mensual)) {
+        serie[m] = { pedido: Number(d.pedido_mensual[m] ?? 0), entregado: Number(d.entregado_mensual[m] ?? 0) };
+      }
+      reales[a.slug][d.product_id] = serie;
+    }
+    for (const mes of mesesVista) {
+      const porProducto: Record<number, number> = {};
+      for (const f of computarFilas(ctx, a, demanda, capturas, mes, hoy)) {
+        if (f.recomendacion) porProducto[f.productId] = f.recomendacion.valor;
+      }
+      recomendaciones[a.slug][mes] = porProducto;
+    }
+  }
+  // Demand no rule claims (`_sin_asignar` is inactive, so it is not in ctx.areas).
+  for (const d of await cargarDemanda(db, '_sin_asignar')) {
+    for (const [m, q] of Object.entries(d.pedido_mensual)) sinAsignar[m] = (sinAsignar[m] ?? 0) + Number(q);
+  }
+  return { mesesVista, mesCerrado, recomendaciones, reales, sinAsignar };
 }
 
 interface FilaEntrada { productId: number; quantity: number; motivo: Motivo; note: string | null }

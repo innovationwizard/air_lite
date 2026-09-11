@@ -14,4 +14,13 @@ export interface Datos {
   miArea: string | null;
   puedeCapturar: boolean;
   mesesAbiertos: string[];
+  /** Readers only (nivel 2): the closed previous month + the open ones. */
+  mesesVista?: string[];
+  mesCerrado?: string;
+  /** area -> month ('YYYY-MM-01') -> productId -> recommended qty. */
+  recomendaciones?: Record<string, Record<string, Record<number, number>>>;
+  /** area -> productId -> 'YYYY-MM' -> real requested / delivered. */
+  reales?: Record<string, Record<number, Record<string, { pedido: number; entregado: number }>>>;
+  /** 'YYYY-MM' -> units requested by teams no channel owns. */
+  sinAsignar?: Record<string, number>;
 }
