@@ -39,7 +39,7 @@ it('headers carry the real month labels and the three months go out expanded', (
     'Jun 2026 pedido', 'Jun 2026 entregado', 'Jun 2026 falta', 'Ago 2026 falta',
     'Faltó entregar 3 m', 'Faltante crítico', 'Pedido Oct 2025', 'Pedido Oct 2024',
     'Compra planificada (Compras)', 'Proyección Compras', 'Recomendación', 'Rango desde', 'Rango hasta',
-    'Mi forecast', 'Estado', 'Fuera de pantalla',
+    'Voy a pedir', 'Estado', 'Fuera de pantalla',
   ]));
 });
 
@@ -54,13 +54,13 @@ it('values land under the right headers', () => {
   expect(v('% cliente principal')).toBe(52);
   expect(v('Compra planificada (Compras)')).toBe(0);
   expect(v('Factor aplicado')).toBe('Sí');
-  expect(v('Mi forecast')).toBe(2030);
+  expect(v('Voy a pedir')).toBe(2030);
 });
 
 it('estado says what the saved row is', () => {
-  expect(estadoFila({ motivoGuardado: null, miForecast: 2030 })).toBe('sin cargar');
-  expect(estadoFila({ motivoGuardado: 'base', miForecast: 2030 })).toBe('aprobado tal cual');
-  expect(estadoFila({ motivoGuardado: 'ajustado', miForecast: 1800 })).toBe('ajustado');
+  expect(estadoFila({ motivoGuardado: null, miForecast: null })).toBe('sugerido, no elegido');
+  expect(estadoFila({ motivoGuardado: 'base', miForecast: 2030 })).toBe('voy a pedir lo sugerido');
+  expect(estadoFila({ motivoGuardado: 'ajustado', miForecast: 1800 })).toBe('voy a pedir otra cantidad');
   expect(estadoFila({ motivoGuardado: 'temporada', miForecast: 500 })).toBe('Compra por temporada');
 });
 
@@ -73,7 +73,7 @@ it('the Origen sheet explains the file, including lock and filters', () => {
   const texto = hoja.rows.map((r) => r.join(' | ')).join('\n');
   expect(texto).toMatch(/Canal \| Supermercados/);
   expect(texto).toMatch(/Mes del forecast \| Octubre 2026/);
-  expect(texto).toMatch(/Bloqueado el .* por Ana <ana@x> \(versión 2\)/);
+  expect(texto).toMatch(/Pedido \| Bloqueado el .* por Ana <ana@x> \(versión 2\); sin aprobar, Compras no lo ve/);
   expect(texto).toMatch(/Búsqueda: «vaso»/);
   expect(texto).toMatch(/Sólo modificados/);
   expect(texto).toMatch(/Filas guardadas fuera de pantalla \| 4/);

@@ -139,6 +139,27 @@ describe('consolidarComercial', () => {
     });
   });
 
+  it('solo los canales que APROBARON su pedido llegan a la pantalla de Wilmer', () => {
+    // «Aprobar pedido» (2026-09-11): bloquear guarda, aprobar envia. Un canal
+    // en borrador o bloqueado sin aprobar es invisible aca, aunque tenga filas.
+    const filas = [
+      fila({ product_id: 30, quantity: 100, motivo: 'extraordinaria', area: 'mayoreo' }),
+      fila({ product_id: 30, quantity: 50, motivo: 'extraordinaria', area: 'tiendas' }),
+    ];
+    const conGate = consolidarComercial(filas, 'San Jose VN', new Map(), new Set(['mayoreo']));
+    expect(conGate.get(30)?.directo).toBe(100);
+    expect(conGate.get(30)?.porArea).toEqual({ mayoreo: { directo: 100, aRevision: 0, base: 0 } });
+    // the gate applies to the CHILD area, before the roll-up into its parent
+    const hijos = consolidarComercial(
+      [fila({ product_id: 31, quantity: 10, motivo: 'extraordinaria', area: 'institucional_ortiz' }),
+       fila({ product_id: 31, quantity: 20, motivo: 'extraordinaria', area: 'institucional_cerezo' })],
+      'San Jose VN', new Map([['institucional_ortiz', 'institucional'], ['institucional_cerezo', 'institucional']]),
+      new Set(['institucional_ortiz']));
+    expect(hijos.get(31)?.porArea).toEqual({ institucional: { directo: 10, aRevision: 0, base: 0 } });
+    // no gate (null) = the old behaviour, so the merge tests above stay meaningful
+    expect(consolidarComercial(filas, 'San Jose VN').get(30)?.directo).toBe(150);
+  });
+
   it('sin capturas no devuelve nada, y el aditivo cae a cero', () => {
     // Con cero filas el Sugerido tiene que valer exactamente lo que valia
     // antes de que existiera el modulo.

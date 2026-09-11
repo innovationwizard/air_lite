@@ -7,16 +7,26 @@ import { etiquetaMes } from '@/lib/comercial/forecast';
  * route (which must refuse writes while a lock is active).
  */
 
-export interface BloqueoResumen { version: number; autor: string; at: string }
+export interface BloqueoResumen {
+  version: number; autor: string; at: string;
+  /** «Aprobar pedido»: when/who sent it to Compras. null = locked, not sent. */
+  aprobadoAt: string | null; aprobadoAutor: string | null;
+}
+
+export function resumen(row: { version: number; autor: string; created_at: string;
+                               aprobado_at?: string | null; aprobado_autor?: string | null }): BloqueoResumen {
+  return { version: row.version, autor: row.autor, at: row.created_at,
+           aprobadoAt: row.aprobado_at ?? null, aprobadoAutor: row.aprobado_autor ?? null };
+}
 
 export async function bloqueoActivo(
   db: SupabaseClient, area: string, month: string,
-): Promise<BloqueoResumen | null> {
+): Promise<(BloqueoResumen & { id: string }) | null> {
   const { data } = await db.from('comercial_forecast_bloqueos')
-    .select('version, autor, created_at')
+    .select('id, version, autor, created_at, aprobado_at, aprobado_autor')
     .eq('area', area).eq('month', month).eq('activo', true)
     .maybeSingle();
-  return data ? { version: data.version, autor: data.autor, at: data.created_at } : null;
+  return data ? { id: data.id, ...resumen(data) } : null;
 }
 
 export function mensajeBloqueado(lock: BloqueoResumen, month: string): string {

@@ -80,6 +80,19 @@ it('el mes cerrado está en los botones y muestra lo capturado contra lo real', 
   expect(within(may).queryByTestId('recomendado')).not.toBeInTheDocument();
 });
 
+it('cada canal dice si está en borrador, bloqueado o aprobado', async () => {
+  global.fetch = jest.fn(async () => ({ ok: true, json: async () => ({
+    ...DATOS, bloqueos: {
+      'supermercados|2026-10-01': { version: 1, autor: 'Ana <ana@x>', at: '2026-09-11T20:15:00Z', aprobadoAt: null, aprobadoAutor: null },
+      'tiendas|2026-10-01': { version: 2, autor: 'Olga <o@x>', at: '2026-09-11T20:15:00Z', aprobadoAt: '2026-09-11T21:00:00Z', aprobadoAutor: 'Olga <o@x>' },
+    },
+  }) })) as unknown as typeof fetch;
+  await montar();
+  expect(screen.getByTestId('estado-mayoreo')).toHaveTextContent('borrador');
+  expect(screen.getByTestId('estado-supermercados')).toHaveTextContent('bloqueado');
+  expect(screen.getByTestId('estado-tiendas')).toHaveTextContent('aprobado');
+});
+
 it('al pie se ve la demanda que ningún canal tiene asignada', async () => {
   await montar();
   expect(screen.getByTestId('sin-asignar')).toHaveTextContent('Sin canal asignado: 12,131 unidades pedidas en 6 meses (2026-03 a 2026-08).');
@@ -106,7 +119,7 @@ describe('Institucional por vendedor (2026-09-11)', () => {
   it('para compras/gerencia: una columna Institucional que suma, con cada vendedor adentro', async () => {
     global.fetch = jest.fn(async () => ({ ok: true, json: async () => ({
       ...DATOS, areas: AREAS, filas: FILAS, recomendaciones: REC,
-      bloqueos: { 'institucional_cerezo|2026-10-01': { version: 1, autor: 'Lucrecia <l@x>', at: '2026-09-11T20:15:00Z' } },
+      bloqueos: { 'institucional_cerezo|2026-10-01': { version: 1, autor: 'Lucrecia <l@x>', at: '2026-09-11T20:15:00Z', aprobadoAt: null, aprobadoAutor: null } },
     }) })) as unknown as typeof fetch;
     render(<ForecastClient />);
     await waitFor(() => expect(screen.getByText('77205049')).toBeInTheDocument());
@@ -135,7 +148,7 @@ describe('Institucional por vendedor (2026-09-11)', () => {
     expect(screen.getByTestId('th-total-canal')).toBeInTheDocument();
     expect(screen.getByTestId('total-canal')).toHaveTextContent('200');
     expect(screen.queryByTestId('celda-mayoreo')).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /Aprobar todo|Bloquear cambios/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Tomar las|Bloquear cambios/ })).not.toBeInTheDocument();
     // the selector offers only the sellers
     const opciones = within(screen.getByRole('combobox')).getAllByRole('option').map((o) => o.textContent);
     expect(opciones).toEqual(['—', 'Institucional · Alejandra Ortiz', 'Institucional · Lucrecia Cerezo']);

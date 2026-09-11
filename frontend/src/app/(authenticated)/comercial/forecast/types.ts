@@ -1,6 +1,10 @@
 import type { Motivo } from '@/lib/comercial/forecast';
 
-export interface BloqueoResumen { version: number; autor: string; at: string }
+export interface BloqueoResumen {
+  version: number; autor: string; at: string;
+  /** «Aprobar pedido»: sent to Compras. null = locked, not sent. */
+  aprobadoAt: string | null; aprobadoAutor: string | null;
+}
 
 /** The shape of GET /api/comercial/forecast, shared by the three views. */
 export interface Producto { id: number; sku: string; name: string; stock_uom?: string }

@@ -8,7 +8,7 @@ import {
 } from '@/lib/comercial/forecast';
 import { cargarContexto, cargarDemanda, computarFilas, esPadre, mesAnterior, type CapturaRow } from '../historial/lib';
 import { areaPermitida } from '@/lib/comercial/permisos';
-import { bloqueoActivo, mensajeBloqueado, type BloqueoResumen } from '../bloqueo/lib';
+import { bloqueoActivo, mensajeBloqueado, resumen, type BloqueoResumen } from '../bloqueo/lib';
 import { CAN_DESBLOQUEAR_FORECAST } from '@/lib/auth/roles';
 
 export const dynamic = 'force-dynamic';
@@ -79,13 +79,11 @@ export async function GET() {
   // the readers. Keyed `area|month` so the screen can tell locked from open.
   const { data: locks } = misAreas
     ? await db.from('comercial_forecast_bloqueos')
-        .select('area, month, version, autor, created_at').eq('activo', true).in('area', misAreas)
+        .select('area, month, version, autor, created_at, aprobado_at, aprobado_autor').eq('activo', true).in('area', misAreas)
     : await db.from('comercial_forecast_bloqueos')
-        .select('area, month, version, autor, created_at').eq('activo', true);
+        .select('area, month, version, autor, created_at, aprobado_at, aprobado_autor').eq('activo', true);
   const bloqueos: Record<string, BloqueoResumen> = {};
-  for (const l of locks ?? []) {
-    bloqueos[`${l.area}|${l.month}`] = { version: l.version, autor: l.autor, at: l.created_at };
-  }
+  for (const l of locks ?? []) bloqueos[`${l.area}|${l.month}`] = resumen(l);
   const base = {
     filas: filas ?? [],
     productos,

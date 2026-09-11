@@ -228,10 +228,19 @@ export function consolidarComercial(
    * for the comercial screens, not the purchase table.
    */
   padreDe: ReadonlyMap<string, string> = new Map(),
+  /**
+   * Areas whose forecast was APPROVED («Aprobar pedido», 2026-09-11) for this
+   * month. null = no gate (the pre-approval behaviour, kept for the tests
+   * that pin the merge itself). With a set, a row of an area not in it is
+   * a draft — visible on the comercial screens, invisible here: nothing
+   * reaches purchasing until the channel says so.
+   */
+  aprobadas: ReadonlySet<string> | null = null,
 ): Map<number, AporteComercial> {
   const porProducto = new Map<number, AporteComercial>();
   for (const c of filas) {
     if (c.bodega !== null && c.bodega !== bodega) continue;
+    if (aprobadas !== null && !aprobadas.has(c.area)) continue;
     const area = padreDe.get(c.area) ?? c.area;
     const acc = porProducto.get(c.product_id)
       ?? { directo: 0, aRevision: 0, base: 0, porArea: {} as AporteComercial['porArea'] };
@@ -278,7 +287,7 @@ export async function buildRows(
     // solo lugar para que ambas no puedan discrepar.
     const monthStart = mesPorDefecto(new Date());
 
-    const [inputs, products, links, suppliers, transitoOv, pendingOv, comercial, sugBodegaOv, detalleTr, cobertura,
+    const [inputs, products, links, suppliers, transitoOv, pendingOv, comercial, aprobaciones, sugBodegaOv, detalleTr, cobertura,
            supplierGroups, supplierGroupMembers, areasCom] =
       await Promise.all([
         // El desempate por columna única de cada consulta NO ES OPCIONAL —
@@ -310,6 +319,10 @@ export async function buildRows(
             .eq('month', monthStart)
             .order('created_at', { ascending: false }),
           { columna: 'id', ascending: false }),
+        // «Aprobar pedido» (2026-09-11): which areas SENT their forecast for
+        // this month. An active lock with aprobado_at; nothing else counts.
+        service.from('comercial_forecast_bloqueos').select('area')
+          .eq('month', monthStart).eq('activo', true).not('aprobado_at', 'is', null),
         // A4.17 — el pedido adicional del encargado del CD, por bodega.
         // Append-only; `qty` NULL es un borrado, igual que en tránsito.
         fetchAll<OverrideRow>(() =>
@@ -388,7 +401,9 @@ export async function buildRows(
     const pendingByProduct = latest(pendingOv);
     // Suma de los seis canales, y sólo lo que es compromiso — ver
     // `consolidarComercial` arriba.
-    const comercialByProduct = consolidarComercial(comercial, bodega, padreDe);
+    const areasAprobadas = new Set(
+      ((aprobaciones?.data as { area: string }[] | null) ?? []).map((a) => a.area));
+    const comercialByProduct = consolidarComercial(comercial, bodega, padreDe, areasAprobadas);
 
     let maxAsOf = '';
     const rows = inputs.map((r) => {

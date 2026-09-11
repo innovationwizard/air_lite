@@ -18,9 +18,11 @@ export const dynamic = 'force-dynamic';
 /**
  * «Bloquear cambios» (PM, 2026-09-11).
  *
- *   GET    ?area=&month=   the active lock, if any
- *   POST   { month, area? } freeze the area's forecast for the month
- *   DELETE ?area=&month=   unlock (sales_manager / admin / superuser)
+ *   GET    ?area=&month=   the active lock, if any (with its approval)
+ *   POST   { month, area? } «Bloquear cambios»: freeze and store — NOT sent
+ *   PATCH  { month, area? } «Aprobar pedido»: send the frozen record to Compras
+ *                           (requires the active lock; no partial approval)
+ *   DELETE ?area=&month=   unlock (sales_manager / admin / superuser) — withdraws the approval
  *
  * The record is SERVER-AUTHORITATIVE: the rows are read from
  * comercial_forecast and their context is recomputed with the same lib the
@@ -126,6 +128,31 @@ export async function POST(request: Request) {
       { status: conflicto ? 409 : 500 });
   }
   return NextResponse.json({ bloqueo: data });
+}
+
+export async function PATCH(request: Request) {
+  const auth = await requireAuth(CAN_CAPTURE_FORECAST);
+  if (auth instanceof Response) return auth;
+  let body: Record<string, unknown>;
+  try { body = await request.json(); } catch { return NextResponse.json({ error: 'cuerpo JSON inválido' }, { status: 400 }); }
+  const permiso = areaPermitida(auth, body.area);
+  if (!permiso.ok) return NextResponse.json({ error: permiso.msg }, { status: 403 });
+  const { month } = body;
+  if (!esMesValido(month)) return NextResponse.json({ error: 'month inválido' }, { status: 400 });
+
+  const db = createServiceRoleClient();
+  const lock = await bloqueoActivo(db, permiso.area, month);
+  if (!lock) {
+    return NextResponse.json(
+      { error: 'Primero bloqueá los cambios: se aprueba el pedido bloqueado, no uno que todavía se puede editar.' }, { status: 409 });
+  }
+  if (lock.aprobadoAt) return NextResponse.json({ error: 'Ese pedido ya fue aprobado.', bloqueo: lock }, { status: 409 });
+  const autor = `${auth.displayName ?? ''} <${auth.email}>`.trim();
+  const { error } = await db.from('comercial_forecast_bloqueos')
+    .update({ aprobado_at: new Date().toISOString(), aprobado_por: auth.id, aprobado_autor: autor })
+    .eq('id', lock.id);
+  if (error) return NextResponse.json({ error: 'No se pudo aprobar', detail: error.message }, { status: 500 });
+  return NextResponse.json({ bloqueo: await bloqueoActivo(db, permiso.area, month) });
 }
 
 export async function DELETE(request: Request) {

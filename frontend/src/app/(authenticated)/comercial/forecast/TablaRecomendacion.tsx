@@ -155,7 +155,9 @@ export function TablaRecomendacion({ area, mes, soloLectura, onCambio, bloqueo =
   const [confirmarDesbloqueo, setConfirmarDesbloqueo] = useState(false);
   const [bloqueando, setBloqueando] = useState(false);
   const bloqueado = bloqueo !== null;
+  const aprobado = !!bloqueo?.aprobadoAt;
   const editable = !soloLectura && !bloqueado;
+  const [confirmarAprobacion, setConfirmarAprobacion] = useState(false);
   // The three month columns are the widest part of the row and the
   // sparkline already carries the shape; collapsed by default (Jorge
   // 2026-09-10), one click opens them. Collapsed, the cell keeps the one
@@ -206,13 +208,20 @@ export function TablaRecomendacion({ area, mes, soloLectura, onCambio, bloqueo =
     return () => clearTimeout(t);
   }, [busqueda]);
 
-  /** The number in the cell: edited > saved this session > captured > recommendation. */
+  /**
+   * What the «Voy a pedir» box holds: ONLY the leader's number — being
+   * edited, saved this session, or saved before. Empty means the leader has
+   * not taken a position; the app's suggestion is shown as a grey
+   * placeholder, never as a value (Jorge 2026-09-11: a full column of
+   * pre-filled numbers read as a full request while nothing was saved).
+   */
   const valorDe = useCallback((f: FilaHistorial): string => {
     if (f.productId in edits) return edits[f.productId];
     if (f.productId in guardado) return guardado[f.productId] ? String(guardado[f.productId]) : '';
     if (f.capturado) return String(f.capturado.quantity);
-    return f.recomendacion ? String(f.recomendacion.valor) : '';
+    return '';
   }, [edits, guardado]);
+  const sugerenciaDe = (f: FilaHistorial): string => (f.recomendacion ? String(f.recomendacion.valor) : '');
 
   /**
    * The reason a saved row carries. A code added by hand keeps its own
@@ -259,13 +268,14 @@ export function TablaRecomendacion({ area, mes, soloLectura, onCambio, bloqueo =
     }
   }
 
-  async function aprobarTodo() {
+  /** Adopt the app's suggestion wherever the box is empty; keep the leader's own number where it is not. */
+  async function tomarSugerencias() {
     if (!h) return;
     const filas = visibles
-      .map((f) => ({ f, texto: valorDe(f).trim() }))
+      .map((f) => ({ f, texto: (valorDe(f).trim() || sugerenciaDe(f)) }))
       .filter(({ texto }) => texto !== '' && Number.isFinite(Number(texto)) && Number(texto) > 0)
       .map(({ f, texto }) => ({ productId: f.productId, quantity: Number(texto), motivo: motivoDe(f, Number(texto)) }));
-    if (filas.length === 0) { setAviso('No hay nada que aprobar'); return; }
+    if (filas.length === 0) { setAviso('No hay sugerencias que tomar'); return; }
     setGuardando(true); setAviso(null);
     try {
       const r = await enviar(filas);
@@ -281,7 +291,7 @@ export function TablaRecomendacion({ area, mes, soloLectura, onCambio, bloqueo =
       });
       setEdits({});
       setUltimaEdicion(new Date());
-      setAviso(`Se guardaron ${r.guardadas} códigos para ${etiquetaMes(mes)}.`);
+      setAviso(`${r.guardadas} códigos en «Voy a pedir» para ${etiquetaMes(mes)}. Se envían con «Bloquear cambios».`);
       onCambio?.();
     } catch (e) {
       setAviso(e instanceof Error ? e.message : 'No se pudo guardar');
@@ -300,10 +310,30 @@ export function TablaRecomendacion({ area, mes, soloLectura, onCambio, bloqueo =
       const j = await r.json();
       if (!r.ok) throw new Error(j.error ?? 'No se pudo bloquear');
       setConfirmarBloqueo(false);
-      setAviso(`Bloqueado: ${j.bloqueo.total_filas} códigos de ${etiquetaMes(mes)} quedaron registrados.`);
+      setAviso(`Cambios bloqueados: ${j.bloqueo.total_filas} códigos de ${etiquetaMes(mes)} quedaron registrados. Falta «Aprobar pedido» para que lleguen a Compras.`);
       onCambio?.();
     } catch (e) {
       setAviso(e instanceof Error ? e.message : 'No se pudo bloquear');
+    } finally {
+      setBloqueando(false);
+    }
+  }
+
+  /** «Aprobar pedido»: send the frozen record to Compras. Requires the lock; no partial approval. */
+  async function aprobarPedido() {
+    setBloqueando(true); setAviso(null);
+    try {
+      const r = await fetch('/api/comercial/bloqueo', {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ month: mes, area }),
+      });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.error ?? 'No se pudo aprobar');
+      setConfirmarAprobacion(false);
+      setAviso(`Pedido aprobado: ${etiquetaMes(mes)} ya está en la pantalla de Compras.`);
+      onCambio?.();
+    } catch (e) {
+      setAviso(e instanceof Error ? e.message : 'No se pudo aprobar');
     } finally {
       setBloqueando(false);
     }
@@ -403,11 +433,25 @@ export function TablaRecomendacion({ area, mes, soloLectura, onCambio, bloqueo =
         </div>
         <div className="flex flex-wrap items-center gap-3 md:ml-auto">
         {bloqueado ? (
-          <div className="flex items-center gap-3">
-            <span className="text-sm text-amber-800 font-medium" data-testid="bloqueado"
-                  title={`Versión ${bloqueo.version}. Lo cargado hasta ese momento quedó registrado con su contexto; nadie del canal puede cambiarlo.`}>
-              🔒 Bloqueado el {fechaHoraCorta(bloqueo.at)} por {bloqueo.autor}
-            </span>
+          <div className="flex flex-wrap items-center gap-3">
+            {aprobado ? (
+              <span className="text-sm text-emerald-800 font-medium" data-testid="aprobado"
+                    title={`Bloqueado el ${fechaHoraCorta(bloqueo.at)} por ${bloqueo.autor} (versión ${bloqueo.version}); aprobado y enviado a Compras.`}>
+                ✅ Pedido aprobado el {fechaHoraCorta(bloqueo.aprobadoAt!)} por {bloqueo.aprobadoAutor} · en la pantalla de Compras
+              </span>
+            ) : (
+              <span className="text-sm text-amber-800 font-medium" data-testid="bloqueado"
+                    title={`Versión ${bloqueo.version}. Lo que está en «Voy a pedir» quedó registrado con su contexto; nadie del canal puede cambiarlo. Todavía NO está en la pantalla de Compras.`}>
+                🔒 Cambios bloqueados el {fechaHoraCorta(bloqueo.at)} por {bloqueo.autor} · sin aprobar
+              </span>
+            )}
+            {!soloLectura && !aprobado && !confirmarAprobacion && (
+              <button type="button" onClick={() => setConfirmarAprobacion(true)} disabled={bloqueando}
+                      className="px-4 py-2 text-sm bg-gray-900 text-white rounded-md hover:bg-gray-800 disabled:opacity-50"
+                      title="Envía el pedido bloqueado a la pantalla de Compras. No hay aprobación parcial.">
+                Aprobar pedido
+              </button>
+            )}
             {puedeDesbloquear && !confirmarDesbloqueo && (
               <button type="button" onClick={() => setConfirmarDesbloqueo(true)}
                       className="px-3 py-1.5 text-xs border border-gray-300 rounded-md hover:bg-gray-50">
@@ -417,23 +461,33 @@ export function TablaRecomendacion({ area, mes, soloLectura, onCambio, bloqueo =
           </div>
         ) : !soloLectura && (
           <div className="flex items-center gap-3">
-            <span className="text-xs text-gray-500">
-              Cargado: {cargadas} de {visibles.length}
+            <button
+              type="button" onClick={tomarSugerencias} disabled={guardando || visibles.length === 0}
+              className="px-3 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50"
+              title={(visibles.length < h.filas.length ? 'Sólo las filas que se ven con el filtro actual. ' : '')
+                + 'Pone la sugerencia de la app en «Voy a pedir» donde esté vacío; lo que ya escribiste no se toca.'}
+            >
+              {guardando ? 'Guardando…' : `Tomar las ${visibles.length} sugerencias`}
+            </button>
+            <span className="text-xs text-gray-500" data-testid="contador">
+              Voy a pedir: {cargadas} de {visibles.length} códigos
               {ultimaEdicion && <> · última edición {fechaHora(ultimaEdicion)}</>}
             </span>
             <button
-              type="button" onClick={() => setConfirmarBloqueo(true)} disabled={guardando || bloqueando}
+              type="button" onClick={() => setConfirmarBloqueo(true)} disabled={guardando || bloqueando || cargadas === 0}
               className="px-4 py-2 text-sm bg-amber-800 text-white rounded-md hover:bg-amber-900 disabled:opacity-50"
-              title="Congela lo cargado para este mes: queda registrado con fecha, autor y contexto, y ya no se puede cambiar."
+              title={cargadas === 0
+                ? 'Todavía no hay nada en «Voy a pedir»: tomá las sugerencias o escribí tus números primero.'
+                : 'Envía el pedido: lo que está en «Voy a pedir» queda registrado con fecha, autor y contexto, y ya no se puede cambiar.'}
             >
               Bloquear cambios
             </button>
             <button
-              type="button" onClick={aprobarTodo} disabled={guardando || visibles.length === 0}
-              className="px-4 py-2 text-sm bg-gray-900 text-white rounded-md hover:bg-gray-800 disabled:opacity-50"
-              title={visibles.length < h.filas.length ? 'Aprueba sólo las filas que se ven con el filtro actual' : undefined}
+              type="button" disabled
+              className="px-4 py-2 text-sm bg-gray-900 text-white rounded-md opacity-50 cursor-not-allowed"
+              title="Primero bloqueá los cambios: se aprueba el pedido bloqueado, no uno que todavía se puede editar."
             >
-              {guardando ? 'Guardando…' : `Aprobar todo (${visibles.length})`}
+              Aprobar pedido
             </button>
           </div>
         )}
@@ -458,15 +512,22 @@ export function TablaRecomendacion({ area, mes, soloLectura, onCambio, bloqueo =
         </div>
       </div>
 
+      {!soloLectura && !bloqueado && cargadas === 0 && (
+        <p className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-4 py-3" data-testid="sin-pedido">
+          Todavía no elegiste ningún código: lo que ves en gris es lo que la app sugiere, no un pedido.
+          Tocá «Tomar las sugerencias» o escribí tus números en «Voy a pedir»; después «Bloquear cambios» y, para que llegue a Compras, «Aprobar pedido».
+        </p>
+      )}
       {confirmarBloqueo && !bloqueado && (
         <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-sm space-y-2" data-testid="confirmar-bloqueo">
           <p className="text-gray-800">
-            Vas a <strong>bloquear</strong> el forecast de <strong>{etiquetaMes(mes)}</strong> de {h.area.nombre}:
-            todo lo cargado hasta ahora queda registrado con fecha, autor y lo que estás viendo en pantalla,
+            Vas a <strong>bloquear los cambios</strong> de <strong>{etiquetaMes(mes)}</strong> de {h.area.nombre}:
+            lo que está en «Voy a pedir» queda registrado con fecha, autor y lo que estás viendo en pantalla,
             y <strong>después nadie del canal puede cambiarlo</strong>. Sólo la gerencia de ventas puede desbloquearlo.
+            Todavía no llega a Compras: eso lo hace «Aprobar pedido».
           </p>
           <p className="text-xs text-gray-600">
-            Revisá que lo que querés mandar esté cargado (✓). Lo que no esté cargado no entra al registro.
+            Un código con la caja vacía no va en el pedido: la sugerencia en gris no cuenta hasta que la tomes.
           </p>
           <div className="flex gap-2">
             <button type="button" onClick={bloquear} disabled={bloqueando}
@@ -480,11 +541,31 @@ export function TablaRecomendacion({ area, mes, soloLectura, onCambio, bloqueo =
           </div>
         </div>
       )}
+      {confirmarAprobacion && bloqueado && !aprobado && (
+        <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 text-sm space-y-2" data-testid="confirmar-aprobacion">
+          <p className="text-gray-800">
+            Vas a <strong>aprobar el pedido</strong> de <strong>{etiquetaMes(mes)}</strong> de {h.area.nombre}: los códigos
+            bloqueados pasan a la pantalla de Compras tal como están. <strong>No hay aprobación parcial</strong>: se aprueba
+            todo el pedido o nada.
+          </p>
+          <div className="flex gap-2">
+            <button type="button" onClick={aprobarPedido} disabled={bloqueando}
+                    className="px-4 py-2 text-sm bg-gray-900 text-white rounded-md hover:bg-gray-800 disabled:opacity-50">
+              {bloqueando ? 'Aprobando…' : 'Sí, aprobar el pedido'}
+            </button>
+            <button type="button" onClick={() => setConfirmarAprobacion(false)} disabled={bloqueando}
+                    className="px-4 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50">
+              Cancelar
+            </button>
+          </div>
+        </div>
+      )}
       {confirmarDesbloqueo && bloqueado && (
         <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 text-sm space-y-2" data-testid="confirmar-desbloqueo">
           <p className="text-gray-800">
             Vas a <strong>desbloquear</strong> {etiquetaMes(mes)} de {h.area.nombre}. El registro bloqueado se conserva
             tal cual (versión {bloqueo.version}); el canal podrá editar y, si vuelve a bloquear, será una versión nueva.
+            {aprobado && <> <strong>La aprobación se retira</strong>: el pedido deja de verse en Compras hasta que se vuelva a aprobar.</>}
           </p>
           <div className="flex gap-2">
             <button type="button" onClick={desbloquear} disabled={bloqueando}
@@ -551,7 +632,7 @@ export function TablaRecomendacion({ area, mes, soloLectura, onCambio, bloqueo =
         {!soloLectura && (
           <button
             type="button" onClick={() => setSoloModificados((v) => !v)} aria-pressed={soloModificados}
-            title="Sólo los códigos cuyo número es tuyo: recomendaciones que cambiaste y códigos agregados a mano. Lo aprobado tal cual no aparece."
+            title="Sólo los códigos donde vas a pedir algo distinto de lo sugerido, o que agregaste a mano."
             className={`px-2.5 py-1 text-xs rounded-full border ${
               soloModificados ? 'bg-amber-800 text-white border-amber-800' : 'bg-white text-amber-800 border-amber-300 hover:bg-amber-50'}`}
           >
@@ -612,14 +693,18 @@ export function TablaRecomendacion({ area, mes, soloLectura, onCambio, bloqueo =
                   title="Promedio de los promedios de 3 y 6 meses de lo PEDIDO por tu canal; por el factor del mes donde aplica. «Normalmente» es el rango donde cayó la realidad para códigos así de parejos.">
                 Recomendación
               </th>
-              {!soloLectura && <th className="py-2 pr-3 font-medium text-right">{bloqueado ? 'Forecast bloqueado' : 'Mi forecast'}</th>}
+              {!soloLectura && (
+                <th className="py-2 pr-3 font-medium text-right whitespace-nowrap"
+                    title={aprobado ? 'Lo que Compras ve; ya no se cambia.' : bloqueado ? 'Bloqueado, todavía no aprobado: Compras no lo ve.' : 'Tu número. Vacío = todavía no elegiste; en gris, lo que sugiere la app.'}>
+                  {aprobado ? 'Pedido aprobado' : bloqueado ? 'Pedido bloqueado' : 'Voy a pedir'}
+                </th>
+              )}
             </tr>
           </thead>
           <tbody>
             {visibles.map((f) => {
               const r = f.recomendacion;
               const valor = valorDe(f);
-              const ok = f.productId in guardado;
               return (
                 <tr key={f.productId} className="border-b border-gray-100 align-top">
                   <td className="py-2 pr-3 sticky left-0 bg-white max-w-[16rem]">
@@ -723,25 +808,36 @@ export function TablaRecomendacion({ area, mes, soloLectura, onCambio, bloqueo =
                     <td className="py-2 pr-3 text-right whitespace-nowrap">
                       <input
                         type="number" min={0} value={valor} disabled={!editable}
-                        aria-label={`Mi forecast ${f.sku}`}
+                        placeholder={sugerenciaDe(f)}
+                        aria-label={`Voy a pedir ${f.sku}`}
                         onChange={(e) => setEdits((x) => ({ ...x, [f.productId]: e.target.value }))}
                         onBlur={() => guardarFila(f)}
                         onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
-                        className="w-24 px-2 py-1 text-sm text-right border border-gray-300 rounded-md tabular-nums disabled:bg-gray-50 disabled:text-gray-500"
+                        className="w-24 px-2 py-1 text-sm text-right border border-gray-300 rounded-md tabular-nums placeholder:text-gray-300 disabled:bg-gray-50 disabled:text-gray-700"
                       />
-                      <span className="inline-block w-4 ml-1 text-emerald-700" aria-label={ok ? 'guardado' : undefined}>
-                        {ok ? '✓' : (f.capturado ? <span className="text-gray-300" title="Ya cargado antes">·</span> : '')}
-                      </span>
                       {(() => {
-                        const m = motivoGuardado[f.productId] ?? f.capturado?.motivo;
-                        if (!m || (f.productId in guardado && guardado[f.productId] === 0)) return null;
-                        return (
-                          <span className={`block text-[10px] ${m === 'base' ? 'text-gray-400' : 'text-amber-800'}`}
-                                data-testid="motivo-guardado">
-                            {m === 'base' ? 'tal cual' : m === 'ajustado' ? 'ajustado'
-                              : (MOTIVOS.find((x) => x.valor === m)?.etiqueta ?? m)}
-                          </span>
-                        );
+                        // Under the box: only what helps decide — the suggestion when
+                        // the leader's number differs from it, or the reason of a
+                        // hand-added code. Nothing when they match, nothing when empty.
+                        if (valor.trim() === '') return null;
+                        const m = motivoGuardado[f.productId] ?? f.capturado?.motivo ?? null;
+                        if (m && !esBase(m)) {
+                          return (
+                            <span className="block text-[10px] text-gray-400" data-testid="nota-pedido">
+                              {MOTIVOS.find((x) => x.valor === m)?.etiqueta ?? m}
+                            </span>
+                          );
+                        }
+                        const sug = sugerenciaDe(f);
+                        if (sug && sug !== valor.trim()) {
+                          return (
+                            <span className="block text-[10px] text-gray-400" data-testid="nota-pedido"
+                                  title="Lo que sugería la app; vos vas a pedir otra cosa">
+                              sugerido {n(Number(sug))}
+                            </span>
+                          );
+                        }
+                        return null;
                       })()}
                     </td>
                   )}
@@ -752,7 +848,7 @@ export function TablaRecomendacion({ area, mes, soloLectura, onCambio, bloqueo =
         </table>
       </div>
       <p className="text-xs text-gray-500">
-        Se muestran {TOP_N} códigos como máximo; buscá arriba para llegar a cualquier otro de tu canal. Poné 0 o dejá vacío para no cargar un código.
+        Se muestran {TOP_N} códigos como máximo; buscá arriba para llegar a cualquier otro de tu canal. Dejá la caja vacía (o 0) para no pedir un código.
       </p>
     </section>
   );

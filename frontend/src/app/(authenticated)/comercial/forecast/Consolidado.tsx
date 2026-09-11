@@ -145,8 +145,8 @@ export function Consolidado({ datos, mes, onCambio, modo = 'rollup' }: {
               {areasConDatos.map((a) => (
                 <th key={a.slug} className="py-2 pr-3 font-medium text-right whitespace-nowrap"
                     title={cerrado
-                      ? 'Arriba lo que el canal capturó; abajo lo que realmente pidió / se le entregó ese mes'
-                      : 'Arriba lo que el canal capturó; abajo, en gris, lo que la app le recomendaba'}>
+                      ? 'Arriba lo que el canal pidió; abajo lo que realmente pidió / se le entregó ese mes'
+                      : 'Arriba lo que el canal va a pedir (borrador) o pidió (enviado); abajo, en gris, lo que la app le sugería'}>
                   {esHijos ? nombreCorto(a.nombre) : a.nombre}
                   {bloqueoDe(a.slug) && (
                     <span className="ml-1 text-amber-800" data-testid={`candado-${a.slug}`}
@@ -161,7 +161,14 @@ export function Consolidado({ datos, mes, onCambio, modo = 'rollup' }: {
                     </span>
                   )}
                   <span className="block font-normal text-gray-400">
-                    {cerrado ? 'capturado · real pedido / entregado' : 'capturado · recomendado'}
+                    {cerrado ? 'pedido · real pedido / entregado' : 'pedido · sugerido'}
+                    {!cerrado && !esHijos && hijosDe(a.slug).length === 0 && (
+                      <span className={`ml-1 ${bloqueoDe(a.slug)?.aprobadoAt ? 'text-emerald-800' : bloqueoDe(a.slug) ? 'text-amber-800' : 'text-gray-400'}`}
+                            data-testid={`estado-${a.slug}`}
+                            title={bloqueoDe(a.slug)?.aprobadoAt ? 'Aprobado: lo ve Compras' : bloqueoDe(a.slug) ? 'Bloqueado, sin aprobar: Compras todavía no lo ve' : 'Borrador: se puede cambiar; Compras no lo ve'}>
+                        · {bloqueoDe(a.slug)?.aprobadoAt ? 'aprobado' : bloqueoDe(a.slug) ? 'bloqueado' : 'borrador'}
+                      </span>
+                    )}
                   </span>
                 </th>
               ))}
@@ -215,7 +222,7 @@ export function Consolidado({ datos, mes, onCambio, modo = 'rollup' }: {
                       {hijos.length > 0 && hijos.filter((h) => c.porArea[h.slug] != null).map((h) => (
                         <span key={h.slug} className="block text-[10px] text-gray-500 whitespace-nowrap" data-testid={`desglose-${h.slug}`}
                               title={`${nombreCorto(h.nombre)}: capturó ${n(c.porArea[h.slug])}${bloqueoDe(h.slug) ? ' · bloqueado' : ''}`}>
-                          {nombreCorto(h.nombre)} {n(c.porArea[h.slug])}{bloqueoDe(h.slug) ? ' 🔒' : ''}
+                          {nombreCorto(h.nombre)} {n(c.porArea[h.slug])}{bloqueoDe(h.slug)?.aprobadoAt ? ' ✅' : bloqueoDe(h.slug) ? ' 🔒' : ''}
                         </span>
                       ))}
                     </td>
@@ -262,6 +269,7 @@ export function Consolidado({ datos, mes, onCambio, modo = 'rollup' }: {
 
       <p className="text-xs text-gray-500 mt-3">
         <span className="inline-block w-3 h-3 bg-amber-50 border border-amber-200 align-middle mr-1" />
+        Sólo lo <strong>aprobado</strong> llega a la pantalla de Compras; borrador y bloqueado se ven acá para saber quién falta.
         Resaltado: lo que va <strong>a revisión</strong> supera la proyección de la app, que es
         justamente el caso que la reunión tiene que discutir. Lo <strong>directo</strong> no
         dispara revisión — es certeza con destinatario y entra al pedido igual. Lo <strong>aprobado</strong> es

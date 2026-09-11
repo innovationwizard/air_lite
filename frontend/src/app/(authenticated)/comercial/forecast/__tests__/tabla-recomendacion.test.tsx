@@ -2,7 +2,7 @@
  * Nivel 2 — la tabla del jefe de canal. Monta el árbol REAL de ForecastClient
  * con fetch mockeado por URL, y prueba lo que la spec promete en pantalla:
  * el faltante crítico en rojo, el año anterior en ámbar cuando diverge, el
- * cliente dominante sólo al 50 %, «Aprobar todo» manda exactamente las filas
+ * cliente dominante sólo al 50 %, «Tomar las sugerencias» manda exactamente las filas
  * visibles, un 0 limpia, y un canal sin historial muestra el formulario y
  * ningún número inventado.
  */
@@ -110,8 +110,12 @@ function mockFetch(historial: unknown = HISTORIAL, buscado: unknown = null) {
       bloqueos.push({ method: init?.method ?? 'GET', url, body });
       if (init?.method === 'POST') {
         // after the lock, the shell reloads and finds it
-        datos = { ...datos, bloqueos: { [`supermercados|${body.month}`]: { version: 1, autor: 'Ana <ana@x>', at: '2026-09-11T20:15:00Z' } } };
+        datos = { ...datos, bloqueos: { [`supermercados|${body.month}`]: { version: 1, autor: 'Ana <ana@x>', at: '2026-09-11T20:15:00Z', aprobadoAt: null, aprobadoAutor: null } } };
         return { ok: true, json: async () => ({ bloqueo: { total_filas: 37 } }) } as Response;
+      }
+      if (init?.method === 'PATCH') {
+        datos = { ...datos, bloqueos: { [`supermercados|${body.month}`]: { version: 1, autor: 'Ana <ana@x>', at: '2026-09-11T20:15:00Z', aprobadoAt: '2026-09-11T20:30:00Z', aprobadoAutor: 'Ana <ana@x>' } } };
+        return { ok: true, json: async () => ({ bloqueo: datos.bloqueos }) } as Response;
       }
       if (init?.method === 'DELETE') {
         datos = { ...datos, bloqueos: {} };
@@ -225,16 +229,22 @@ it('la recomendación trae su rango y la frase del factor, aplicado o no', async
   expect(frases).toContain('Oct suele ser 0.87× mes normal (no se aplica)');
 });
 
-it('la celda arranca con la recomendación, o con lo ya cargado, y muestra el ciclo anterior', async () => {
+it('la caja arranca VACÍA con la sugerencia en gris, o con lo ya cargado, y muestra el ciclo anterior', async () => {
   await montar();
-  expect(screen.getByLabelText('Mi forecast 77205190')).toHaveValue(2030);
-  expect(screen.getByLabelText('Mi forecast 11111111')).toHaveValue(500);
+  // nothing chosen: no value; the app's number is only a placeholder
+  const caja = screen.getByLabelText('Voy a pedir 77205190');
+  expect(caja).toHaveValue(null);
+  expect(caja).toHaveAttribute('placeholder', '2030');
+  expect(screen.getByLabelText('Voy a pedir 11111111')).toHaveValue(500);
+  // the hand-added code shows its reason under the box; the empty one shows nothing
+  expect(screen.getAllByTestId('nota-pedido').map((e) => e.textContent)).toEqual(['Compra por temporada']);
   expect(screen.getByTestId('ciclo-anterior')).toHaveTextContent('Tu forecast de Ago: 1,200 · real 1,300');
 });
 
-it('«Aprobar todo» manda exactamente las filas visibles, base salvo lo cargado a mano', async () => {
+it('«Tomar las sugerencias» manda las filas visibles: la sugerencia donde la caja está vacía, lo cargado donde no', async () => {
   const user = await montar();
-  await user.click(screen.getByRole('button', { name: /Aprobar todo \(3\)/ }));
+  expect(screen.getByTestId('contador')).toHaveTextContent('Voy a pedir: 1 de 3 códigos');
+  await user.click(screen.getByRole('button', { name: /Tomar las 3 sugerencias/ }));
   await waitFor(() => expect(puts).toHaveLength(1));
   expect(puts[0].body).toEqual({
     month: '2026-10-01',
@@ -244,26 +254,35 @@ it('«Aprobar todo» manda exactamente las filas visibles, base salvo lo cargado
       { productId: 3, quantity: 500, motivo: 'temporada' },
     ],
   });
-  await waitFor(() => expect(screen.getByText(/Se guardaron 3 códigos para Octubre 2026/)).toBeInTheDocument());
-  expect(screen.getByText(/Cargado: 3 de 3/)).toBeInTheDocument();
+  await waitFor(() => expect(screen.getByText(/3 códigos en «Voy a pedir» para Octubre 2026/)).toBeInTheDocument());
+  expect(screen.getByTestId('contador')).toHaveTextContent('Voy a pedir: 3 de 3 códigos');
+  expect(screen.getByLabelText('Voy a pedir 77205190')).toHaveValue(2030);
+});
+
+it('sin nada elegido, el aviso lo dice y «Bloquear cambios» no se puede tocar', async () => {
+  mockFetch({ ...HISTORIAL, filas: [fila({}), fila({ productId: 2, sku: '88201006' })] });
+  await montar();
+  expect(screen.getByTestId('sin-pedido')).toHaveTextContent(/lo que ves en gris es lo que la app sugiere, no un pedido/);
+  expect(screen.getByRole('button', { name: 'Bloquear cambios' })).toBeDisabled();
 });
 
 it('editar una celda la guarda al salir; un 0 la limpia; pasar sin editar no escribe', async () => {
   const user = await montar();
-  const input = screen.getByLabelText('Mi forecast 77205190');
+  const input = screen.getByLabelText('Voy a pedir 77205190');
   await user.clear(input);
   await user.type(input, '1800');
   await user.tab();
   await waitFor(() => expect(puts).toHaveLength(1));
   // 1800 is not the app's 2030: recorded as `ajustado`, so «Modificados» is a fact
   expect(puts[0].body).toEqual({ month: '2026-10-01', filas: [{ productId: 1, quantity: 1800, motivo: 'ajustado' }] });
-  await waitFor(() => expect(screen.getAllByTestId('motivo-guardado')[0]).toHaveTextContent('ajustado'));
+  // under the box: what the app suggested, since the leader asks for something else
+  await waitFor(() => expect(screen.getAllByTestId('nota-pedido')[0]).toHaveTextContent('sugerido 2,030'));
 
   // tab through the next input without touching it: nothing is written
   await user.tab();
   expect(puts).toHaveLength(1);
 
-  const otro = screen.getByLabelText('Mi forecast 88201006');
+  const otro = screen.getByLabelText('Voy a pedir 88201006');
   await user.clear(otro);
   await user.type(otro, '0');
   await user.tab();
@@ -278,7 +297,7 @@ it('un canal sin historial muestra el formulario y ningún número', async () =>
   });
   render(<ForecastClient />);
   await waitFor(() => expect(screen.getByText(/Sin historial en este canal/)).toBeInTheDocument());
-  expect(screen.queryByText(/Aprobar todo/)).not.toBeInTheDocument();
+  expect(screen.queryByText(/Tomar las/)).not.toBeInTheDocument();
   expect(screen.queryByText(/normalmente/)).not.toBeInTheDocument();
   // the four-field form is still there
   expect(screen.getByPlaceholderText(/77205049/)).toBeInTheDocument();
@@ -295,8 +314,8 @@ it('quien sólo lee elige un canal y ve la tabla sin editar', async () => {
   await waitFor(() => expect(screen.getByText(/Ver la tabla de un canal/)).toBeInTheDocument());
   await user.selectOptions(screen.getByRole('combobox'), 'supermercados');
   await waitFor(() => expect(screen.getByText('77205190')).toBeInTheDocument());
-  expect(screen.queryByLabelText(/Mi forecast/)).not.toBeInTheDocument();
-  expect(screen.queryByText(/Aprobar todo/)).not.toBeInTheDocument();
+  expect(screen.queryByLabelText(/Voy a pedir/)).not.toBeInTheDocument();
+  expect(screen.queryByText(/Tomar las/)).not.toBeInTheDocument();
   expect(within(screen.getByRole('table')).getByText('normalmente 1,502–2,497')).toBeInTheDocument();
 });
 
@@ -312,7 +331,7 @@ it('la búsqueda filtra al instante y, tras la pausa, pregunta al servidor por t
   // client-side, right away: only the PAJILLA row of the 50
   expect(screen.queryByText('77205190')).not.toBeInTheDocument();
   expect(screen.getByText('88201006')).toBeInTheDocument();
-  expect(screen.getByRole('button', { name: /Aprobar todo \(1\)/ })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: /Tomar las 1 sugerencias/ })).toBeInTheDocument();
 
   await user.clear(caja);
   await user.type(caja, 'vaso');
@@ -328,18 +347,18 @@ it('sin coincidencias en el canal, lo dice y manda al formulario de abajo', asyn
   await user.type(screen.getByLabelText('Buscar por código o nombre'), 'zzz');
   jest.advanceTimersByTime(400);
   await waitFor(() => expect(screen.getByTestId('sin-resultados')).toHaveTextContent(/nunca pidió, agregalo abajo/));
-  expect(screen.getByRole('button', { name: /Aprobar todo \(0\)/ })).toBeDisabled();
+  expect(screen.getByRole('button', { name: /Tomar las 0 sugerencias/ })).toBeDisabled();
 });
 
-it('el filtro por variabilidad deja sólo esa etiqueta y «Aprobar todo» cuenta lo visible', async () => {
+it('el filtro por variabilidad deja sólo esa etiqueta y «Tomar las sugerencias» cuenta lo visible', async () => {
   const user = await montar();
   await user.click(screen.getByRole('button', { name: 'estable' }));
   expect(screen.queryByText('77205190')).not.toBeInTheDocument();     // medio
   expect(screen.getByText('88201006')).toBeInTheDocument();           // estable
   expect(screen.getByText('11111111')).toBeInTheDocument();           // estable
-  expect(screen.getByRole('button', { name: /Aprobar todo \(2\)/ })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: /Tomar las 2 sugerencias/ })).toBeInTheDocument();
   await user.click(screen.getByRole('button', { name: 'Todas' }));
-  expect(screen.getByRole('button', { name: /Aprobar todo \(3\)/ })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: /Tomar las 3 sugerencias/ })).toBeInTheDocument();
 });
 
 it('proveedor y categoría filtran en el servidor sobre todo el canal, con las opciones del canal', async () => {
@@ -382,12 +401,31 @@ describe('«Bloquear cambios»', () => {
     await waitFor(() => expect(bloqueos.some((b) => b.method === 'POST')).toBe(true));
     expect(bloqueos.find((b) => b.method === 'POST')!.body).toEqual({ month: '2026-10-01', area: 'supermercados' });
 
-    await waitFor(() => expect(screen.getByTestId('bloqueado')).toHaveTextContent(/Bloqueado el .* por Ana <ana@x>/));
+    await waitFor(() => expect(screen.getByTestId('bloqueado')).toHaveTextContent(/Cambios bloqueados el .* por Ana <ana@x> · sin aprobar/));
     expect(screen.queryByRole('button', { name: 'Bloquear cambios' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /Aprobar todo/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Tomar las/ })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Desbloquear' })).not.toBeInTheDocument();  // a leader cannot
-    expect(screen.getByLabelText('Mi forecast 77205190')).toBeDisabled();
+    expect(screen.getByLabelText('Voy a pedir 77205190')).toBeDisabled();
     expect(screen.getByTestId('captura-bloqueada')).toHaveTextContent(/bloqueado/);
+    // locked is not sent: Compras does not see it until «Aprobar pedido»
+    expect(screen.getByText(/Falta «Aprobar pedido» para que lleguen a Compras/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Aprobar pedido' })).toBeEnabled();
+  });
+
+  it('«Aprobar pedido» está apagado hasta bloquear; después de bloquear, pide confirmación y manda el PATCH', async () => {
+    const user = await montar();
+    expect(screen.getByRole('button', { name: 'Aprobar pedido' })).toBeDisabled();
+    await user.click(screen.getByRole('button', { name: 'Bloquear cambios' }));
+    await user.click(screen.getByRole('button', { name: 'Sí, bloquear' }));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Aprobar pedido' })).toBeEnabled());
+    await user.click(screen.getByRole('button', { name: 'Aprobar pedido' }));
+    expect(screen.getByTestId('confirmar-aprobacion')).toHaveTextContent(/No hay aprobación parcial/);
+    await user.click(screen.getByRole('button', { name: 'Sí, aprobar el pedido' }));
+    await waitFor(() => expect(bloqueos.some((b) => b.method === 'PATCH')).toBe(true));
+    expect(bloqueos.find((b) => b.method === 'PATCH')!.body).toEqual({ month: '2026-10-01', area: 'supermercados' });
+    await waitFor(() => expect(screen.getByTestId('aprobado')).toHaveTextContent(/Pedido aprobado el .* por Ana <ana@x> · en la pantalla de Compras/));
+    expect(screen.queryByRole('button', { name: 'Aprobar pedido' })).not.toBeInTheDocument();
+    expect(screen.getByText('Pedido aprobado')).toBeInTheDocument();   // column header
   });
 
   it('cancelar no manda nada', async () => {
@@ -419,7 +457,7 @@ describe('«Bloquear cambios»', () => {
       ...DATOS, miArea: null, puedeCapturar: false, puedeDesbloquear: true,
       filas: [{ id: 'a', product_id: 1, month: '2026-10-01', quantity: 500, motivo: 'base', area: 'supermercados', note: null }],
       productos: [{ id: 1, sku: '77205190', name: 'BANDEJA' }],
-      bloqueos: { 'supermercados|2026-10-01': { version: 1, autor: 'Ana <ana@x>', at: '2026-09-11T20:15:00Z' } },
+      bloqueos: { 'supermercados|2026-10-01': { version: 1, autor: 'Ana <ana@x>', at: '2026-09-11T20:15:00Z', aprobadoAt: null, aprobadoAutor: null } },
     };
     mockFetch();
     window.confirm = jest.fn(() => true);
@@ -435,11 +473,11 @@ describe('«Bloquear cambios»', () => {
 
 it('«Modificados» pregunta al servidor y el aprobado tal cual queda marcado como tal', async () => {
   const user = await montar();
-  await user.click(screen.getByRole('button', { name: /Aprobar todo \(3\)/ }));
-  await waitFor(() => expect(screen.getByText(/Se guardaron 3 códigos/)).toBeInTheDocument());
-  // approved as-is -> 'tal cual'; the hand-added code keeps its reason
-  const marcas = screen.getAllByTestId('motivo-guardado').map((e) => e.textContent);
-  expect(marcas).toEqual(['tal cual', 'tal cual', 'Compra por temporada']);
+  await user.click(screen.getByRole('button', { name: /Tomar las 3 sugerencias/ }));
+  await waitFor(() => expect(screen.getByText(/3 códigos en «Voy a pedir»/)).toBeInTheDocument());
+  // taken as suggested -> no note; the hand-added code keeps its reason
+  const marcas = screen.getAllByTestId('nota-pedido').map((e) => e.textContent);
+  expect(marcas).toEqual(['Compra por temporada']);
 
   await user.click(screen.getByRole('button', { name: 'Modificados' }));
   await waitFor(() => expect(gets.some((u) => u.includes('modificados=1'))).toBe(true));

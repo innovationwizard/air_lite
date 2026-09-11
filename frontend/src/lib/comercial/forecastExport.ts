@@ -36,7 +36,7 @@ export interface FilaForecastExport {
   compras: { compra: number; proyeccion: number; bodega: string; coberturaDias: number } | null;
   capturado: { quantity: number; motivo: Motivo } | null;
   cicloAnterior: { mes: string; capturado: number | null; pedidoReal: number; entregadoReal: number } | null;
-  /** What the cell shows right now (edited > saved > captured > recommendation). */
+  /** The leader's number in «Voy a pedir» (edited > saved > captured); null when the box is empty. */
   miForecast: number | null;
   /** The motivo the saved row carries, if saved (this session or before). */
   motivoGuardado: Motivo | null;
@@ -53,7 +53,7 @@ export interface ContextoForecastExport {
   generadoEn: Date;
   autor: string | null;
   asOf: string | null;
-  bloqueo: { version: number; autor: string; at: string } | null;
+  bloqueo: { version: number; autor: string; at: string; aprobadoAt?: string | null; aprobadoAutor?: string | null } | null;
   filtros: {
     busqueda: string | null; proveedor: string | null; categoria: string | null;
     etiqueta: Etiqueta | null; modificados: boolean;
@@ -74,11 +74,11 @@ export function nombreArchivo(ctx: Pick<ContextoForecastExport, 'areaSlug' | 'me
   return `Forecast_${ctx.areaSlug}_${ctx.mes.slice(0, 7)}_${fechaArchivo(ctx.generadoEn)}.xlsx`;
 }
 
-/** What the saved row is, in the leader's words. */
+/** What the row is, in the leader's words (Jorge 2026-09-11: «Voy a pedir», never "requested"). */
 export function estadoFila(f: Pick<FilaForecastExport, 'motivoGuardado' | 'miForecast'>): string {
-  if (f.motivoGuardado === null) return f.miForecast === null ? '' : 'sin cargar';
-  if (f.motivoGuardado === 'base') return 'aprobado tal cual';
-  if (f.motivoGuardado === 'ajustado') return 'ajustado';
+  if (f.motivoGuardado === null) return 'sugerido, no elegido';
+  if (f.motivoGuardado === 'base') return 'voy a pedir lo sugerido';
+  if (f.motivoGuardado === 'ajustado') return 'voy a pedir otra cantidad';
   return MOTIVOS.find((m) => m.valor === f.motivoGuardado)?.etiqueta ?? f.motivoGuardado;
 }
 
@@ -127,7 +127,7 @@ export function columnasForecast(filas: readonly FilaForecastExport[], mes: stri
     { header: 'Rango hasta', width: 12, type: 'number', valor: (f) => f.recomendacion?.rango[1] ?? null },
     { header: 'Factor del mes', width: 10, type: 'decimal4', valor: (f) => f.recomendacion?.indiceMes ?? null },
     { header: 'Factor aplicado', width: 10, type: 'text', valor: (f) => (f.recomendacion ? (f.recomendacion.aplicado ? 'Sí' : 'No') : null) },
-    { header: 'Mi forecast', width: 12, type: 'number', valor: (f) => f.miForecast },
+    { header: 'Voy a pedir', width: 12, type: 'number', valor: (f) => f.miForecast },
     { header: 'Estado', width: 20, type: 'text', valor: (f) => estadoFila(f) || null },
     { header: 'Fuera de pantalla', width: 12, type: 'text', valor: (f) => (f.fueraDePantalla ? 'Sí' : 'No') },
     { header: 'Forecast mes anterior', width: 14, type: 'number', valor: (f) => f.cicloAnterior?.capturado ?? null },
@@ -166,14 +166,16 @@ export function construirHojaOrigen(ctx: ContextoForecastExport): SheetSpec {
   ];
   if (ctx.autor) rows.push(['Descargado por', ctx.autor]);
   if (ctx.asOf) rows.push(['Historial de Odoo al', new Date(ctx.asOf).toLocaleString('es-GT')]);
-  rows.push(['Bloqueo', ctx.bloqueo
-    ? `Bloqueado el ${new Date(ctx.bloqueo.at).toLocaleString('es-GT')} por ${ctx.bloqueo.autor} (versión ${ctx.bloqueo.version})`
-    : 'Sin bloquear']);
+  rows.push(['Pedido', ctx.bloqueo
+    ? (ctx.bloqueo.aprobadoAt
+      ? `Aprobado el ${new Date(ctx.bloqueo.aprobadoAt).toLocaleString('es-GT')} por ${ctx.bloqueo.aprobadoAutor} (bloqueado el ${new Date(ctx.bloqueo.at).toLocaleString('es-GT')}, versión ${ctx.bloqueo.version}); lo ve Compras`
+      : `Bloqueado el ${new Date(ctx.bloqueo.at).toLocaleString('es-GT')} por ${ctx.bloqueo.autor} (versión ${ctx.bloqueo.version}); sin aprobar, Compras no lo ve`)
+    : 'Borrador: se puede cambiar; Compras no lo ve']);
   for (const [i, t] of describirFiltros(ctx.filtros).entries()) rows.push([i === 0 ? 'Filtros' : '', t]);
   rows.push(['Filas en pantalla', ctx.enPantalla]);
   rows.push(['Filas guardadas fuera de pantalla', ctx.guardadasFueraDePantalla]);
   rows.push(['Nota', 'Los tres meses van desplegados (pedido / entregado / falta) aunque en pantalla estén colapsados. '
-    + 'Mi forecast es lo que la celda mostraba al exportar; Estado dice si estaba cargado y cómo.']);
+    + '«Voy a pedir» es el número del canal al exportar (vacío = todavía no elegido; la sugerencia va en «Recomendación»). Estado lo explica.']);
   return {
     name: 'Origen',
     columns: [{ header: 'Dato', width: 34, type: 'text' }, { header: 'Valor', width: 100, type: 'text' }],
