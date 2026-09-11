@@ -5,7 +5,7 @@ import { createServiceRoleClient } from '@/lib/supabase/server';
 import { fetchAll } from '@/lib/supabase/paginado';
 import { mesDentroDelHorizonte, mesPorDefecto, mesesAbiertos } from '@/lib/comercial/forecast';
 import { TOP_N, bodegaQueSirve } from '@/lib/comercial/recomendacion';
-import { cargarContexto, cargarDemanda, computarFilas, type CapturaRow } from './lib';
+import { cargarContexto, cargarDemanda, cargarForecastCompras, computarFilas, type CapturaRow } from './lib';
 
 export const dynamic = 'force-dynamic';
 
@@ -55,13 +55,16 @@ export async function GET(request: Request) {
   }
 
   const db = createServiceRoleClient();
-  const [ctx, demanda, capturas, cobertura] = await Promise.all([
+  const [ctx, demanda, capturas, cobertura, forecastCompras] = await Promise.all([
     cargarContexto(db),
     cargarDemanda(db, area),
     fetchAll<CapturaRow>(() => db.from('comercial_forecast')
       .select('id, product_id, month, quantity, motivo, area').eq('area', area), 'id'),
     db.from('bodega_cobertura').select('dias').eq('bodega', bodegaQueSirve(area))
       .order('created_at', { ascending: false }).limit(1).maybeSingle(),
+    // Compras' plan for the serving bodega, before the channels' forms (PM
+    // request 2026-09-11): the leader compares their need against it.
+    cargarForecastCompras(db, bodegaQueSirve(area)),
   ]);
   const areaCfg = ctx.areas.get(area);
   if (!areaCfg) return NextResponse.json({ error: 'Canal desconocido o inactivo' }, { status: 404 });
@@ -76,7 +79,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ ...meta, historialDisponible: false, asOf: null, filas: [], total: 0 });
   }
 
-  const filas = computarFilas(ctx, areaCfg, demanda, capturas, mes, hoy);
+  const filas = computarFilas(ctx, areaCfg, demanda, capturas, mes, hoy, forecastCompras);
   const asOf = demanda.reduce((m, d) => (d.as_of > m ? d.as_of : m), '');
   return NextResponse.json({
     ...meta, historialDisponible: true, asOf, total: filas.length, filas: filas.slice(0, TOP_N),

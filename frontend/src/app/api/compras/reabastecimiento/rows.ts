@@ -13,6 +13,7 @@ import {
   COBERTURA_DEFAULT_DIAS,
   type ProductRow,
   sugerido,
+  forecast,
   doh,
 } from '@/app/(authenticated)/compras/reabastecimiento/engine';
 import { esBase, mesPorDefecto, sumaDirecto, type Motivo } from '@/lib/comercial/forecast';
@@ -114,6 +115,13 @@ export interface LiveRow {
   pending: number | null;
   trans: number; transOverridden: boolean;
   adic: number; adicComercial: number; sugBodega: number | null;
+  /**
+   * The engine's demand projection for this bodega over its coverage window
+   * — `forecast(engineRow)`, the term the Sugerido subtracts stock from.
+   * Exposed (2026-09-11) so the channel leader's table can show what
+   * Compras projects and plans to buy BEFORE the channels' forms arrive.
+   */
+  proyeccion: number;
   /**
    * Forecast comercial que NO entra al pedido: `temporada` + `critico`, que
    * son proyección del canal y se discuten en la reunión. Viaja para poder
@@ -491,6 +499,7 @@ export async function buildRows(
         win: engineRow.win,
         doh: round1(doh(engineRow)),
         sug: round1(sugerido(engineRow, trans)),
+        proyeccion: round1(forecast(engineRow)),
         tendencia,
         divergencia,
         alerta,

@@ -34,6 +34,7 @@ export interface FilaHistorial {
   recomendacion: Recomendacion | null;
   ventaPublico: number | null;
   capturado: { quantity: number; motivo: Motivo } | null;
+  compras: { compra: number; proyeccion: number; bodega: string; coberturaDias: number } | null;
   cicloAnterior: { mes: string; capturado: number | null; pedidoReal: number; entregadoReal: number } | null;
 }
 
@@ -48,6 +49,7 @@ export interface Historial {
 }
 
 const n = (v: number) => Math.round(v).toLocaleString('es-GT');
+const nombreBodega = (b: string) => (b === 'San Jose VN' ? 'San José' : b);
 const MES_CORTO = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
 const mesCorto = (label: string) => MES_CORTO[Number(label.slice(5, 7)) - 1];
 const mesCortoAnio = (label: string) => `${mesCorto(label)} ${label.slice(0, 4)}`;
@@ -248,7 +250,7 @@ export function TablaRecomendacion({ area, mes, soloLectura, onCambio }: Props) 
           </h2>
           <p className="text-xs text-gray-500">
             De {h.total} códigos con pedidos en los últimos 6 meses. Ordenados por lo que faltó y por lo que
-            queda en {h.bodega === 'San Jose VN' ? 'San José' : h.bodega}. Cualquier otro código se agrega abajo.
+            queda en {nombreBodega(h.bodega)}. Cualquier otro código se agrega abajo.
             {h.asOf && <> · Historial de Odoo al {new Date(h.asOf).toLocaleString('es-GT', { dateStyle: 'short', timeStyle: 'short' })}</>}
             {' · '}
             <button type="button" onClick={() => setVerComoSeCalcula((v) => !v)} className="underline hover:text-gray-800">
@@ -306,6 +308,11 @@ export function TablaRecomendacion({ area, mes, soloLectura, onCambio }: Props) 
                 {mesCorto(mes)} años anteriores
               </th>
               <th className="py-2 pr-3 font-medium" title="Quién lo compra en tu canal (últimos 3 meses)">Clientes</th>
+              <th className="py-2 pr-3 font-medium text-right whitespace-nowrap"
+                  title={`Lo que Compras tiene planificado comprar para ${nombreBodega(h.bodega)} ANTES de recibir los formularios de los canales, y la venta que proyecta para ese CD (todos los canales que surte). Si tu forecast cabe en lo proyectado, ya está cubierto; si no, el faltante es real.`}>
+                Forecast Compras
+                <span className="block font-normal text-gray-400">compra · proyección {nombreBodega(h.bodega)}</span>
+              </th>
               <th className="py-2 pr-3 font-medium text-right whitespace-nowrap"
                   title="Promedio de los promedios de 3 y 6 meses de lo PEDIDO por tu canal; por el factor del mes donde aplica. «Normalmente» es el rango donde cayó la realidad para códigos así de parejos.">
                 Recomendación
@@ -384,6 +391,19 @@ export function TablaRecomendacion({ area, mes, soloLectura, onCambio }: Props) 
                         venta al público {n(f.ventaPublico)}/mes
                       </span>
                     )}
+                  </td>
+                  <td className="py-2 pr-3 text-right tabular-nums whitespace-nowrap" data-testid="forecast-compras">
+                    {f.compras ? (
+                      <>
+                        <span className="text-gray-800" title="Lo que Compras planifica comprar, sin lo que cargaron los canales">
+                          {n(f.compras.compra)}
+                        </span>
+                        <span className="block text-xs text-gray-400"
+                              title={`Venta proyectada por Compras para ${nombreBodega(f.compras.bodega)} en ${f.compras.coberturaDias} días, todos los canales`}>
+                          proyecta {n(f.compras.proyeccion)}
+                        </span>
+                      </>
+                    ) : <span className="text-gray-300" title="Compras no tiene fila para este código en la bodega que te surte">—</span>}
                   </td>
                   <td className="py-2 pr-3 text-right tabular-nums whitespace-nowrap">
                     {r ? (

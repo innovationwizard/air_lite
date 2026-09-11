@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { fetchAll } from '@/lib/supabase/paginado';
 import { primerDiaMes, type Motivo } from '@/lib/comercial/forecast';
+import { buildRows } from '@/app/api/compras/reabastecimiento/rows';
 import {
   bodegaQueSirve, compararRiesgo, diasDeCobertura, divergeAnioAnterior, falta, faltaCritica,
   mesesOrdenados, recomendar, type Etiqueta, type Recomendacion, type RiesgoInput,
@@ -45,6 +46,14 @@ export interface FilaHistorial {
   recomendacion: Recomendacion | null;
   ventaPublico: number | null;
   capturado: { quantity: number; motivo: Motivo } | null;
+  /**
+   * Compras' numbers for the bodega that serves this channel, BEFORE the
+   * channels' forms: what Wilmer's engine plans to buy (Sugerido without
+   * the comercial additive) and the demand it projects for the coverage
+   * window. Per bodega, i.e. for every channel that bodega serves — exact
+   * for Zacapa/Petén, a shared total for the four San José channels.
+   */
+  compras: { compra: number; proyeccion: number; bodega: string; coberturaDias: number } | null;
   cicloAnterior: { mes: string; capturado: number | null; pedidoReal: number; entregadoReal: number } | null;
   riesgo: RiesgoInput;
 }
@@ -105,6 +114,27 @@ export async function cargarContexto(db: SupabaseClient): Promise<Contexto> {
   };
 }
 
+export type ForecastCompras = Map<number, { compra: number; proyeccion: number }> & { coberturaDias: number };
+
+/**
+ * Wilmer's live numbers for one bodega, through the same `buildRows` his
+ * page uses (overrides, seasonal exclusions, coverage horizon included), so
+ * the leader sees exactly what Compras sees. `compra` is the Sugerido with
+ * the channels' additive removed: what he would buy had no form arrived.
+ */
+export async function cargarForecastCompras(db: SupabaseClient, bodega: string): Promise<ForecastCompras> {
+  const { rows, coberturaDias } = await buildRows(db, bodega);
+  const m = new Map<number, { compra: number; proyeccion: number }>() as ForecastCompras;
+  for (const r of rows) {
+    m.set(r.productId, {
+      compra: Math.max(0, Math.round(r.sug - r.adicComercial)),
+      proyeccion: Math.round(r.proyeccion),
+    });
+  }
+  m.coberturaDias = coberturaDias;
+  return m;
+}
+
 export function cargarDemanda(db: SupabaseClient, area: string): Promise<DemandaRow[]> {
   return fetchAll<DemandaRow>(() => db.from('comercial_demanda_canal')
     .select('id, product_id, pedido_mensual, entregado_mensual, mismo_mes_anios_anteriores, clientes_3m, cliente_principal, cliente_principal_share, as_of')
@@ -131,6 +161,7 @@ export function computarFilas(
   capturas: CapturaRow[],
   mes: string,
   hoy: Date,
+  forecastCompras: ForecastCompras | null = null,
 ): FilaHistorial[] {
   const area = areaCfg.slug;
   const bodega = bodegaQueSirve(area);
@@ -177,6 +208,11 @@ export function computarFilas(
       recomendacion: rec,
       ventaPublico: area === 'tiendas' ? (ctx.ventaPublico.get(d.product_id) ?? 0) : null,
       capturado: cap ? { quantity: Number(cap.quantity), motivo: cap.motivo } : null,
+      compras: (() => {
+        const fc = forecastCompras?.get(d.product_id);
+        return fc && forecastCompras
+          ? { ...fc, bodega, coberturaDias: forecastCompras.coberturaDias } : null;
+      })(),
       cicloAnterior: enSerie ? {
         mes: labelPrevio, capturado: capPrev ? Number(capPrev.quantity) : null,
         pedidoReal: Number(d.pedido_mensual[labelPrevio] ?? 0),

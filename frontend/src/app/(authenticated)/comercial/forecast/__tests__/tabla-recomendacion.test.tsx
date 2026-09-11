@@ -33,6 +33,7 @@ function fila(over: Record<string, unknown>) {
       valor: 2030, rango: [1502, 2497], etiqueta: 'medio',
     },
     ventaPublico: null, capturado: null, cicloAnterior: null,
+    compras: { compra: 1200, proyeccion: 6500, bodega: 'San Jose VN', coberturaDias: 30 },
     ...over,
   };
 }
@@ -152,6 +153,21 @@ it('el cliente dominante se nombra al 50 %; abajo de eso sólo cuenta', async ()
   expect(screen.getByText('· 52 %')).toBeInTheDocument();
   expect(screen.queryByText('ALGUIEN')).not.toBeInTheDocument();
   expect(screen.getByText(/12 clientes/)).toBeInTheDocument();
+});
+
+it('«Forecast Compras» muestra lo que Compras planea comprar y lo que proyecta, antes de los formularios', async () => {
+  await montar();
+  const celdas = screen.getAllByTestId('forecast-compras');
+  expect(celdas[0]).toHaveTextContent('1,200');
+  expect(celdas[0]).toHaveTextContent('proyecta 6,500');
+  expect(screen.getByText(/compra · proyección San José/)).toBeInTheDocument();
+});
+
+it('sin fila de Compras para el código, la celda dice — y no inventa un cero', async () => {
+  mockFetch({ ...HISTORIAL, filas: [fila({ compras: null })] });
+  await montar();
+  expect(screen.getByTestId('forecast-compras')).toHaveTextContent('—');
+  expect(screen.getByTestId('forecast-compras')).not.toHaveTextContent('0');
 });
 
 it('la recomendación trae su rango y la frase del factor, aplicado o no', async () => {
