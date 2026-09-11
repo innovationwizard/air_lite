@@ -9,6 +9,11 @@ import { cargarContexto, cargarDemanda, cargarForecastCompras, computarFilas, ty
 
 export const dynamic = 'force-dynamic';
 
+/** Case- and accent-insensitive, so «pajilla» finds «PAJILLA» and «bandeja» «BANDEJÁ». */
+function normalizar(t: string): string {
+  return t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+}
+
 /**
  * GET /api/comercial/historial?area=&mes=  —  the channel leader's rows.
  *
@@ -79,9 +84,18 @@ export async function GET(request: Request) {
     return NextResponse.json({ ...meta, historialDisponible: false, asOf: null, filas: [], total: 0 });
   }
 
-  const filas = computarFilas(ctx, areaCfg, demanda, capturas, mes, hoy, forecastCompras);
+  const todas = computarFilas(ctx, areaCfg, demanda, capturas, mes, hoy, forecastCompras);
   const asOf = demanda.reduce((m, d) => (d.as_of > m ? d.as_of : m), '');
+  // `q`: search the channel's WHOLE history by code or name, not just the
+  // ranked 50 — the leader may know something about a product further down.
+  // A product the channel never ordered is not here at all; the add form
+  // below the table covers that.
+  const q = normalizar(url.searchParams.get('q') ?? '');
+  const filas = q
+    ? todas.filter((f) => normalizar(f.sku).includes(q) || normalizar(f.nombre).includes(q))
+    : todas;
   return NextResponse.json({
-    ...meta, historialDisponible: true, asOf, total: filas.length, filas: filas.slice(0, TOP_N),
+    ...meta, historialDisponible: true, asOf, busqueda: q || null,
+    total: filas.length, totalCanal: todas.length, filas: filas.slice(0, TOP_N),
   });
 }

@@ -45,10 +45,13 @@ export interface Historial {
   asOf: string | null;
   bodega: string;
   total: number;
+  totalCanal?: number;
+  busqueda?: string | null;
   filas: FilaHistorial[];
 }
 
 const n = (v: number) => Math.round(v).toLocaleString('es-GT');
+const normalizar = (t: string) => t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
 const nombreBodega = (b: string) => (b === 'San Jose VN' ? 'San José' : b);
 const MES_CORTO = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
 const mesCorto = (label: string) => MES_CORTO[Number(label.slice(5, 7)) - 1];
@@ -99,12 +102,13 @@ function Clientes({ c }: { c: FilaHistorial['clientes'] }) {
   );
 }
 
-function fraseFactor(r: Recomendacion, mes: string, area: string): string | null {
+/** Short on purpose: the channel is already in the page header (Jorge 2026-09-11). */
+function fraseFactor(r: Recomendacion, mes: string): string | null {
   if (r.indiceMes === null) return null;
   const f = r.indiceMes.toFixed(2);
   return r.aplicado
-    ? `${mesCorto(mes)} = ${f}× un mes normal en ${area}`
-    : `${mesCorto(mes)} suele ser ${f}× un mes normal en ${area} (no se aplica en este canal)`;
+    ? `${mesCorto(mes)} = ${f}× mes normal`
+    : `${mesCorto(mes)} suele ser ${f}× mes normal (no se aplica)`;
 }
 
 interface Props {
@@ -132,20 +136,36 @@ export function TablaRecomendacion({ area, mes, soloLectura, onCambio }: Props) 
   // 2026-09-10), one click opens them. Collapsed, the cell keeps the one
   // number the ranking is built on: units short over the three months.
   const [verMeses, setVerMeses] = useState(false);
+  // Search by code or name. Typed text filters the loaded rows at once;
+  // after a pause it also asks the server for matches beyond the ranked 50
+  // (the whole history of the channel). A product the channel never ordered
+  // is not in that history: the add form below is for it.
+  const [busqueda, setBusqueda] = useState('');
+  const [busquedaServidor, setBusquedaServidor] = useState('');
+  // Variability filter: which rows to trust, at a glance.
+  const [filtroEtiqueta, setFiltroEtiqueta] = useState<Etiqueta | ''>('');
 
   const cargar = useCallback(async () => {
-    setH(null); setError(null); setEdits({}); setGuardado({});
+    setError(null);
     try {
-      const r = await fetch(`/api/comercial/historial?area=${encodeURIComponent(area)}&mes=${encodeURIComponent(mes)}`);
+      const q = busquedaServidor ? `&q=${encodeURIComponent(busquedaServidor)}` : '';
+      const r = await fetch(`/api/comercial/historial?area=${encodeURIComponent(area)}&mes=${encodeURIComponent(mes)}${q}`);
       const j = await r.json();
       if (!r.ok) throw new Error(j.error ?? 'No se pudo cargar el historial');
       setH(j);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'No se pudo cargar el historial');
     }
-  }, [area, mes]);
+  }, [area, mes, busquedaServidor]);
 
+  // A new area or month is a new table: forget edits and ✓s. A search is not.
+  useEffect(() => { setH(null); setEdits({}); setGuardado({}); setBusqueda(''); setBusquedaServidor(''); }, [area, mes]);
   useEffect(() => { cargar(); }, [cargar]);
+  // Search with a brake: the server is asked after the typing pauses.
+  useEffect(() => {
+    const t = setTimeout(() => setBusquedaServidor(busqueda.trim()), 350);
+    return () => clearTimeout(t);
+  }, [busqueda]);
 
   /** The number in the cell: edited > saved this session > captured > recommendation. */
   const valorDe = useCallback((f: FilaHistorial): string => {
@@ -193,7 +213,7 @@ export function TablaRecomendacion({ area, mes, soloLectura, onCambio }: Props) 
 
   async function aprobarTodo() {
     if (!h) return;
-    const filas = h.filas
+    const filas = visibles
       .map((f) => ({ f, texto: valorDe(f).trim() }))
       .filter(({ texto }) => texto !== '' && Number.isFinite(Number(texto)) && Number(texto) > 0)
       .map(({ f, texto }) => ({ productId: f.productId, quantity: Number(texto), motivo: motivoDe(f) }));
@@ -217,14 +237,21 @@ export function TablaRecomendacion({ area, mes, soloLectura, onCambio }: Props) 
     }
   }
 
-  const cargadas = useMemo(() => {
-    if (!h) return 0;
+  /** What the table shows: the loaded rows, narrowed by the typed text at once and by the label. */
+  const visibles = useMemo(() => {
+    if (!h) return [];
+    const q = normalizar(busqueda);
     return h.filas.filter((f) =>
-      f.productId in guardado ? guardado[f.productId] > 0 : !!f.capturado).length;
-  }, [h, guardado]);
+      (!q || normalizar(f.sku).includes(q) || normalizar(f.nombre).includes(q))
+      && (!filtroEtiqueta || f.etiqueta === filtroEtiqueta));
+  }, [h, busqueda, filtroEtiqueta]);
+
+  const cargadas = useMemo(() => visibles.filter((f) =>
+    f.productId in guardado ? guardado[f.productId] > 0 : !!f.capturado).length, [visibles, guardado]);
 
   if (error) return <div className="text-sm text-red-700">{error}</div>;
   if (!h) return <div className="text-sm text-gray-500">Cargando el historial del canal…</div>;
+  const buscando = !!h.busqueda;
 
   if (!h.historialDisponible) {
     return (
@@ -246,10 +273,12 @@ export function TablaRecomendacion({ area, mes, soloLectura, onCambio }: Props) 
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <div>
           <h2 className="text-sm font-medium text-gray-900">
-            Los {h.filas.length} códigos con más riesgo de faltante en {h.area.nombre} — {etiquetaMes(mes)}
+            {buscando
+              ? `${h.total} códigos de ${h.area.nombre} para «${h.busqueda}» — ${etiquetaMes(mes)}`
+              : `Los ${h.filas.length} códigos con más riesgo de faltante en ${h.area.nombre} — ${etiquetaMes(mes)}`}
           </h2>
           <p className="text-xs text-gray-500">
-            De {h.total} códigos con pedidos en los últimos 6 meses. Ordenados por lo que faltó y por lo que
+            De {h.totalCanal ?? h.total} códigos con pedidos en los últimos 6 meses. Ordenados por lo que faltó y por lo que
             queda en {nombreBodega(h.bodega)}. Cualquier otro código se agrega abajo.
             {h.asOf && <> · Historial de Odoo al {new Date(h.asOf).toLocaleString('es-GT', { dateStyle: 'short', timeStyle: 'short' })}</>}
             {' · '}
@@ -261,16 +290,48 @@ export function TablaRecomendacion({ area, mes, soloLectura, onCambio }: Props) 
         {!soloLectura && (
           <div className="flex items-center gap-3">
             <span className="text-xs text-gray-500">
-              Cargado: {cargadas} de {h.filas.length}
+              Cargado: {cargadas} de {visibles.length}
               {ultimaEdicion && <> · última edición {fechaHora(ultimaEdicion)}</>}
             </span>
             <button
-              type="button" onClick={aprobarTodo} disabled={guardando}
+              type="button" onClick={aprobarTodo} disabled={guardando || visibles.length === 0}
               className="px-4 py-2 text-sm bg-gray-900 text-white rounded-md hover:bg-gray-800 disabled:opacity-50"
+              title={visibles.length < h.filas.length ? 'Aprueba sólo las filas que se ven con el filtro actual' : undefined}
             >
-              {guardando ? 'Guardando…' : `Aprobar todo (${h.filas.length})`}
+              {guardando ? 'Guardando…' : `Aprobar todo (${visibles.length})`}
             </button>
           </div>
+        )}
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <input
+          type="search" value={busqueda} onChange={(e) => setBusqueda(e.target.value)}
+          placeholder="Buscar por código o nombre en todo tu canal"
+          aria-label="Buscar por código o nombre"
+          className="w-72 max-w-full px-3 py-1.5 text-sm border border-gray-300 rounded-md"
+        />
+        <div className="flex flex-wrap gap-1" role="group" aria-label="Filtrar por variabilidad">
+          {([['', 'Todas'], ...(Object.keys(ETIQUETA_TEXTO) as Etiqueta[]).map((e) => [e, ETIQUETA_TEXTO[e]])] as [Etiqueta | '', string][])
+            .map(([valor, texto]) => (
+              <button
+                key={valor || 'todas'} type="button" onClick={() => setFiltroEtiqueta(valor)}
+                aria-pressed={filtroEtiqueta === valor}
+                className={`px-2.5 py-1 text-xs rounded-full border ${
+                  filtroEtiqueta === valor
+                    ? 'bg-gray-900 text-white border-gray-900'
+                    : valor ? `${CHIP[valor]} hover:opacity-80` : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'}`}
+              >
+                {texto}
+              </button>
+            ))}
+        </div>
+        {visibles.length === 0 && (
+          <span className="text-xs text-gray-500" data-testid="sin-resultados">
+            {buscando
+              ? 'Ningún código de tu canal coincide. Si es un producto que tu canal nunca pidió, agregalo abajo.'
+              : 'Ninguna fila con ese filtro.'}
+          </span>
         )}
       </div>
 
@@ -321,7 +382,7 @@ export function TablaRecomendacion({ area, mes, soloLectura, onCambio }: Props) 
             </tr>
           </thead>
           <tbody>
-            {h.filas.map((f) => {
+            {visibles.map((f) => {
               const r = f.recomendacion;
               const valor = valorDe(f);
               const ok = f.productId in guardado;
@@ -412,9 +473,10 @@ export function TablaRecomendacion({ area, mes, soloLectura, onCambio }: Props) 
                         <span className="block text-xs text-gray-500" title={`Promedio 3 meses ${n(r.avg3)} · promedio 6 meses ${n(r.avg6)} · base ${n(r.base)}${r.aplicado ? ` · × ${r.factor.toFixed(2)}` : ''}`}>
                           normalmente {n(r.rango[0])}–{n(r.rango[1])}
                         </span>
-                        {fraseFactor(r, mes, h.area.nombre) && (
-                          <span className="block text-xs text-gray-400" data-testid="factor">
-                            {fraseFactor(r, mes, h.area.nombre)}
+                        {fraseFactor(r, mes) && (
+                          <span className="block text-xs text-gray-400" data-testid="factor"
+                                title={r.aplicado ? `Factor del mes para tu categoría en ${h.area.nombre}, de cuatro años de historia` : `Factor del mes en ${h.area.nombre}; se muestra pero no se aplica en este canal`}>
+                            {fraseFactor(r, mes)}
                           </span>
                         )}
                       </>
@@ -442,7 +504,7 @@ export function TablaRecomendacion({ area, mes, soloLectura, onCambio }: Props) 
         </table>
       </div>
       <p className="text-xs text-gray-500">
-        Se muestran {TOP_N} códigos como máximo. Poné 0 o dejá vacío para no cargar un código.
+        Se muestran {TOP_N} códigos como máximo; buscá arriba para llegar a cualquier otro de tu canal. Poné 0 o dejá vacío para no cargar un código.
       </p>
     </section>
   );

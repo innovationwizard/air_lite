@@ -78,13 +78,16 @@ const HISTORIAL = {
 };
 
 let puts: { url: string; body: Record<string, unknown> }[];
+let gets: string[];
 
-function mockFetch(historial: unknown = HISTORIAL) {
-  puts = [];
+function mockFetch(historial: unknown = HISTORIAL, buscado: unknown = null) {
+  puts = []; gets = [];
   global.fetch = jest.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
     if (url.startsWith('/api/comercial/historial')) {
-      return { ok: true, json: async () => historial } as Response;
+      gets.push(url);
+      const q = new URL(url, 'http://x').searchParams.get('q');
+      return { ok: true, json: async () => (q && buscado ? buscado : historial) } as Response;
     }
     if (url === '/api/comercial/forecast' && init?.method === 'PUT') {
       const body = JSON.parse(String(init.body));
@@ -174,8 +177,8 @@ it('la recomendación trae su rango y la frase del factor, aplicado o no', async
   await montar();
   expect(screen.getByText('normalmente 1,502–2,497')).toBeInTheDocument();
   const frases = screen.getAllByTestId('factor').map((e) => e.textContent);
-  expect(frases).toContain('Oct = 0.83× un mes normal en Supermercados');
-  expect(frases).toContain('Oct suele ser 0.87× un mes normal en Supermercados (no se aplica en este canal)');
+  expect(frases).toContain('Oct = 0.83× mes normal');
+  expect(frases).toContain('Oct suele ser 0.87× mes normal (no se aplica)');
 });
 
 it('la celda arranca con la recomendación, o con lo ya cargado, y muestra el ciclo anterior', async () => {
@@ -249,4 +252,46 @@ it('quien sólo lee elige un canal y ve la tabla sin editar', async () => {
   expect(screen.queryByLabelText(/Mi forecast/)).not.toBeInTheDocument();
   expect(screen.queryByText(/Aprobar todo/)).not.toBeInTheDocument();
   expect(within(screen.getByRole('table')).getByText('normalmente 1,502–2,497')).toBeInTheDocument();
+});
+
+it('la búsqueda filtra al instante y, tras la pausa, pregunta al servidor por todo el canal', async () => {
+  const lejano = fila({
+    productId: 99, sku: '55555555', nombre: 'VASO LEJANO', etiqueta: 'estable',
+    recomendacion: { avg3: 10, avg6: 10, base: 10, factor: 1, indiceMes: null, aplicado: false, valor: 10, rango: [8, 12], etiqueta: 'estable' },
+  });
+  mockFetch(HISTORIAL, { ...HISTORIAL, busqueda: 'vaso', total: 1, totalCanal: 162, filas: [lejano] });
+  const user = await montar();
+  const caja = screen.getByLabelText('Buscar por código o nombre');
+  await user.type(caja, 'pajilla');
+  // client-side, right away: only the PAJILLA row of the 50
+  expect(screen.queryByText('77205190')).not.toBeInTheDocument();
+  expect(screen.getByText('88201006')).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: /Aprobar todo \(1\)/ })).toBeInTheDocument();
+
+  await user.clear(caja);
+  await user.type(caja, 'vaso');
+  jest.advanceTimersByTime(400);
+  await waitFor(() => expect(gets.some((u) => u.includes('q=vaso'))).toBe(true));
+  await waitFor(() => expect(screen.getByText('55555555')).toBeInTheDocument());
+  expect(screen.getByText(/1 códigos de Supermercados para «vaso»/)).toBeInTheDocument();
+});
+
+it('sin coincidencias en el canal, lo dice y manda al formulario de abajo', async () => {
+  mockFetch(HISTORIAL, { ...HISTORIAL, busqueda: 'zzz', total: 0, totalCanal: 162, filas: [] });
+  const user = await montar();
+  await user.type(screen.getByLabelText('Buscar por código o nombre'), 'zzz');
+  jest.advanceTimersByTime(400);
+  await waitFor(() => expect(screen.getByTestId('sin-resultados')).toHaveTextContent(/nunca pidió, agregalo abajo/));
+  expect(screen.getByRole('button', { name: /Aprobar todo \(0\)/ })).toBeDisabled();
+});
+
+it('el filtro por variabilidad deja sólo esa etiqueta y «Aprobar todo» cuenta lo visible', async () => {
+  const user = await montar();
+  await user.click(screen.getByRole('button', { name: 'estable' }));
+  expect(screen.queryByText('77205190')).not.toBeInTheDocument();     // medio
+  expect(screen.getByText('88201006')).toBeInTheDocument();           // estable
+  expect(screen.getByText('11111111')).toBeInTheDocument();           // estable
+  expect(screen.getByRole('button', { name: /Aprobar todo \(2\)/ })).toBeInTheDocument();
+  await user.click(screen.getByRole('button', { name: 'Todas' }));
+  expect(screen.getByRole('button', { name: /Aprobar todo \(3\)/ })).toBeInTheDocument();
 });
