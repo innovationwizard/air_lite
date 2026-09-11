@@ -46,7 +46,6 @@ import logging
 import os
 import statistics
 import sys
-import urllib.parse
 from collections import defaultdict
 from datetime import datetime, timezone
 

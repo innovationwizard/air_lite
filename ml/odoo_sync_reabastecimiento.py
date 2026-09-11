@@ -1075,11 +1075,11 @@ def assemble_demanda_canal(por_area, buckets_labels, anios_anteriores, clientes,
             if not sb_pid:
                 unmapped.add(opid)
                 continue
-            ped = {l: round(por_mes.get(l, {}).get('pedido', {}).get(opid, 0.0), 4) for l in buckets_labels}
-            ent = {l: round(por_mes.get(l, {}).get('entregado', {}).get(opid, 0.0), 4) for l in buckets_labels}
-            ly = {l: {'pedido': round(por_mes.get(l, {}).get('pedido', {}).get(opid, 0.0), 4),
-                      'entregado': round(por_mes.get(l, {}).get('entregado', {}).get(opid, 0.0), 4)}
-                  for l in ly_labels if l in por_mes}
+            ped = {m: round(por_mes.get(m, {}).get('pedido', {}).get(opid, 0.0), 4) for m in buckets_labels}
+            ent = {m: round(por_mes.get(m, {}).get('entregado', {}).get(opid, 0.0), 4) for m in buckets_labels}
+            ly = {m: {'pedido': round(por_mes.get(m, {}).get('pedido', {}).get(opid, 0.0), 4),
+                      'entregado': round(por_mes.get(m, {}).get('entregado', {}).get(opid, 0.0), 4)}
+                  for m in ly_labels if m in por_mes}
             n, top, share = concentracion(clientes.get(area, {}).get(opid, {}))
             rows.append({
                 'area': area, 'product_id': sb_pid,
@@ -1181,11 +1181,11 @@ def sync_demanda_canal(execute, issues, uom_ctx, product_map, sync_id, velocity)
                + ', '.join(f'{(g["team_id"] or [None, "(none)"])[1]}={g["__count"]}' for g in equipos_sin))
 
     # Partition self-check against the General bucket of demanda_mensual.
-    por_area_mes = {area: {l: sum(m[l]['pedido'].values()) for l in bucket_labels if l in m}
-                    for area, m in por_area.items()}
+    por_area_mes = {area: {lbl: sum(meses[lbl]['pedido'].values()) for lbl in bucket_labels if lbl in meses}
+                    for area, meses in por_area.items()}
     general = velocity.get(GENERAL_BODEGA, {})
-    general_mensual = {l: sum(v['demanda_mensual'].get(l, 0.0) for v in general.values())
-                       for l in bucket_labels}
+    general_mensual = {lbl: sum(v['demanda_mensual'].get(lbl, 0.0) for v in general.values())
+                       for lbl in bucket_labels}
     check_particion(por_area_mes, general_mensual, issues)
 
     if unconverted_total:
