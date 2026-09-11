@@ -34,6 +34,8 @@ function fila(over: Record<string, unknown>) {
     },
     ventaPublico: null, capturado: null, cicloAnterior: null,
     compras: { compra: 1200, proyeccion: 6500, bodega: 'San Jose VN', coberturaDias: 30 },
+    proveedor: { id: 7, nombre: 'DARNEL', grupoId: null, grupoNombre: null },
+    categoria: 'BANDEJAS',
     ...over,
   };
 }
@@ -42,6 +44,15 @@ const HISTORIAL = {
   area: { slug: 'supermercados', nombre: 'Supermercados', aplicaEstacional: true },
   mes: '2026-10-01', historialDisponible: true, asOf: '2026-09-11T02:00:00Z', bodega: 'San Jose VN',
   total: 162,
+  filtros: {
+    proveedor: null, categoria: null,
+    proveedores: [
+      { valor: 'group:g1', etiqueta: 'Carvajal (grupo)', grupo: true },
+      { valor: 'sup:7', etiqueta: 'DARNEL', grupo: false },
+      { valor: 'sup:9', etiqueta: 'REYMA', grupo: false },
+    ],
+    categorias: ['BANDEJAS', 'PAJILLAS', 'VASOS'],
+  },
   filas: [
     fila({}),
     fila({
@@ -294,4 +305,33 @@ it('el filtro por variabilidad deja sólo esa etiqueta y «Aprobar todo» cuenta
   expect(screen.getByRole('button', { name: /Aprobar todo \(2\)/ })).toBeInTheDocument();
   await user.click(screen.getByRole('button', { name: 'Todas' }));
   expect(screen.getByRole('button', { name: /Aprobar todo \(3\)/ })).toBeInTheDocument();
+});
+
+it('proveedor y categoría filtran en el servidor sobre todo el canal, con las opciones del canal', async () => {
+  const soloReyma = { ...HISTORIAL, total: 1, totalCanal: 162,
+    filas: [fila({ productId: 42, sku: '99990001', nombre: 'VASO REYMA', proveedor: { id: 9, nombre: 'REYMA', grupoId: null, grupoNombre: null }, categoria: 'VASOS' })] };
+  gets = [];
+  global.fetch = jest.fn(async (input: RequestInfo | URL) => {
+    const url = String(input);
+    if (url.startsWith('/api/comercial/historial')) {
+      gets.push(url);
+      const u = new URL(url, 'http://x');
+      const filtrado = u.searchParams.get('proveedor') || u.searchParams.get('categoria');
+      return { ok: true, json: async () => (filtrado ? soloReyma : HISTORIAL) } as Response;
+    }
+    return { ok: true, json: async () => DATOS } as Response;
+  }) as unknown as typeof fetch;
+  const user = await montar();
+
+  const prov = screen.getByLabelText('Filtrar por proveedor');
+  expect(within(prov).getByRole('group', { name: 'Grupos de proveedores' })).toBeInTheDocument();
+  await user.selectOptions(prov, 'sup:9');
+  await waitFor(() => expect(gets.some((u) => u.includes('proveedor=sup%3A9'))).toBe(true));
+  await waitFor(() => expect(screen.getByText('99990001')).toBeInTheDocument());
+  expect(screen.queryByText('77205190')).not.toBeInTheDocument();
+  expect(screen.getByText(/1 códigos de Supermercados para REYMA/)).toBeInTheDocument();
+
+  await user.selectOptions(screen.getByLabelText('Filtrar por categoría'), 'VASOS');
+  await waitFor(() => expect(gets.some((u) => u.includes('proveedor=sup%3A9') && u.includes('categoria=VASOS'))).toBe(true));
+  expect(screen.getByRole('heading', { name: /1 códigos de Supermercados para REYMA · VASOS/ })).toBeInTheDocument();
 });

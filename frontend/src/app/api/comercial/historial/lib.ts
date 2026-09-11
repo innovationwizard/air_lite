@@ -27,7 +27,11 @@ export interface DemandaRow {
   clientes_3m: number; cliente_principal: string | null; cliente_principal_share: number | null;
   as_of: string;
 }
-interface ProductRow { id: number; sku: string; name: string; stock_uom: string | null }
+interface ProductRow { id: number; sku: string; name: string; stock_uom: string | null; category: string | null }
+interface SupplierLink { id: number; product_id: number; supplier_id: number }
+interface SupplierRef { id: number; name: string }
+interface SupplierGroupRef { id: string; display_name: string }
+interface SupplierGroupMemberRef { supplier_id: number; group_id: string }
 interface IndiceRow { id: string; grupo_sai: string; categoria: string; mes: number; indice: number }
 interface InputRow { id: string; product_id: number; bodega: string; existencias: number | null; p3: number | null }
 export interface CapturaRow { id: string; product_id: number; month: string; quantity: number; motivo: Motivo; area: string }
@@ -46,6 +50,10 @@ export interface FilaHistorial {
   recomendacion: Recomendacion | null;
   ventaPublico: number | null;
   capturado: { quantity: number; motivo: Motivo } | null;
+  /** Principal supplier (first product_suppliers link, as on Wilmer's page) and its group, if any. */
+  proveedor: { id: number | null; nombre: string; grupoId: string | null; grupoNombre: string | null };
+  /** Odoo category (`products.category`), the one Wilmer's page groups by. */
+  categoria: string;
   /**
    * Compras' numbers for the bodega that serves this channel, BEFORE the
    * channels' forms: what Wilmer's engine plans to buy (Sugerido without
@@ -68,15 +76,17 @@ export interface Contexto {
   inputs: Map<string, Map<number, { existencias: number | null; p3: number | null }>>;
   /** product_id -> retail sell-out (invoiced_tiendas f3 summed over stores). */
   ventaPublico: Map<number, number>;
+  /** product_id -> principal supplier (+ group), same rule as rows.ts. */
+  proveedorPorProducto: Map<number, { id: number; nombre: string; grupoId: string | null; grupoNombre: string | null }>;
 }
 
 export async function cargarContexto(db: SupabaseClient): Promise<Contexto> {
   // Whole tables, not `.in(ids)`: an `in` list of ~900 ids is a URL the
   // gateway may refuse. These are 1.5-3k rows each.
-  const [areas, productos, categorias, indices, inputs, tiendas] = await Promise.all([
+  const [areas, productos, categorias, indices, inputs, tiendas, links, suppliers, groups, members] = await Promise.all([
     fetchAll<AreaCfg & { id?: string }>(() => db.from('comercial_areas')
       .select('slug, nombre, activa, aplica_estacional, grupo_sai').eq('activa', true), 'slug'),
-    fetchAll<ProductRow>(() => db.from('products').select('id, sku, name, stock_uom'), 'id'),
+    fetchAll<ProductRow>(() => db.from('products').select('id, sku, name, stock_uom, category'), 'id'),
     fetchAll<{ sku: string; categoria: string }>(() => db.from('comercial_categoria_sai')
       .select('sku, categoria'), 'sku'),
     fetchAll<IndiceRow>(() => db.from('comercial_estacionalidad')
@@ -85,6 +95,12 @@ export async function cargarContexto(db: SupabaseClient): Promise<Contexto> {
       .select('id, product_id, bodega, existencias, p3')
       .in('bodega', ['San Jose VN', 'Zacapa', 'Petén']), 'id'),
     fetchAll<TiendaRow>(() => db.from('invoiced_tiendas').select('id, product_id, f3'), 'id'),
+    // Supplier and group, exactly as rows.ts resolves them for Wilmer: `id`
+    // is SERIAL so the first link per product is the principal supplier.
+    fetchAll<SupplierLink>(() => db.from('product_suppliers').select('id, product_id, supplier_id'), 'id'),
+    fetchAll<SupplierRef>(() => db.from('suppliers').select('id, name'), 'id'),
+    fetchAll<SupplierGroupRef>(() => db.from('supplier_groups').select('id, display_name'), 'id'),
+    fetchAll<SupplierGroupMemberRef>(() => db.from('supplier_group_members').select('supplier_id, group_id'), 'supplier_id'),
   ]);
 
   const idx = new Map<string, Map<string, number[]>>();
@@ -103,6 +119,18 @@ export async function cargarContexto(db: SupabaseClient): Promise<Contexto> {
   }
   const vp = new Map<number, number>();
   for (const t of tiendas) vp.set(t.product_id, (vp.get(t.product_id) ?? 0) + Number(t.f3));
+  const supplierById = new Map(suppliers.map((x) => [x.id, x.name]));
+  const groupById = new Map(groups.map((g) => [g.id, g.display_name]));
+  const groupBySupplier = new Map(members.map((m) => [m.supplier_id, m.group_id]));
+  const prov = new Map<number, { id: number; nombre: string; grupoId: string | null; grupoNombre: string | null }>();
+  for (const l of links) {
+    if (prov.has(l.product_id)) continue;          // first link wins (principal)
+    const grupoId = groupBySupplier.get(l.supplier_id) ?? null;
+    prov.set(l.product_id, {
+      id: l.supplier_id, nombre: supplierById.get(l.supplier_id) ?? '',
+      grupoId, grupoNombre: grupoId ? (groupById.get(grupoId) ?? null) : null,
+    });
+  }
 
   return {
     areas: new Map(areas.map((a) => [a.slug, a])),
@@ -111,6 +139,7 @@ export async function cargarContexto(db: SupabaseClient): Promise<Contexto> {
     indices: idx,
     inputs: inp,
     ventaPublico: vp,
+    proveedorPorProducto: prov,
   };
 }
 
@@ -208,6 +237,9 @@ export function computarFilas(
       recomendacion: rec,
       ventaPublico: area === 'tiendas' ? (ctx.ventaPublico.get(d.product_id) ?? 0) : null,
       capturado: cap ? { quantity: Number(cap.quantity), motivo: cap.motivo } : null,
+      proveedor: ctx.proveedorPorProducto.get(d.product_id)
+        ?? { id: null, nombre: '', grupoId: null, grupoNombre: null },
+      categoria: (p?.category ?? '').trim() || 'Sin categoría',
       compras: (() => {
         const fc = forecastCompras?.get(d.product_id);
         return fc && forecastCompras

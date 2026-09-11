@@ -34,6 +34,8 @@ export interface FilaHistorial {
   recomendacion: Recomendacion | null;
   ventaPublico: number | null;
   capturado: { quantity: number; motivo: Motivo } | null;
+  proveedor: { id: number | null; nombre: string; grupoId: string | null; grupoNombre: string | null };
+  categoria: string;
   compras: { compra: number; proyeccion: number; bodega: string; coberturaDias: number } | null;
   cicloAnterior: { mes: string; capturado: number | null; pedidoReal: number; entregadoReal: number } | null;
 }
@@ -47,6 +49,11 @@ export interface Historial {
   total: number;
   totalCanal?: number;
   busqueda?: string | null;
+  filtros?: {
+    proveedor: string | null; categoria: string | null;
+    proveedores: { valor: string; etiqueta: string; grupo: boolean }[];
+    categorias: string[];
+  };
   filas: FilaHistorial[];
 }
 
@@ -144,22 +151,33 @@ export function TablaRecomendacion({ area, mes, soloLectura, onCambio }: Props) 
   const [busquedaServidor, setBusquedaServidor] = useState('');
   // Variability filter: which rows to trust, at a glance.
   const [filtroEtiqueta, setFiltroEtiqueta] = useState<Etiqueta | ''>('');
+  // Supplier (or Wilmer's supplier group) and Odoo category — server-side,
+  // over the channel's whole history, like the search (Jorge 2026-09-11).
+  const [filtroProveedor, setFiltroProveedor] = useState('');
+  const [filtroCategoria, setFiltroCategoria] = useState('');
 
   const cargar = useCallback(async () => {
     setError(null);
     try {
-      const q = busquedaServidor ? `&q=${encodeURIComponent(busquedaServidor)}` : '';
-      const r = await fetch(`/api/comercial/historial?area=${encodeURIComponent(area)}&mes=${encodeURIComponent(mes)}${q}`);
+      const extra = [
+        busquedaServidor ? `&q=${encodeURIComponent(busquedaServidor)}` : '',
+        filtroProveedor ? `&proveedor=${encodeURIComponent(filtroProveedor)}` : '',
+        filtroCategoria ? `&categoria=${encodeURIComponent(filtroCategoria)}` : '',
+      ].join('');
+      const r = await fetch(`/api/comercial/historial?area=${encodeURIComponent(area)}&mes=${encodeURIComponent(mes)}${extra}`);
       const j = await r.json();
       if (!r.ok) throw new Error(j.error ?? 'No se pudo cargar el historial');
       setH(j);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'No se pudo cargar el historial');
     }
-  }, [area, mes, busquedaServidor]);
+  }, [area, mes, busquedaServidor, filtroProveedor, filtroCategoria]);
 
   // A new area or month is a new table: forget edits and ✓s. A search is not.
-  useEffect(() => { setH(null); setEdits({}); setGuardado({}); setBusqueda(''); setBusquedaServidor(''); }, [area, mes]);
+  useEffect(() => {
+    setH(null); setEdits({}); setGuardado({}); setBusqueda(''); setBusquedaServidor('');
+    setFiltroProveedor(''); setFiltroCategoria('');
+  }, [area, mes]);
   useEffect(() => { cargar(); }, [cargar]);
   // Search with a brake: the server is asked after the typing pauses.
   useEffect(() => {
@@ -251,7 +269,12 @@ export function TablaRecomendacion({ area, mes, soloLectura, onCambio }: Props) 
 
   if (error) return <div className="text-sm text-red-700">{error}</div>;
   if (!h) return <div className="text-sm text-gray-500">Cargando el historial del canal…</div>;
-  const buscando = !!h.busqueda;
+  const buscando = !!h.busqueda || !!filtroProveedor || !!filtroCategoria;
+  const filtroTexto = [
+    h.busqueda ? `«${h.busqueda}»` : '',
+    filtroProveedor ? (h.filtros?.proveedores.find((p) => p.valor === filtroProveedor)?.etiqueta ?? '') : '',
+    filtroCategoria || '',
+  ].filter(Boolean).join(' · ');
 
   if (!h.historialDisponible) {
     return (
@@ -274,7 +297,7 @@ export function TablaRecomendacion({ area, mes, soloLectura, onCambio }: Props) 
         <div>
           <h2 className="text-sm font-medium text-gray-900">
             {buscando
-              ? `${h.total} códigos de ${h.area.nombre} para «${h.busqueda}» — ${etiquetaMes(mes)}`
+              ? `${h.total} códigos de ${h.area.nombre} para ${filtroTexto} — ${etiquetaMes(mes)}`
               : `Los ${h.filas.length} códigos con más riesgo de faltante en ${h.area.nombre} — ${etiquetaMes(mes)}`}
           </h2>
           <p className="text-xs text-gray-500">
@@ -311,6 +334,33 @@ export function TablaRecomendacion({ area, mes, soloLectura, onCambio }: Props) 
           aria-label="Buscar por código o nombre"
           className="w-72 max-w-full px-3 py-1.5 text-sm border border-gray-300 rounded-md"
         />
+        <select
+          value={filtroProveedor} onChange={(e) => setFiltroProveedor(e.target.value)}
+          aria-label="Filtrar por proveedor"
+          className="px-2 py-1.5 text-sm border border-gray-300 rounded-md bg-white max-w-[16rem]"
+        >
+          <option value="">Todos los proveedores</option>
+          {h.filtros?.proveedores.some((p) => p.grupo) && (
+            <optgroup label="Grupos de proveedores">
+              {h.filtros.proveedores.filter((p) => p.grupo).map((p) => (
+                <option key={p.valor} value={p.valor}>{p.etiqueta}</option>
+              ))}
+            </optgroup>
+          )}
+          <optgroup label="Proveedores">
+            {h.filtros?.proveedores.filter((p) => !p.grupo).map((p) => (
+              <option key={p.valor} value={p.valor}>{p.etiqueta}</option>
+            ))}
+          </optgroup>
+        </select>
+        <select
+          value={filtroCategoria} onChange={(e) => setFiltroCategoria(e.target.value)}
+          aria-label="Filtrar por categoría"
+          className="px-2 py-1.5 text-sm border border-gray-300 rounded-md bg-white max-w-[14rem]"
+        >
+          <option value="">Todas las categorías</option>
+          {h.filtros?.categorias.map((c) => <option key={c} value={c}>{c}</option>)}
+        </select>
         <div className="flex flex-wrap gap-1" role="group" aria-label="Filtrar por variabilidad">
           {([['', 'Todas'], ...(Object.keys(ETIQUETA_TEXTO) as Etiqueta[]).map((e) => [e, ETIQUETA_TEXTO[e]])] as [Etiqueta | '', string][])
             .map(([valor, texto]) => (
@@ -399,6 +449,9 @@ export function TablaRecomendacion({ area, mes, soloLectura, onCambio }: Props) 
                       )}
                     </div>
                     <div className="text-gray-800 truncate" title={f.nombre}>{f.nombre}</div>
+                    <div className="text-xs text-gray-400 truncate" title={`${f.proveedor.nombre}${f.proveedor.grupoNombre ? ` (${f.proveedor.grupoNombre})` : ''} · ${f.categoria}`}>
+                      {f.proveedor.nombre || '—'} · {f.categoria}
+                    </div>
                     {f.cicloAnterior && f.cicloAnterior.capturado !== null && (
                       <div className="text-xs text-gray-500" data-testid="ciclo-anterior">
                         Tu forecast de {mesCorto(f.cicloAnterior.mes)}: {n(f.cicloAnterior.capturado)} · real {n(f.cicloAnterior.pedidoReal)}

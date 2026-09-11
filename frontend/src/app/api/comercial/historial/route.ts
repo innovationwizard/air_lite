@@ -91,11 +91,37 @@ export async function GET(request: Request) {
   // A product the channel never ordered is not here at all; the add form
   // below the table covers that.
   const q = normalizar(url.searchParams.get('q') ?? '');
-  const filas = q
-    ? todas.filter((f) => normalizar(f.sku).includes(q) || normalizar(f.nombre).includes(q))
-    : todas;
+  // `proveedor`: `group:<id>` (one of Wilmer's supplier groups) or `sup:<id>`;
+  // `categoria`: exact products.category. Both over the whole channel, like
+  // `q` (Jorge 2026-09-11). The option lists come from the UNFILTERED set so
+  // a filter never hides the other filter's choices.
+  const proveedor = url.searchParams.get('proveedor') ?? '';
+  const categoria = url.searchParams.get('categoria') ?? '';
+  const filas = todas.filter((f) =>
+    (!q || normalizar(f.sku).includes(q) || normalizar(f.nombre).includes(q))
+    && (!proveedor || (proveedor.startsWith('group:')
+      ? f.proveedor.grupoId === proveedor.slice('group:'.length)
+      : String(f.proveedor.id) === proveedor.replace(/^sup:/, '')))
+    && (!categoria || f.categoria === categoria));
+  const grupos = new Map<string, string>();
+  const proveedores = new Map<number, string>();
+  const categorias = new Set<string>();
+  for (const f of todas) {
+    if (f.proveedor.grupoId && f.proveedor.grupoNombre) grupos.set(f.proveedor.grupoId, f.proveedor.grupoNombre);
+    if (f.proveedor.id !== null && f.proveedor.nombre) proveedores.set(f.proveedor.id, f.proveedor.nombre);
+    categorias.add(f.categoria);
+  }
+  const porNombre = (a: [unknown, string], b: [unknown, string]) => a[1].localeCompare(b[1], 'es');
   return NextResponse.json({
     ...meta, historialDisponible: true, asOf, busqueda: q || null,
+    filtros: {
+      proveedor: proveedor || null, categoria: categoria || null,
+      proveedores: [
+        ...[...grupos].sort(porNombre).map(([id, nombre]) => ({ valor: `group:${id}`, etiqueta: nombre, grupo: true })),
+        ...[...proveedores].sort(porNombre).map(([id, nombre]) => ({ valor: `sup:${id}`, etiqueta: nombre, grupo: false })),
+      ],
+      categorias: [...categorias].sort((a, b) => a.localeCompare(b, 'es')),
+    },
     total: filas.length, totalCanal: todas.length, filas: filas.slice(0, TOP_N),
   });
 }
