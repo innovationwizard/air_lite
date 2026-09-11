@@ -122,6 +122,23 @@ describe('consolidarComercial', () => {
     expect(r.get(12)?.base).toBe(1100);
   });
 
+  it('los vendedores de Institucional se suman en UNA columna Institucional', () => {
+    // 2026-09-11: institucional se pronostica por vendedor (cinco areas hijas).
+    // Wilmer no discute con cinco vendedores: ve el canal.
+    const padreDe = new Map([['institucional_ortiz', 'institucional'], ['institucional_cerezo', 'institucional']]);
+    const r = consolidarComercial([
+      fila({ product_id: 20, quantity: 100, motivo: 'extraordinaria', area: 'institucional_ortiz' }),
+      fila({ product_id: 20, quantity: 50, motivo: 'extraordinaria', area: 'institucional_cerezo' }),
+      fila({ product_id: 20, quantity: 30, motivo: 'critico', area: 'institucional_cerezo' }),
+      fila({ product_id: 20, quantity: 7, motivo: 'extraordinaria', area: 'mayoreo' }),
+    ], 'San Jose VN', padreDe);
+    expect(r.get(20)?.directo).toBe(157);
+    expect(r.get(20)?.porArea).toEqual({
+      institucional: { directo: 150, aRevision: 30, base: 0 },
+      mayoreo: { directo: 7, aRevision: 0, base: 0 },
+    });
+  });
+
   it('sin capturas no devuelve nada, y el aditivo cae a cero', () => {
     // Con cero filas el Sugerido tiene que valer exactamente lo que valia
     // antes de que existiera el modulo.

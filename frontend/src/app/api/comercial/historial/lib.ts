@@ -19,7 +19,7 @@ import {
  * come out whichever route asked.
  */
 
-export interface AreaCfg { slug: string; nombre: string; activa: boolean; aplica_estacional: boolean; grupo_sai: string | null }
+export interface AreaCfg { slug: string; nombre: string; activa: boolean; aplica_estacional: boolean; grupo_sai: string | null; padre: string | null }
 export interface DemandaRow {
   id: string; product_id: number;
   pedido_mensual: Record<string, number>; entregado_mensual: Record<string, number>;
@@ -85,7 +85,7 @@ export async function cargarContexto(db: SupabaseClient): Promise<Contexto> {
   // gateway may refuse. These are 1.5-3k rows each.
   const [areas, productos, categorias, indices, inputs, tiendas, links, suppliers, groups, members] = await Promise.all([
     fetchAll<AreaCfg & { id?: string }>(() => db.from('comercial_areas')
-      .select('slug, nombre, activa, aplica_estacional, grupo_sai').eq('activa', true), 'slug'),
+      .select('slug, nombre, activa, aplica_estacional, grupo_sai, padre').eq('activa', true), 'slug'),
     fetchAll<ProductRow>(() => db.from('products').select('id, sku, name, stock_uom, category'), 'id'),
     fetchAll<{ sku: string; categoria: string }>(() => db.from('comercial_categoria_sai')
       .select('sku, categoria'), 'sku'),
@@ -162,6 +162,15 @@ export async function cargarForecastCompras(db: SupabaseClient, bodega: string):
   }
   m.coberturaDias = coberturaDias;
   return m;
+}
+
+/** A parent area has children; it captures nothing and has no history of its own. */
+export function esPadre(ctx: Contexto, area: string): boolean {
+  return [...ctx.areas.values()].some((a) => a.padre === area);
+}
+
+export function hijosDe(ctx: Contexto, area: string): AreaCfg[] {
+  return [...ctx.areas.values()].filter((a) => a.padre === area);
 }
 
 export function cargarDemanda(db: SupabaseClient, area: string): Promise<DemandaRow[]> {

@@ -954,15 +954,20 @@ SIN_ASIGNAR = '_sin_asignar'
 
 
 def load_area_reglas(issues):
-    """[{area, odoo_team_id, sucursal_ids, excluir_sucursal_ids}] for ACTIVE
-    areas. Empty -> error issue (nothing can be attributed)."""
-    activas = {a['slug'] for a in
-               sb_get_all('comercial_areas?select=slug,activa&activa=eq.true')}
-    rows = sb_get_all('comercial_area_reglas?select=area,odoo_team_id,sucursal_ids,excluir_sucursal_ids')
-    reglas = [r for r in rows if r['area'] in activas]
+    """[{area, odoo_team_id, sucursal_ids, excluir_sucursal_ids, odoo_user_ids,
+    excluir_user_ids}] for ACTIVE LEAF areas. A parent area (one that has
+    children, 2026-09-11) has no rules of its own: its demand is the sum of
+    its children. Empty -> error issue (nothing can be attributed)."""
+    areas = sb_get_all('comercial_areas?select=slug,activa,padre&activa=eq.true')
+    activas = {a['slug'] for a in areas}
+    padres = {a['padre'] for a in areas if a.get('padre')}
+    hojas = activas - padres
+    rows = sb_get_all('comercial_area_reglas?select=area,odoo_team_id,sucursal_ids,'
+                      'excluir_sucursal_ids,odoo_user_ids,excluir_user_ids')
+    reglas = [r for r in rows if r['area'] in hojas]
     if not reglas:
         issues.add('error', 'comercial', 'comercial_area_reglas is empty — no channel demand can be attributed')
-    huerfanas = sorted(activas - {r['area'] for r in reglas})
+    huerfanas = sorted(hojas - {r['area'] for r in reglas})
     if huerfanas:
         issues.add('warning', 'comercial',
                    f'active areas without an Odoo rule (their leaders will see no history): {huerfanas}')
@@ -970,13 +975,35 @@ def load_area_reglas(issues):
 
 
 def regla_domain(regla):
-    """Odoo domain (on sale.order.line, via order_id) for one rule."""
+    """Odoo domain (on sale.order.line, via order_id) for one rule: a plain
+    conjunction of terms (implicit AND), as Odoo reads a flat list."""
     dom = [['order_id.team_id', '=', regla['odoo_team_id']]]
     if regla.get('sucursal_ids'):
         dom.append(['order_id.location_id', 'in', list(regla['sucursal_ids'])])
     if regla.get('excluir_sucursal_ids'):
         dom.append(['order_id.location_id', 'not in', list(regla['excluir_sucursal_ids'])])
+    # 2026-09-11: a rule can name the salesperson (Institucional per seller).
+    if regla.get('odoo_user_ids'):
+        dom.append(['order_id.user_id', 'in', list(regla['odoo_user_ids'])])
+    if regla.get('excluir_user_ids'):
+        dom.append(['order_id.user_id', 'not in', list(regla['excluir_user_ids'])])
     return dom
+
+
+def domain_not_any(domains):
+    """Odoo domain matching what NONE of `domains` matches: ['!', OR(AND(d1), AND(d2), …)]
+    in Odoo's prefix notation. This is the unassigned bucket — exact
+    complement of every rule, so the partition check is an identity, not
+    a hope. Before 2026-09-11 it was "team not in mapped teams", which
+    dropped orders on a mapped team by an unmapped salesperson."""
+    def conj(terms):
+        return ['&'] * (len(terms) - 1) + list(terms)
+    if not domains:
+        return []
+    union = []
+    for i, d in enumerate(domains):
+        union = (['|'] + union + conj(d)) if i else conj(d)
+    return ['!'] + union
 
 
 def meses_anio_anterior(today, horizonte=HORIZONTE_MESES_ANIO_ANTERIOR,
@@ -1126,11 +1153,11 @@ def sync_demanda_canal(execute, issues, uom_ctx, product_map, sync_id, velocity)
             clientes[area][opid][cliente or '?'] += q
         logger.info('demanda canal %s (team %s): done', area, regla['odoo_team_id'])
 
-    # Demand no rule claims: reported, never dropped. Today that is the
-    # residual `Sales` team and `Point of Sale`; tomorrow, any team someone
-    # creates in Odoo.
-    equipos = sorted({r['odoo_team_id'] for r in reglas})
-    dom_sin = [['order_id.team_id', 'not in', equipos]]
+    # Demand no rule claims: reported, never dropped. The exact complement of
+    # every rule — the residual `Sales` team, `Point of Sale`, a team someone
+    # creates in Odoo tomorrow, or an order on a mapped team by a salesperson
+    # no rule names.
+    dom_sin = domain_not_any([regla_domain(r) for r in reglas])
     for label in bucket_labels:
         s, e = month_bounds(label)
         dom = base + dom_sin + [['order_id.date_order', '>=', s], ['order_id.date_order', '<', e]]
@@ -1140,9 +1167,12 @@ def sync_demanda_canal(execute, issues, uom_ctx, product_map, sync_id, velocity)
             por_area[SIN_ASIGNAR][label]['entregado'][opid] += q
     w_start, _ = month_bounds(bucket_labels[0])
     _, w_end = month_bounds(bucket_labels[-1])
+    # The same complement on the order header, for the report by team.
+    dom_sin_orden = domain_not_any([[[t[0].replace('order_id.', ''), t[1], t[2]] for t in regla_domain(r)]
+                                    for r in reglas])
     equipos_sin = execute('sale.order', 'read_group',
-                          [['state', 'in', ORDERED_STATES], ['team_id', 'not in', equipos],
-                           ['date_order', '>=', w_start], ['date_order', '<', w_end]],
+                          [['state', 'in', ORDERED_STATES],
+                           ['date_order', '>=', w_start], ['date_order', '<', w_end]] + dom_sin_orden,
                           ['id:count'], ['team_id'], lazy=False)
     total_sin = sum(sum(m['pedido'].values()) for m in por_area[SIN_ASIGNAR].values())
     issues.add('info', 'comercial',

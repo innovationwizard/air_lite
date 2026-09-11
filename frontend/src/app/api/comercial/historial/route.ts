@@ -5,7 +5,7 @@ import { createServiceRoleClient } from '@/lib/supabase/server';
 import { fetchAll } from '@/lib/supabase/paginado';
 import { esModificado, mesDentroDelHorizonte, mesPorDefecto, mesesAbiertos } from '@/lib/comercial/forecast';
 import { TOP_N, bodegaQueSirve } from '@/lib/comercial/recomendacion';
-import { cargarContexto, cargarDemanda, cargarForecastCompras, computarFilas, type CapturaRow } from './lib';
+import { cargarContexto, cargarDemanda, cargarForecastCompras, computarFilas, esPadre, type CapturaRow } from './lib';
 
 export const dynamic = 'force-dynamic';
 
@@ -73,6 +73,10 @@ export async function GET(request: Request) {
   ]);
   const areaCfg = ctx.areas.get(area);
   if (!areaCfg) return NextResponse.json({ error: 'Canal desconocido o inactivo' }, { status: 404 });
+  if (esPadre(ctx, area)) {
+    return NextResponse.json(
+      { error: `${areaCfg.nombre} se pronostica por vendedor: elegí uno de sus canales.` }, { status: 400 });
+  }
 
   const meta = {
     area: { slug: areaCfg.slug, nombre: areaCfg.nombre, aplicaEstacional: areaCfg.aplica_estacional },

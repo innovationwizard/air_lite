@@ -66,6 +66,10 @@ export async function POST(request: Request) {
   }
 
   const db = createServiceRoleClient();
+  const { data: hijos } = await db.from('comercial_areas').select('slug').eq('padre', area).eq('activa', true).limit(1);
+  if (hijos && hijos.length) {
+    return NextResponse.json({ error: 'Este canal se pronostica por vendedor; cada vendedor bloquea el suyo.' }, { status: 403 });
+  }
   const yaActivo = await bloqueoActivo(db, area, month);
   if (yaActivo) return NextResponse.json({ error: 'Ese mes ya está bloqueado.', bloqueo: yaActivo }, { status: 409 });
 

@@ -222,13 +222,20 @@ export interface AporteComercial {
 export function consolidarComercial(
   filas: ComercialRow[],
   bodega: string,
+  /**
+   * Child area → parent (institucional per seller, 2026-09-11). Wilmer sees
+   * ONE «Institucional» column: the sum of its sellers. The seller detail is
+   * for the comercial screens, not the purchase table.
+   */
+  padreDe: ReadonlyMap<string, string> = new Map(),
 ): Map<number, AporteComercial> {
   const porProducto = new Map<number, AporteComercial>();
   for (const c of filas) {
     if (c.bodega !== null && c.bodega !== bodega) continue;
+    const area = padreDe.get(c.area) ?? c.area;
     const acc = porProducto.get(c.product_id)
       ?? { directo: 0, aRevision: 0, base: 0, porArea: {} as AporteComercial['porArea'] };
-    const canal = acc.porArea[c.area] ?? { directo: 0, aRevision: 0, base: 0 };
+    const canal = acc.porArea[area] ?? { directo: 0, aRevision: 0, base: 0 };
     if (sumaDirecto(c.motivo as Motivo)) {
       acc.directo += c.quantity;
       canal.directo += c.quantity;
@@ -239,7 +246,7 @@ export function consolidarComercial(
       acc.aRevision += c.quantity;
       canal.aRevision += c.quantity;
     }
-    acc.porArea[c.area] = canal;
+    acc.porArea[area] = canal;
     porProducto.set(c.product_id, acc);
   }
   return porProducto;
@@ -328,10 +335,13 @@ export async function buildRows(
           service.from('supplier_group_members').select('supplier_id, group_id'), 'supplier_id'),
         // Catálogo de canales comerciales — seis filas hoy; el orden por
         // nombre es el orden de las columnas, para que no bailen entre cargas.
-        service.from('comercial_areas').select('slug, nombre').eq('activa', true).order('nombre'),
+        service.from('comercial_areas').select('slug, nombre, padre').eq('activa', true).order('nombre'),
       ]);
-    const areasComerciales =
-      (areasCom?.data as { slug: string; nombre: string }[] | null) ?? [];
+    const todasLasAreas =
+      (areasCom?.data as { slug: string; nombre: string; padre: string | null }[] | null) ?? [];
+    // Columns are TOP-LEVEL areas only; a child rolls into its parent.
+    const padreDe = new Map(todasLasAreas.filter((a) => a.padre).map((a) => [a.slug, a.padre!]));
+    const areasComerciales = todasLasAreas.filter((a) => !a.padre).map(({ slug, nombre }) => ({ slug, nombre }));
 
     const coberturaDias = (cobertura?.data as { dias: number } | null)?.dias
       ?? COBERTURA_DEFAULT_DIAS;
@@ -378,7 +388,7 @@ export async function buildRows(
     const pendingByProduct = latest(pendingOv);
     // Suma de los seis canales, y sólo lo que es compromiso — ver
     // `consolidarComercial` arriba.
-    const comercialByProduct = consolidarComercial(comercial, bodega);
+    const comercialByProduct = consolidarComercial(comercial, bodega, padreDe);
 
     let maxAsOf = '';
     const rows = inputs.map((r) => {

@@ -22,7 +22,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 import odoo_sync_reabastecimiento as sync  # noqa: E402
 from odoo_sync_reabastecimiento import (  # noqa: E402
-    Issues, assemble_demanda_canal, check_particion, concentracion,
+    Issues, assemble_demanda_canal, check_particion, concentracion, domain_not_any,
     meses_anio_anterior, month_bounds, regla_domain, sync_demanda_canal,
 )
 
@@ -46,6 +46,32 @@ def test_domain_team_with_exclusion():
 def test_domain_empty_arrays_mean_no_filter():
     assert regla_domain({'odoo_team_id': 5, 'sucursal_ids': [], 'excluir_sucursal_ids': []}) \
         == [['order_id.team_id', '=', 5]]
+
+
+def test_domain_team_with_salesperson():
+    """Institucional per seller (2026-09-11): team AND the order's salesperson."""
+    d = regla_domain({'odoo_team_id': 6, 'odoo_user_ids': [52]})
+    assert d == [['order_id.team_id', '=', 6], ['order_id.user_id', 'in', [52]]]
+    d = regla_domain({'odoo_team_id': 6, 'excluir_user_ids': [56]})
+    assert d == [['order_id.team_id', '=', 6], ['order_id.user_id', 'not in', [56]]]
+
+
+# ── domain_not_any ───────────────────────────────────────────────────────────
+
+def test_not_any_of_one_rule():
+    assert domain_not_any([[['a', '=', 1], ['b', '=', 2]]]) == ['!', '&', ['a', '=', 1], ['b', '=', 2]]
+
+
+def test_not_any_of_three_rules_is_prefix_or_of_ands():
+    d = domain_not_any([[['t', '=', 9]], [['t', '=', 8], ['s', 'not in', [1, 3]]], [['t', '=', 6], ['u', 'in', [52]]]])
+    assert d == ['!',
+                 '|', '|', ['t', '=', 9],
+                 '&', ['t', '=', 8], ['s', 'not in', [1, 3]],
+                 '&', ['t', '=', 6], ['u', 'in', [52]]]
+
+
+def test_not_any_of_nothing_matches_everything():
+    assert domain_not_any([]) == []
 
 
 # ── meses_anio_anterior ──────────────────────────────────────────────────────
@@ -161,7 +187,8 @@ def _fake_execute(calls):
         domain = args[0]
         if model == 'sale.order':
             return [{'team_id': [1, 'Sales'], '__count': 2}]
-        team = next((d[2] for d in domain if isinstance(d, list) and d[0] == 'order_id.team_id'), None)
+        negado = '!' in domain
+        team = None if negado else next((d[2] for d in domain if isinstance(d, list) and d[0] == 'order_id.team_id'), None)
         fields = args[1]
         groupby = args[2]
         qty = 'qty_delivered' if 'qty_delivered' in fields else 'product_uom_qty'
@@ -175,7 +202,7 @@ def _fake_execute(calls):
                      qty: 10.0 if qty == 'product_uom_qty' else 9.0}]
         if team == 5:      # Tienda: 100 loose units = 2 fardos
             return [{'product_id': [501, 'x'], 'product_uom': [UNIDAD, 'U'], qty: 100.0}]
-        if isinstance(team, list):  # 'not in' -> unassigned: 1 fardo
+        if negado:  # the complement of every rule -> unassigned: 1 fardo
             return [{'product_id': [501, 'x'], 'product_uom': [FARDO50, 'F'], qty: 1.0}]
         return []
     return execute
@@ -187,7 +214,7 @@ def test_sync_unions_rules_folds_uom_and_reports_unassigned(monkeypatch):
 
     def fake_sb_get_all(path):
         if path.startswith('comercial_areas'):
-            return [{'slug': 'mayoreo', 'activa': True}, {'slug': 'tiendas', 'activa': True}]
+            return [{'slug': 'mayoreo', 'activa': True, 'padre': None}, {'slug': 'tiendas', 'activa': True, 'padre': None}]
         return reglas
     monkeypatch.setattr(sync, 'sb_get_all', fake_sb_get_all)
 
@@ -221,7 +248,7 @@ def test_sync_partition_warning_when_rules_overlap(monkeypatch):
     reglas = [{'area': 'mayoreo', 'odoo_team_id': 9, 'sucursal_ids': None, 'excluir_sucursal_ids': None},
               {'area': 'zacapa', 'odoo_team_id': 9, 'sucursal_ids': None, 'excluir_sucursal_ids': None}]
     monkeypatch.setattr(sync, 'sb_get_all', lambda path: (
-        [{'slug': 'mayoreo', 'activa': True}, {'slug': 'zacapa', 'activa': True}]
+        [{'slug': 'mayoreo', 'activa': True, 'padre': None}, {'slug': 'zacapa', 'activa': True, 'padre': None}]
         if path.startswith('comercial_areas') else reglas))
     issues = Issues()
     buckets = sync.month_buckets(date.today())
@@ -235,3 +262,19 @@ def test_sync_without_rules_is_an_error_and_returns_nothing(monkeypatch):
     issues = Issues()
     assert sync_demanda_canal(_fake_execute([]), issues, (FACTORS, STOCK_UOM), {}, None, {}) == []
     assert issues.has_errors()
+
+
+def test_parent_area_has_no_rules_and_raises_no_warning(monkeypatch):
+    """A parent (institucional) is active but captures nothing: its children
+    carry the rules. It must not be reported as an area without a rule."""
+    reglas = [{'area': 'institucional_ortiz', 'odoo_team_id': 6, 'odoo_user_ids': [52]},
+              {'area': 'institucional_cerezo', 'odoo_team_id': 6, 'odoo_user_ids': [54]}]
+    monkeypatch.setattr(sync, 'sb_get_all', lambda path: (
+        [{'slug': 'institucional', 'activa': True, 'padre': None},
+         {'slug': 'institucional_ortiz', 'activa': True, 'padre': 'institucional'},
+         {'slug': 'institucional_cerezo', 'activa': True, 'padre': 'institucional'}]
+        if path.startswith('comercial_areas') else reglas))
+    issues = Issues()
+    out = sync.load_area_reglas(issues)
+    assert [r['area'] for r in out] == ['institucional_ortiz', 'institucional_cerezo']
+    assert not any('without an Odoo rule' in r['message'] for r in issues.rows)

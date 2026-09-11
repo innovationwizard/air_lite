@@ -50,8 +50,11 @@ export function ForecastClient() {
   if (error) return <div className="p-8 text-sm text-red-700">{error}</div>;
   if (!d) return <div className="p-8 text-sm text-gray-500">Cargando…</div>;
 
-  const capturando = d.puedeCapturar && !!d.miArea;
+  const esPadre = !!d.esPadre;
+  const capturando = d.puedeCapturar && !!d.miArea && !esPadre;
   const bloqueoMio = capturando ? (d.bloqueos?.[`${d.miArea}|${mes}`] ?? null) : null;
+  // A parent login (institucional@) reads its sellers; the selector offers only them.
+  const areasElegibles = esPadre ? d.areas.filter((a) => a.padre === d.miArea) : d.areas.filter((a) => !d.areas.some((h) => h.padre === a.slug));
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8 space-y-6">
@@ -61,7 +64,9 @@ export function ForecastClient() {
           {capturando
             ? `Revisá la recomendación de cada código y aprobá. Canal: ${
                 d.areas.find((a) => a.slug === d.miArea)?.nombre ?? d.miArea}`
-            : 'Lo que cargó cada canal, junto, sin descargar ni pegar nada.'}
+            : esPadre
+              ? `Lo que cargó cada vendedor de ${d.areas.find((a) => a.slug === d.miArea)?.nombre ?? d.miArea}, y el total que ve Compras. Sólo lectura: cada vendedor carga y bloquea lo suyo.`
+              : 'Lo que cargó cada canal, junto, sin descargar ni pegar nada.'}
         </p>
       </header>
 
@@ -92,17 +97,17 @@ export function ForecastClient() {
         </>
       ) : (
         <>
-          <Consolidado datos={d} mes={mes} onCambio={cargar} />
+          <Consolidado datos={d} mes={mes} onCambio={cargar} modo={esPadre ? 'hijos' : 'rollup'} />
           <section className="space-y-3">
             <label className="text-sm text-gray-700">
-              Ver la tabla de un canal:{' '}
+              {esPadre ? 'Ver la tabla de un vendedor:' : 'Ver la tabla de un canal:'}{' '}
               <select
                 value={areaVista}
                 onChange={(e) => setAreaVista(e.target.value)}
                 className="ml-1 px-2 py-1 text-sm border border-gray-300 rounded-md bg-white"
               >
                 <option value="">—</option>
-                {d.areas.map((a) => <option key={a.slug} value={a.slug}>{a.nombre}</option>)}
+                {areasElegibles.map((a) => <option key={a.slug} value={a.slug}>{a.nombre}</option>)}
               </select>
             </label>
             {areaVista && d.mesesAbiertos.includes(mes) && (
@@ -117,7 +122,7 @@ export function ForecastClient() {
         </>
       )}
 
-      {d.puedeCapturar && !d.miArea && (
+      {d.puedeCapturar && !d.miArea && !esPadre && (
         <p className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-4">
           Tu usuario todavía no tiene un canal comercial asignado, así que no podés cargar
           todavía. Un administrador lo configura en un minuto.

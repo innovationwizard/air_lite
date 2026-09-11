@@ -12,8 +12,11 @@ export interface Datos {
   filas: FilaApi[];
   productos: Producto[];
   proyeccion: { product_id: number; p3: number | null }[];
-  areas: { slug: string; nombre: string }[];
+  /** Active areas. A child carries `padre`; a parent captures nothing and rolls its children up. */
+  areas: { slug: string; nombre: string; padre?: string | null }[];
   miArea: string | null;
+  /** The viewer's area is a parent (e.g. institucional): read-only over its children. */
+  esPadre?: boolean;
   puedeCapturar: boolean;
   /** sales_manager / admin / superuser: may lift a «Bloquear cambios» lock. */
   puedeDesbloquear?: boolean;

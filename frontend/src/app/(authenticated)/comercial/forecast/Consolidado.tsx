@@ -18,12 +18,25 @@ import type { Datos } from './types';
 
 const n = (v: number) => Math.round(v).toLocaleString('es-GT');
 const mesLabel = (primerDia: string) => primerDia.slice(0, 7);
+/** «Institucional · Alejandra Ortiz» → «Alejandra Ortiz» inside the parent's cell. */
+const nombreCorto = (nombre: string) => nombre.includes('·') ? nombre.slice(nombre.indexOf('·') + 1).trim() : nombre;
 
-export function Consolidado({ datos, mes, onCambio }: { datos: Datos; mes: string; onCambio?: () => void }) {
+type Area = Datos['areas'][number];
+
+/**
+ * @param modo  'rollup' (readers): one column per top-level area; a parent
+ *              sums its children and lists each seller inside the cell.
+ *              'hijos' (the parent's own login, e.g. institucional@): one
+ *              column per seller plus a total — read-only.
+ */
+export function Consolidado({ datos, mes, onCambio, modo = 'rollup' }: {
+  datos: Datos; mes: string; onCambio?: () => void; modo?: 'rollup' | 'hijos';
+}) {
   const [desbloqueando, setDesbloqueando] = useState<string | null>(null);
   const [avisoBloqueo, setAvisoBloqueo] = useState<string | null>(null);
   const bloqueoDe = (area: string) => datos.bloqueos?.[`${area}|${mes}`] ?? null;
   const bloqueadas = datos.areas.filter((a) => bloqueoDe(a.slug));
+  const esHijos = modo === 'hijos';
 
   async function desbloquear(area: string) {
     if (!window.confirm(`¿Desbloquear ${etiquetaMes(mes)} de ${datos.areas.find((a) => a.slug === area)?.nombre ?? area}? El registro bloqueado se conserva; el canal podrá editar.`)) return;
@@ -55,12 +68,33 @@ export function Consolidado({ datos, mes, onCambio }: { datos: Datos; mes: strin
     });
 
   const filasCons = consolidar(filas, proy);
-  const areasConDatos = datos.areas.filter((a) => filas.some((f) => f.area === a.slug));
-  const areasSinCargar = datos.areas.filter((a) => !filas.some((f) => f.area === a.slug));
+  const hijosDe = (padre: string): Area[] => datos.areas.filter((a) => a.padre === padre);
+  const tieneDatos = (a: Area) => filas.some((f) => f.area === a.slug);
+  // The columns. rollup: top-level areas (a parent counts as having data when
+  // any child has). hijos: the viewer's children, in catalogue order.
+  const columnas: Area[] = modo === 'hijos'
+    ? hijosDe(datos.miArea ?? '')
+    : datos.areas.filter((a) => !a.padre);
+  const areasConDatos = columnas.filter((a) => tieneDatos(a) || hijosDe(a.slug).some(tieneDatos));
+  // «Sin cargar» names leaves (sellers), not parents: a parent never loads anything itself.
+  const hojas = datos.areas.filter((a) => !datos.areas.some((h) => h.padre === a.slug));
+  const areasSinCargar = (modo === 'hijos' ? columnas : hojas).filter((a) => !tieneDatos(a));
+  /** Captured qty of a top-level column = its own + its children's. */
+  const capturadoDe = (a: Area, c: { porArea: Record<string, number> }): number | null => {
+    const propio = c.porArea[a.slug];
+    const deHijos = hijosDe(a.slug).map((h) => c.porArea[h.slug]).filter((v): v is number => v != null);
+    if (propio == null && deHijos.length === 0) return null;
+    return (propio ?? 0) + deHijos.reduce((x, y) => x + y, 0);
+  };
   const cerrado = mes === datos.mesCerrado;
   const label = mesLabel(mes);
-  const recomendadoDe = (area: string, productId: number): number | null =>
-    datos.recomendaciones?.[area]?.[mes]?.[productId] ?? null;
+  const recomendadoDe = (area: string, productId: number): number | null => {
+    const propio = datos.recomendaciones?.[area]?.[mes]?.[productId] ?? null;
+    const deHijos = hijosDe(area).map((h) => datos.recomendaciones?.[h.slug]?.[mes]?.[productId])
+      .filter((v): v is number => v != null);
+    if (propio === null && deHijos.length === 0) return null;
+    return (propio ?? 0) + deHijos.reduce((x, y) => x + y, 0);
+  };
   const realDe = (area: string, productId: number) =>
     datos.reales?.[area]?.[productId]?.[label] ?? null;
   const sinAsignar = datos.sinAsignar ?? {};
@@ -83,18 +117,20 @@ export function Consolidado({ datos, mes, onCambio }: { datos: Datos; mes: strin
     <section className="bg-white border border-gray-200 rounded-lg p-5">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h2 className="text-sm font-medium text-gray-900">
-          Consolidado de {etiquetaMes(mes)} — {filasCons.length} códigos
+          {esHijos
+            ? `${datos.areas.find((a) => a.slug === datos.miArea)?.nombre ?? 'Canal'} por vendedor — ${etiquetaMes(mes)} — ${filasCons.length} códigos`
+            : `Consolidado de ${etiquetaMes(mes)} — ${filasCons.length} códigos`}
           {cerrado && <span className="text-gray-500 font-normal"> · mes cerrado: capturado contra real</span>}
         </h2>
         <span className="text-xs">
           {bloqueadas.length > 0 && (
             <span className="text-amber-800 mr-3" data-testid="bloqueados">
-              🔒 Bloqueados: {bloqueadas.map((a) => a.nombre).join(', ')}
+              🔒 Bloqueados: {bloqueadas.map((a) => nombreCorto(a.nombre)).join(', ')}
             </span>
           )}
           {areasSinCargar.length > 0 && (
             <span className="text-amber-800">
-              Sin cargar: {areasSinCargar.map((a) => a.nombre).join(', ')}
+              Sin cargar: {areasSinCargar.map((a) => nombreCorto(a.nombre)).join(', ')}
             </span>
           )}
         </span>
@@ -111,7 +147,7 @@ export function Consolidado({ datos, mes, onCambio }: { datos: Datos; mes: strin
                     title={cerrado
                       ? 'Arriba lo que el canal capturó; abajo lo que realmente pidió / se le entregó ese mes'
                       : 'Arriba lo que el canal capturó; abajo, en gris, lo que la app le recomendaba'}>
-                  {a.nombre}
+                  {esHijos ? nombreCorto(a.nombre) : a.nombre}
                   {bloqueoDe(a.slug) && (
                     <span className="ml-1 text-amber-800" data-testid={`candado-${a.slug}`}
                           title={`Bloqueado el ${new Date(bloqueoDe(a.slug)!.at).toLocaleString('es-GT', { dateStyle: 'short', timeStyle: 'short' })} por ${bloqueoDe(a.slug)!.autor} (v${bloqueoDe(a.slug)!.version})`}>
@@ -129,6 +165,12 @@ export function Consolidado({ datos, mes, onCambio }: { datos: Datos; mes: strin
                   </span>
                 </th>
               ))}
+              {esHijos && (
+                <th className="py-2 pr-3 font-medium text-right whitespace-nowrap" data-testid="th-total-canal"
+                    title="La suma de los vendedores: es la columna que ve Compras en su pantalla.">
+                  Total canal
+                </th>
+              )}
               <th className="py-2 pr-3 font-medium text-right">Total</th>
               <th className="py-2 pr-3 font-medium text-right" title="Certeza con destinatario: suma directo al pedido">
                 Directo
@@ -152,7 +194,8 @@ export function Consolidado({ datos, mes, onCambio }: { datos: Datos; mes: strin
                   <span className="text-gray-800">{c.nombre}</span>
                 </td>
                 {areasConDatos.map((a) => {
-                  const cap = c.porArea[a.slug];
+                  const hijos = hijosDe(a.slug);
+                  const cap = capturadoDe(a, c);
                   const rec = recomendadoDe(a.slug, c.product_id);
                   const real = cerrado ? realDe(a.slug, c.product_id) : null;
                   return (
@@ -168,9 +211,21 @@ export function Consolidado({ datos, mes, onCambio }: { datos: Datos; mes: strin
                                 title="Lo que la app recomendaba a este canal para este código">
                             {n(rec)}
                           </span>))}
+                      {/* A parent lists each seller inside the cell (rollup mode). */}
+                      {hijos.length > 0 && hijos.filter((h) => c.porArea[h.slug] != null).map((h) => (
+                        <span key={h.slug} className="block text-[10px] text-gray-500 whitespace-nowrap" data-testid={`desglose-${h.slug}`}
+                              title={`${nombreCorto(h.nombre)}: capturó ${n(c.porArea[h.slug])}${bloqueoDe(h.slug) ? ' · bloqueado' : ''}`}>
+                          {nombreCorto(h.nombre)} {n(c.porArea[h.slug])}{bloqueoDe(h.slug) ? ' 🔒' : ''}
+                        </span>
+                      ))}
                     </td>
                   );
                 })}
+                {esHijos && (
+                  <td className="py-2 pr-3 text-right tabular-nums font-medium text-gray-900" data-testid="total-canal">
+                    {n(c.total)}
+                  </td>
+                )}
                 <td className="py-2 pr-3 text-right tabular-nums font-medium text-gray-900">
                   {n(c.total)}
                 </td>
@@ -192,7 +247,7 @@ export function Consolidado({ datos, mes, onCambio }: { datos: Datos; mes: strin
           </tbody>
           <tfoot>
             <tr className="text-xs text-gray-500">
-              <td className="pt-3 pr-3" colSpan={areasConDatos.length + 1}>
+              <td className="pt-3 pr-3" colSpan={areasConDatos.length + 1 + (esHijos ? 1 : 0)}>
                 <PieSinAsignar meses={mesesSinAsignar} total={totalSinAsignar} />
               </td>
               <td className="pt-3 pr-3 text-right" colSpan={2}></td>

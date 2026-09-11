@@ -28,3 +28,11 @@ export function areaPermitida(
   }
   return { ok: true, area: areaPedida };
 }
+
+/**
+ * A parent area (one with children — institucional since 2026-09-11) is a
+ * consolidated view: it captures nothing, locks nothing. The sellers do.
+ */
+export function esAreaPadre(areas: readonly { slug: string; padre?: string | null }[], area: string): boolean {
+  return areas.some((a) => a.padre === area);
+}

@@ -84,3 +84,62 @@ it('al pie se ve la demanda que ningún canal tiene asignada', async () => {
   await montar();
   expect(screen.getByTestId('sin-asignar')).toHaveTextContent('Sin canal asignado: 12,131 unidades pedidas en 6 meses (2026-03 a 2026-08).');
 });
+
+describe('Institucional por vendedor (2026-09-11)', () => {
+  const AREAS = [
+    { slug: 'mayoreo', nombre: 'Mayoreo', padre: null },
+    { slug: 'institucional', nombre: 'Institucional', padre: null },
+    { slug: 'institucional_ortiz', nombre: 'Institucional · Alejandra Ortiz', padre: 'institucional' },
+    { slug: 'institucional_cerezo', nombre: 'Institucional · Lucrecia Cerezo', padre: 'institucional' },
+  ];
+  const FILAS = [
+    { id: 'a', product_id: 1, month: '2026-10-01', quantity: 500, motivo: 'base', area: 'mayoreo', note: null },
+    { id: 'b', product_id: 1, month: '2026-10-01', quantity: 120, motivo: 'ajustado', area: 'institucional_ortiz', note: null },
+    { id: 'c', product_id: 1, month: '2026-10-01', quantity: 80, motivo: 'base', area: 'institucional_cerezo', note: null },
+  ];
+  const REC = {
+    mayoreo: { '2026-10-01': { 1: 480 } },
+    institucional_ortiz: { '2026-10-01': { 1: 100 } },
+    institucional_cerezo: { '2026-10-01': { 1: 90 } },
+  };
+
+  it('para compras/gerencia: una columna Institucional que suma, con cada vendedor adentro', async () => {
+    global.fetch = jest.fn(async () => ({ ok: true, json: async () => ({
+      ...DATOS, areas: AREAS, filas: FILAS, recomendaciones: REC,
+      bloqueos: { 'institucional_cerezo|2026-10-01': { version: 1, autor: 'Lucrecia <l@x>', at: '2026-09-11T20:15:00Z' } },
+    }) })) as unknown as typeof fetch;
+    render(<ForecastClient />);
+    await waitFor(() => expect(screen.getByText('77205049')).toBeInTheDocument());
+    // one column per top-level area: no seller column
+    expect(screen.queryByTestId('celda-institucional_ortiz')).not.toBeInTheDocument();
+    const inst = screen.getByTestId('celda-institucional');
+    expect(inst).toHaveTextContent('200');                                   // 120 + 80
+    expect(within(inst).getByTestId('recomendado')).toHaveTextContent('190'); // 100 + 90
+    expect(within(inst).getByTestId('desglose-institucional_ortiz')).toHaveTextContent('Alejandra Ortiz 120');
+    expect(within(inst).getByTestId('desglose-institucional_cerezo')).toHaveTextContent('Lucrecia Cerezo 80 🔒');
+    expect(screen.getByTestId('bloqueados')).toHaveTextContent('Bloqueados: Lucrecia Cerezo');
+    expect(screen.queryByTestId('th-total-canal')).not.toBeInTheDocument();
+  });
+
+  it('para institucional@: una columna por vendedor, el total del canal, y nada que editar', async () => {
+    global.fetch = jest.fn(async () => ({ ok: true, json: async () => ({
+      ...DATOS, areas: AREAS, filas: FILAS.filter((f) => f.area.startsWith('institucional_')),
+      recomendaciones: REC, miArea: 'institucional', esPadre: true, puedeCapturar: false,
+    }) })) as unknown as typeof fetch;
+    const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime });
+    render(<ForecastClient />);
+    await waitFor(() => expect(screen.getByText('77205049')).toBeInTheDocument());
+    expect(screen.getByRole('heading', { name: /Institucional por vendedor — Octubre 2026/ })).toBeInTheDocument();
+    expect(screen.getByTestId('celda-institucional_ortiz')).toHaveTextContent('120');
+    expect(screen.getByTestId('celda-institucional_cerezo')).toHaveTextContent('80');
+    expect(screen.getByTestId('th-total-canal')).toBeInTheDocument();
+    expect(screen.getByTestId('total-canal')).toHaveTextContent('200');
+    expect(screen.queryByTestId('celda-mayoreo')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Aprobar todo|Bloquear cambios/ })).not.toBeInTheDocument();
+    // the selector offers only the sellers
+    const opciones = within(screen.getByRole('combobox')).getAllByRole('option').map((o) => o.textContent);
+    expect(opciones).toEqual(['—', 'Institucional · Alejandra Ortiz', 'Institucional · Lucrecia Cerezo']);
+    await user.selectOptions(screen.getByRole('combobox'), 'institucional_ortiz');
+    expect(screen.getByText(/Ver la tabla de un vendedor/)).toBeInTheDocument();
+  });
+});
