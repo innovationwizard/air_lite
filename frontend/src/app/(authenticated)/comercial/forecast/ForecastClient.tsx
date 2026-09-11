@@ -51,6 +51,7 @@ export function ForecastClient() {
   if (!d) return <div className="p-8 text-sm text-gray-500">Cargando…</div>;
 
   const capturando = d.puedeCapturar && !!d.miArea;
+  const bloqueoMio = capturando ? (d.bloqueos?.[`${d.miArea}|${mes}`] ?? null) : null;
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8 space-y-6">
@@ -85,12 +86,13 @@ export function ForecastClient() {
 
       {capturando ? (
         <>
-          <TablaRecomendacion area={d.miArea!} mes={mes} soloLectura={false} onCambio={cargar} />
-          <Captura datos={d} mes={mes} onCambio={cargar} />
+          <TablaRecomendacion area={d.miArea!} mes={mes} soloLectura={false} onCambio={cargar}
+                              bloqueo={bloqueoMio} puedeDesbloquear={!!d.puedeDesbloquear} />
+          <Captura datos={d} mes={mes} onCambio={cargar} bloqueado={!!bloqueoMio} />
         </>
       ) : (
         <>
-          <Consolidado datos={d} mes={mes} />
+          <Consolidado datos={d} mes={mes} onCambio={cargar} />
           <section className="space-y-3">
             <label className="text-sm text-gray-700">
               Ver la tabla de un canal:{' '}
@@ -103,7 +105,11 @@ export function ForecastClient() {
                 {d.areas.map((a) => <option key={a.slug} value={a.slug}>{a.nombre}</option>)}
               </select>
             </label>
-            {areaVista && d.mesesAbiertos.includes(mes) && <TablaRecomendacion area={areaVista} mes={mes} soloLectura />}
+            {areaVista && d.mesesAbiertos.includes(mes) && (
+              <TablaRecomendacion area={areaVista} mes={mes} soloLectura onCambio={cargar}
+                                  bloqueo={d.bloqueos?.[`${areaVista}|${mes}`] ?? null}
+                                  puedeDesbloquear={!!d.puedeDesbloquear} />
+            )}
             {areaVista && !d.mesesAbiertos.includes(mes) && (
               <p className="text-xs text-gray-500">La tabla por canal es para los meses abiertos; para un mes cerrado, el consolidado de arriba muestra lo capturado contra lo real.</p>
             )}

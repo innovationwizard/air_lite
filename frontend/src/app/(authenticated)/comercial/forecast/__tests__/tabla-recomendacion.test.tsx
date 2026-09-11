@@ -91,10 +91,27 @@ const HISTORIAL = {
 let puts: { url: string; body: Record<string, unknown> }[];
 let gets: string[];
 
+let bloqueos: { method: string; url: string; body?: Record<string, unknown> }[];
+let datos: Record<string, unknown> = DATOS;
+
 function mockFetch(historial: unknown = HISTORIAL, buscado: unknown = null) {
-  puts = []; gets = [];
+  puts = []; gets = []; bloqueos = [];
   global.fetch = jest.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
+    if (url.startsWith('/api/comercial/bloqueo')) {
+      const body = init?.body ? JSON.parse(String(init.body)) : undefined;
+      bloqueos.push({ method: init?.method ?? 'GET', url, body });
+      if (init?.method === 'POST') {
+        // after the lock, the shell reloads and finds it
+        datos = { ...datos, bloqueos: { [`supermercados|${body.month}`]: { version: 1, autor: 'Ana <ana@x>', at: '2026-09-11T20:15:00Z' } } };
+        return { ok: true, json: async () => ({ bloqueo: { total_filas: 37 } }) } as Response;
+      }
+      if (init?.method === 'DELETE') {
+        datos = { ...datos, bloqueos: {} };
+        return { ok: true, json: async () => ({ desbloqueado: true }) } as Response;
+      }
+      return { ok: true, json: async () => ({ bloqueo: null }) } as Response;
+    }
     if (url.startsWith('/api/comercial/historial')) {
       gets.push(url);
       const q = new URL(url, 'http://x').searchParams.get('q');
@@ -105,12 +122,13 @@ function mockFetch(historial: unknown = HISTORIAL, buscado: unknown = null) {
       puts.push({ url, body });
       return { ok: true, json: async () => ({ guardadas: body.filas.length, quitadas: 0, filas: [] }) } as Response;
     }
-    return { ok: true, json: async () => DATOS } as Response;
+    return { ok: true, json: async () => datos } as Response;
   }) as unknown as typeof fetch;
 }
 
 beforeEach(() => {
   jest.useFakeTimers({ now: new Date('2026-09-10T12:00:00Z') });
+  datos = DATOS;
   mockFetch();
 });
 afterEach(() => jest.useRealTimers());
@@ -334,4 +352,66 @@ it('proveedor y categoría filtran en el servidor sobre todo el canal, con las o
   await user.selectOptions(screen.getByLabelText('Filtrar por categoría'), 'VASOS');
   await waitFor(() => expect(gets.some((u) => u.includes('proveedor=sup%3A9') && u.includes('categoria=VASOS'))).toBe(true));
   expect(screen.getByRole('heading', { name: /1 códigos de Supermercados para REYMA · VASOS/ })).toBeInTheDocument();
+});
+
+describe('«Bloquear cambios»', () => {
+  it('pide confirmación, manda el POST y deja la tabla bloqueada, sin desbloquear para el canal', async () => {
+    const user = await montar();
+    await user.click(screen.getByRole('button', { name: 'Bloquear cambios' }));
+    expect(screen.getByTestId('confirmar-bloqueo')).toHaveTextContent(/nadie del canal puede cambiarlo/);
+    expect(bloqueos).toHaveLength(0);
+
+    await user.click(screen.getByRole('button', { name: 'Sí, bloquear' }));
+    await waitFor(() => expect(bloqueos.some((b) => b.method === 'POST')).toBe(true));
+    expect(bloqueos.find((b) => b.method === 'POST')!.body).toEqual({ month: '2026-10-01', area: 'supermercados' });
+
+    await waitFor(() => expect(screen.getByTestId('bloqueado')).toHaveTextContent(/Bloqueado el .* por Ana <ana@x>/));
+    expect(screen.queryByRole('button', { name: 'Bloquear cambios' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Aprobar todo/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Desbloquear' })).not.toBeInTheDocument();  // a leader cannot
+    expect(screen.getByLabelText('Mi forecast 77205190')).toBeDisabled();
+    expect(screen.getByTestId('captura-bloqueada')).toHaveTextContent(/bloqueado/);
+  });
+
+  it('cancelar no manda nada', async () => {
+    const user = await montar();
+    await user.click(screen.getByRole('button', { name: 'Bloquear cambios' }));
+    await user.click(screen.getByRole('button', { name: 'Cancelar' }));
+    expect(screen.queryByTestId('confirmar-bloqueo')).not.toBeInTheDocument();
+    expect(bloqueos).toHaveLength(0);
+  });
+
+  it('el error del servidor (nada cargado) se muestra y no bloquea', async () => {
+    const user = await montar();
+    global.fetch = jest.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.startsWith('/api/comercial/bloqueo') && init?.method === 'POST') {
+        return { ok: false, json: async () => ({ error: 'No hay nada que bloquear: todavía no cargaste ningún código para ese mes.' }) } as Response;
+      }
+      if (url.startsWith('/api/comercial/historial')) return { ok: true, json: async () => HISTORIAL } as Response;
+      return { ok: true, json: async () => DATOS } as Response;
+    }) as unknown as typeof fetch;
+    await user.click(screen.getByRole('button', { name: 'Bloquear cambios' }));
+    await user.click(screen.getByRole('button', { name: 'Sí, bloquear' }));
+    await waitFor(() => expect(screen.getByText(/No hay nada que bloquear/)).toBeInTheDocument());
+    expect(screen.getByRole('button', { name: 'Bloquear cambios' })).toBeInTheDocument();
+  });
+
+  it('un gerente de ventas ve el candado en el consolidado y puede desbloquear', async () => {
+    datos = {
+      ...DATOS, miArea: null, puedeCapturar: false, puedeDesbloquear: true,
+      filas: [{ id: 'a', product_id: 1, month: '2026-10-01', quantity: 500, motivo: 'base', area: 'supermercados', note: null }],
+      productos: [{ id: 1, sku: '77205190', name: 'BANDEJA' }],
+      bloqueos: { 'supermercados|2026-10-01': { version: 1, autor: 'Ana <ana@x>', at: '2026-09-11T20:15:00Z' } },
+    };
+    mockFetch();
+    window.confirm = jest.fn(() => true);
+    const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime });
+    render(<ForecastClient />);
+    await waitFor(() => expect(screen.getByTestId('bloqueados')).toHaveTextContent('Bloqueados: Supermercados'));
+    expect(screen.getByTestId('candado-supermercados')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'desbloquear' }));
+    await waitFor(() => expect(bloqueos.some((b) => b.method === 'DELETE' && b.url.includes('area=supermercados') && b.url.includes('month=2026-10-01'))).toBe(true));
+    await waitFor(() => expect(screen.queryByTestId('bloqueados')).not.toBeInTheDocument());
+  });
 });

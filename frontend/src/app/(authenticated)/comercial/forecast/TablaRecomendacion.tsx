@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { etiquetaMes, type Motivo } from '@/lib/comercial/forecast';
+import type { BloqueoResumen } from './types';
 import {
   ETIQUETA_TEXTO, FALTA_CRITICA, DIVERGENCIA_ANIO_ANTERIOR, TOP_N, type Etiqueta, type Recomendacion,
 } from '@/lib/comercial/recomendacion';
@@ -125,9 +126,16 @@ interface Props {
   soloLectura: boolean;
   /** Called after any write so the shell can refresh its own counts. */
   onCambio?: () => void;
+  /** Active «Bloquear cambios» lock for this area and month, if any. */
+  bloqueo?: BloqueoResumen | null;
+  /** sales_manager / admin / superuser may lift the lock. */
+  puedeDesbloquear?: boolean;
 }
 
-export function TablaRecomendacion({ area, mes, soloLectura, onCambio }: Props) {
+const fechaHoraCorta = (iso: string) =>
+  new Date(iso).toLocaleString('es-GT', { dateStyle: 'short', timeStyle: 'short' });
+
+export function TablaRecomendacion({ area, mes, soloLectura, onCambio, bloqueo = null, puedeDesbloquear = false }: Props) {
   const [h, setH] = useState<Historial | null>(null);
   const [error, setError] = useState<string | null>(null);
   // productId -> what the input shows. Absent = the pre-filled value.
@@ -138,6 +146,13 @@ export function TablaRecomendacion({ area, mes, soloLectura, onCambio }: Props) 
   const [aviso, setAviso] = useState<string | null>(null);
   const [ultimaEdicion, setUltimaEdicion] = useState<Date | null>(null);
   const [verComoSeCalcula, setVerComoSeCalcula] = useState(false);
+  // «Bloquear cambios» (PM 2026-09-11): a confirm step, then POST. Once
+  // locked, the cells are read-only and only a manager can lift it.
+  const [confirmarBloqueo, setConfirmarBloqueo] = useState(false);
+  const [confirmarDesbloqueo, setConfirmarDesbloqueo] = useState(false);
+  const [bloqueando, setBloqueando] = useState(false);
+  const bloqueado = bloqueo !== null;
+  const editable = !soloLectura && !bloqueado;
   // The three month columns are the widest part of the row and the
   // sparkline already carries the shape; collapsed by default (Jorge
   // 2026-09-10), one click opens them. Collapsed, the cell keeps the one
@@ -255,6 +270,41 @@ export function TablaRecomendacion({ area, mes, soloLectura, onCambio }: Props) 
     }
   }
 
+  async function bloquear() {
+    setBloqueando(true); setAviso(null);
+    try {
+      const r = await fetch('/api/comercial/bloqueo', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ month: mes, area }),
+      });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.error ?? 'No se pudo bloquear');
+      setConfirmarBloqueo(false);
+      setAviso(`Bloqueado: ${j.bloqueo.total_filas} códigos de ${etiquetaMes(mes)} quedaron registrados.`);
+      onCambio?.();
+    } catch (e) {
+      setAviso(e instanceof Error ? e.message : 'No se pudo bloquear');
+    } finally {
+      setBloqueando(false);
+    }
+  }
+
+  async function desbloquear() {
+    setBloqueando(true); setAviso(null);
+    try {
+      const r = await fetch(`/api/comercial/bloqueo?area=${encodeURIComponent(area)}&month=${encodeURIComponent(mes)}`, { method: 'DELETE' });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.error ?? 'No se pudo desbloquear');
+      setConfirmarDesbloqueo(false);
+      setAviso('Desbloqueado. El canal puede volver a editar; el registro anterior se conserva.');
+      onCambio?.();
+    } catch (e) {
+      setAviso(e instanceof Error ? e.message : 'No se pudo desbloquear');
+    } finally {
+      setBloqueando(false);
+    }
+  }
+
   /** What the table shows: the loaded rows, narrowed by the typed text at once and by the label. */
   const visibles = useMemo(() => {
     if (!h) return [];
@@ -310,12 +360,32 @@ export function TablaRecomendacion({ area, mes, soloLectura, onCambio }: Props) 
             </button>
           </p>
         </div>
-        {!soloLectura && (
+        {bloqueado ? (
+          <div className="flex items-center gap-3">
+            <span className="text-sm text-amber-800 font-medium" data-testid="bloqueado"
+                  title={`Versión ${bloqueo.version}. Lo cargado hasta ese momento quedó registrado con su contexto; nadie del canal puede cambiarlo.`}>
+              🔒 Bloqueado el {fechaHoraCorta(bloqueo.at)} por {bloqueo.autor}
+            </span>
+            {puedeDesbloquear && !confirmarDesbloqueo && (
+              <button type="button" onClick={() => setConfirmarDesbloqueo(true)}
+                      className="px-3 py-1.5 text-xs border border-gray-300 rounded-md hover:bg-gray-50">
+                Desbloquear
+              </button>
+            )}
+          </div>
+        ) : !soloLectura && (
           <div className="flex items-center gap-3">
             <span className="text-xs text-gray-500">
               Cargado: {cargadas} de {visibles.length}
               {ultimaEdicion && <> · última edición {fechaHora(ultimaEdicion)}</>}
             </span>
+            <button
+              type="button" onClick={() => setConfirmarBloqueo(true)} disabled={guardando || bloqueando}
+              className="px-4 py-2 text-sm bg-amber-800 text-white rounded-md hover:bg-amber-900 disabled:opacity-50"
+              title="Congela lo cargado para este mes: queda registrado con fecha, autor y contexto, y ya no se puede cambiar."
+            >
+              Bloquear cambios
+            </button>
             <button
               type="button" onClick={aprobarTodo} disabled={guardando || visibles.length === 0}
               className="px-4 py-2 text-sm bg-gray-900 text-white rounded-md hover:bg-gray-800 disabled:opacity-50"
@@ -326,6 +396,47 @@ export function TablaRecomendacion({ area, mes, soloLectura, onCambio }: Props) 
           </div>
         )}
       </div>
+
+      {confirmarBloqueo && !bloqueado && (
+        <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-sm space-y-2" data-testid="confirmar-bloqueo">
+          <p className="text-gray-800">
+            Vas a <strong>bloquear</strong> el forecast de <strong>{etiquetaMes(mes)}</strong> de {h.area.nombre}:
+            todo lo cargado hasta ahora queda registrado con fecha, autor y lo que estás viendo en pantalla,
+            y <strong>después nadie del canal puede cambiarlo</strong>. Sólo la gerencia de ventas puede desbloquearlo.
+          </p>
+          <p className="text-xs text-gray-600">
+            Revisá que lo que querés mandar esté cargado (✓). Lo que no esté cargado no entra al registro.
+          </p>
+          <div className="flex gap-2">
+            <button type="button" onClick={bloquear} disabled={bloqueando}
+                    className="px-4 py-2 text-sm bg-amber-800 text-white rounded-md hover:bg-amber-900 disabled:opacity-50">
+              {bloqueando ? 'Bloqueando…' : 'Sí, bloquear'}
+            </button>
+            <button type="button" onClick={() => setConfirmarBloqueo(false)} disabled={bloqueando}
+                    className="px-4 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50">
+              Cancelar
+            </button>
+          </div>
+        </div>
+      )}
+      {confirmarDesbloqueo && bloqueado && (
+        <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 text-sm space-y-2" data-testid="confirmar-desbloqueo">
+          <p className="text-gray-800">
+            Vas a <strong>desbloquear</strong> {etiquetaMes(mes)} de {h.area.nombre}. El registro bloqueado se conserva
+            tal cual (versión {bloqueo.version}); el canal podrá editar y, si vuelve a bloquear, será una versión nueva.
+          </p>
+          <div className="flex gap-2">
+            <button type="button" onClick={desbloquear} disabled={bloqueando}
+                    className="px-4 py-2 text-sm bg-gray-900 text-white rounded-md hover:bg-gray-800 disabled:opacity-50">
+              {bloqueando ? 'Desbloqueando…' : 'Sí, desbloquear'}
+            </button>
+            <button type="button" onClick={() => setConfirmarDesbloqueo(false)} disabled={bloqueando}
+                    className="px-4 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50">
+              Cancelar
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="flex flex-wrap items-center gap-2">
         <input
@@ -428,7 +539,7 @@ export function TablaRecomendacion({ area, mes, soloLectura, onCambio }: Props) 
                   title="Promedio de los promedios de 3 y 6 meses de lo PEDIDO por tu canal; por el factor del mes donde aplica. «Normalmente» es el rango donde cayó la realidad para códigos así de parejos.">
                 Recomendación
               </th>
-              {!soloLectura && <th className="py-2 pr-3 font-medium text-right">Mi forecast</th>}
+              {!soloLectura && <th className="py-2 pr-3 font-medium text-right">{bloqueado ? 'Forecast bloqueado' : 'Mi forecast'}</th>}
             </tr>
           </thead>
           <tbody>
@@ -538,12 +649,12 @@ export function TablaRecomendacion({ area, mes, soloLectura, onCambio }: Props) 
                   {!soloLectura && (
                     <td className="py-2 pr-3 text-right whitespace-nowrap">
                       <input
-                        type="number" min={0} value={valor}
+                        type="number" min={0} value={valor} disabled={!editable}
                         aria-label={`Mi forecast ${f.sku}`}
                         onChange={(e) => setEdits((x) => ({ ...x, [f.productId]: e.target.value }))}
                         onBlur={() => guardarFila(f)}
                         onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
-                        className="w-24 px-2 py-1 text-sm text-right border border-gray-300 rounded-md tabular-nums"
+                        className="w-24 px-2 py-1 text-sm text-right border border-gray-300 rounded-md tabular-nums disabled:bg-gray-50 disabled:text-gray-500"
                       />
                       <span className="inline-block w-4 ml-1 text-emerald-700" aria-label={ok ? 'guardado' : undefined}>
                         {ok ? '✓' : (f.capturado ? <span className="text-gray-300" title="Ya cargado antes">·</span> : '')}

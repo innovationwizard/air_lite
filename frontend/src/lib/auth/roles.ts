@@ -107,6 +107,13 @@ export const CAN_VIEW_FORECAST_COMERCIAL: Role[] = [
  */
 export const CAN_CAPTURE_FORECAST: Role[] = ['superuser', 'admin', 'ventas'];
 
+/**
+ * Quién DESBLOQUEA un forecast comercial bloqueado («Bloquear cambios»,
+ * 2026-09-11). El jefe de canal bloquea; sólo gerencia de ventas o admin
+ * abren — si el que bloqueó pudiera abrir, el registro no probaría nada.
+ */
+export const CAN_DESBLOQUEAR_FORECAST: Role[] = ['superuser', 'admin', 'sales_manager'];
+
 /** Roles that can access OA (Open Orders) module */
 export const CAN_VIEW_OA: Role[] = [
   'superuser', 'admin', 'gerencia', 'compras', 'compras_internacionales', 'financiero', 'operaciones', 'ceo', 'sales_manager',

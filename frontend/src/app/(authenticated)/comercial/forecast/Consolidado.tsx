@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { etiquetaMes, consolidar, type FilaForecast } from '@/lib/comercial/forecast';
 import type { Datos } from './types';
 
@@ -19,7 +19,27 @@ import type { Datos } from './types';
 const n = (v: number) => Math.round(v).toLocaleString('es-GT');
 const mesLabel = (primerDia: string) => primerDia.slice(0, 7);
 
-export function Consolidado({ datos, mes }: { datos: Datos; mes: string }) {
+export function Consolidado({ datos, mes, onCambio }: { datos: Datos; mes: string; onCambio?: () => void }) {
+  const [desbloqueando, setDesbloqueando] = useState<string | null>(null);
+  const [avisoBloqueo, setAvisoBloqueo] = useState<string | null>(null);
+  const bloqueoDe = (area: string) => datos.bloqueos?.[`${area}|${mes}`] ?? null;
+  const bloqueadas = datos.areas.filter((a) => bloqueoDe(a.slug));
+
+  async function desbloquear(area: string) {
+    if (!window.confirm(`¿Desbloquear ${etiquetaMes(mes)} de ${datos.areas.find((a) => a.slug === area)?.nombre ?? area}? El registro bloqueado se conserva; el canal podrá editar.`)) return;
+    setDesbloqueando(area); setAvisoBloqueo(null);
+    try {
+      const r = await fetch(`/api/comercial/bloqueo?area=${encodeURIComponent(area)}&month=${encodeURIComponent(mes)}`, { method: 'DELETE' });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.error ?? 'No se pudo desbloquear');
+      onCambio?.();
+    } catch (e) {
+      setAvisoBloqueo(e instanceof Error ? e.message : 'No se pudo desbloquear');
+    } finally {
+      setDesbloqueando(null);
+    }
+  }
+
   const proy = useMemo(
     () => new Map(datos.proyeccion.filter((p) => p.p3 != null).map((p) => [p.product_id, p.p3!])),
     [datos.proyeccion]);
@@ -66,12 +86,20 @@ export function Consolidado({ datos, mes }: { datos: Datos; mes: string }) {
           Consolidado de {etiquetaMes(mes)} — {filasCons.length} códigos
           {cerrado && <span className="text-gray-500 font-normal"> · mes cerrado: capturado contra real</span>}
         </h2>
-        {areasSinCargar.length > 0 && (
-          <span className="text-xs text-amber-800">
-            Sin cargar: {areasSinCargar.map((a) => a.nombre).join(', ')}
-          </span>
-        )}
+        <span className="text-xs">
+          {bloqueadas.length > 0 && (
+            <span className="text-amber-800 mr-3" data-testid="bloqueados">
+              🔒 Bloqueados: {bloqueadas.map((a) => a.nombre).join(', ')}
+            </span>
+          )}
+          {areasSinCargar.length > 0 && (
+            <span className="text-amber-800">
+              Sin cargar: {areasSinCargar.map((a) => a.nombre).join(', ')}
+            </span>
+          )}
+        </span>
       </div>
+      {avisoBloqueo && <p className="text-xs text-red-700 mt-2">{avisoBloqueo}</p>}
 
       <div className="overflow-x-auto mt-3">
         <table className="w-full text-sm">
@@ -84,6 +112,18 @@ export function Consolidado({ datos, mes }: { datos: Datos; mes: string }) {
                       ? 'Arriba lo que el canal capturó; abajo lo que realmente pidió / se le entregó ese mes'
                       : 'Arriba lo que el canal capturó; abajo, en gris, lo que la app le recomendaba'}>
                   {a.nombre}
+                  {bloqueoDe(a.slug) && (
+                    <span className="ml-1 text-amber-800" data-testid={`candado-${a.slug}`}
+                          title={`Bloqueado el ${new Date(bloqueoDe(a.slug)!.at).toLocaleString('es-GT', { dateStyle: 'short', timeStyle: 'short' })} por ${bloqueoDe(a.slug)!.autor} (v${bloqueoDe(a.slug)!.version})`}>
+                      🔒
+                      {datos.puedeDesbloquear && (
+                        <button type="button" onClick={() => desbloquear(a.slug)} disabled={desbloqueando === a.slug}
+                                className="ml-1 underline font-normal hover:text-amber-900 disabled:opacity-50">
+                          desbloquear
+                        </button>
+                      )}
+                    </span>
+                  )}
                   <span className="block font-normal text-gray-400">
                     {cerrado ? 'capturado · real pedido / entregado' : 'capturado · recomendado'}
                   </span>

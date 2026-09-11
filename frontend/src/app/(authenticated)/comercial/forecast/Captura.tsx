@@ -10,7 +10,9 @@ import type { Datos, Producto } from './types';
  * arriba aprueba los 50 de mayor riesgo; acá se agrega cualquier otro.
  */
 
-export function Captura({ datos, mes, onCambio }: { datos: Datos; mes: string; onCambio: () => void }) {
+export function Captura({ datos, mes, onCambio, bloqueado = false }: {
+  datos: Datos; mes: string; onCambio: () => void; bloqueado?: boolean;
+}) {
   const [busqueda, setBusqueda] = useState('');
   const [sugerencias, setSugerencias] = useState<Producto[]>([]);
   const [elegido, setElegido] = useState<Producto | null>(null);
@@ -65,6 +67,17 @@ export function Captura({ datos, mes, onCambio }: { datos: Datos; mes: string; o
   async function quitar(productId: number) {
     await fetch(`/api/comercial/forecast?productId=${productId}&month=${mes}`, { method: 'DELETE' });
     onCambio();
+  }
+
+  if (bloqueado) {
+    return (
+      <section className="bg-white border border-gray-200 rounded-lg p-5">
+        <p className="text-sm text-gray-600" data-testid="captura-bloqueada">
+          🔒 El forecast de {etiquetaMes(mes)} está bloqueado: no se pueden agregar ni quitar códigos.
+          {mias.length > 0 && <> Agregados a mano: {mias.length}.</>}
+        </p>
+      </section>
+    );
   }
 
   return (

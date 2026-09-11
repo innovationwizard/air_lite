@@ -1,5 +1,7 @@
 import type { Motivo } from '@/lib/comercial/forecast';
 
+export interface BloqueoResumen { version: number; autor: string; at: string }
+
 /** The shape of GET /api/comercial/forecast, shared by the three views. */
 export interface Producto { id: number; sku: string; name: string; stock_uom?: string }
 export interface FilaApi {
@@ -13,6 +15,10 @@ export interface Datos {
   areas: { slug: string; nombre: string }[];
   miArea: string | null;
   puedeCapturar: boolean;
+  /** sales_manager / admin / superuser: may lift a «Bloquear cambios» lock. */
+  puedeDesbloquear?: boolean;
+  /** Active locks, keyed `area|month` ('YYYY-MM-DD'). */
+  bloqueos?: Record<string, BloqueoResumen>;
   mesesAbiertos: string[];
   /** Readers only (nivel 2): the closed previous month + the open ones. */
   mesesVista?: string[];

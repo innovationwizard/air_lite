@@ -7,38 +7,14 @@ import {
   type Motivo,
 } from '@/lib/comercial/forecast';
 import { cargarContexto, cargarDemanda, computarFilas, mesAnterior, type CapturaRow } from '../historial/lib';
+import { areaPermitida } from '@/lib/comercial/permisos';
+import { bloqueoActivo, mensajeBloqueado, type BloqueoResumen } from '../bloqueo/lib';
+import { CAN_DESBLOQUEAR_FORECAST } from '@/lib/auth/roles';
 
 export const dynamic = 'force-dynamic';
 
 function badRequest(msg: string) {
   return NextResponse.json({ error: msg }, { status: 400 });
-}
-
-/**
- * El área sobre la que puede escribir quien pide.
- *
- * Un jefe de canal escribe SÓLO la suya, y eso se decide contra su perfil, no
- * contra lo que mande en el cuerpo — si viniera del cuerpo, cualquiera con rol
- * `ventas` podría cargar cifras en nombre de otro canal. `admin` y `superuser`
- * sí pueden indicar el área, porque cargan en representación de alguien.
- */
-function areaPermitida(
-  usuario: { role: string; area: string | null },
-  areaPedida: unknown,
-): { ok: true; area: string } | { ok: false; msg: string } {
-  if (usuario.role === 'ventas') {
-    if (!usuario.area) {
-      return { ok: false, msg: 'Tu usuario no tiene un canal comercial asignado. Pedile a un administrador que te lo configure.' };
-    }
-    if (typeof areaPedida === 'string' && areaPedida !== usuario.area) {
-      return { ok: false, msg: 'Sólo podés cargar el forecast de tu propio canal.' };
-    }
-    return { ok: true, area: usuario.area };
-  }
-  if (typeof areaPedida !== 'string' || !areaPedida.trim()) {
-    return { ok: false, msg: 'area es obligatoria' };
-  }
-  return { ok: true, area: areaPedida };
 }
 
 /**
@@ -88,6 +64,17 @@ export async function GET() {
     : [];
 
   const hoy = new Date();
+  // Active locks («Bloquear cambios»): the leader's own, or every area's for
+  // the readers. Keyed `area|month` so the screen can tell locked from open.
+  const { data: locks } = soloMias
+    ? await db.from('comercial_forecast_bloqueos')
+        .select('area, month, version, autor, created_at').eq('activo', true).eq('area', auth.area!)
+    : await db.from('comercial_forecast_bloqueos')
+        .select('area, month, version, autor, created_at').eq('activo', true);
+  const bloqueos: Record<string, BloqueoResumen> = {};
+  for (const l of locks ?? []) {
+    bloqueos[`${l.area}|${l.month}`] = { version: l.version, autor: l.autor, at: l.created_at };
+  }
   const base = {
     filas: filas ?? [],
     productos,
@@ -95,7 +82,9 @@ export async function GET() {
     areas: areas ?? [],
     miArea: auth.area,
     puedeCapturar: isAuthorized(auth.role, CAN_CAPTURE_FORECAST),
+    puedeDesbloquear: isAuthorized(auth.role, CAN_DESBLOQUEAR_FORECAST),
     mesesAbiertos: mesesAbiertos(hoy),
+    bloqueos,
   };
   if (soloMias) return NextResponse.json(base);
 
@@ -217,6 +206,11 @@ export async function PUT(request: Request) {
     return badRequest(`El mes debe ser uno de los abiertos: ${mesesAbiertos(new Date()).join(', ')}`);
   }
 
+  const db = createServiceRoleClient();
+  // «Bloquear cambios»: a locked area+month refuses every write, batch or single.
+  const lock = await bloqueoActivo(db, area, month);
+  if (lock) return NextResponse.json({ error: mensajeBloqueado(lock, month) }, { status: 423 });
+
   const esLote = Array.isArray(body.filas);
   const entradas: FilaEntrada[] = [];
   if (esLote) {
@@ -236,8 +230,6 @@ export async function PUT(request: Request) {
     if (v.fila.quantity <= 0) return badRequest('La cantidad debe ser un número mayor que cero');
     entradas.push(v.fila);
   }
-
-  const db = createServiceRoleClient();
 
   const { data: existentes } = await db
     .from('products').select('id').in('id', entradas.map((f) => f.productId));
@@ -303,6 +295,8 @@ export async function DELETE(request: Request) {
   if (!month) return badRequest('month es obligatorio');
 
   const db = createServiceRoleClient();
+  const lock = await bloqueoActivo(db, permiso.area, month);
+  if (lock) return NextResponse.json({ error: mensajeBloqueado(lock, month) }, { status: 423 });
   const { error } = await db.from('comercial_forecast').delete()
     .eq('area', permiso.area).eq('month', month).eq('product_id', productId);
   if (error) {
