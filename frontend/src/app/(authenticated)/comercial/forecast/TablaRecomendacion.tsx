@@ -1,0 +1,425 @@
+'use client';
+
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { etiquetaMes, type Motivo } from '@/lib/comercial/forecast';
+import {
+  ETIQUETA_TEXTO, FALTA_CRITICA, DIVERGENCIA_ANIO_ANTERIOR, TOP_N, type Etiqueta, type Recomendacion,
+} from '@/lib/comercial/recomendacion';
+
+/**
+ * La tabla del jefe de canal (nivel 2): por código, lo que su canal pidió y
+ * recibió, quién lo compra, cómo fue el mismo mes el año pasado, y la
+ * recomendación ya calculada — para que aprobar sea lo normal y editar la
+ * excepción.
+ *
+ * TODOS los números vienen de /api/comercial/historial ya calculados
+ * (lib/comercial/recomendacion.ts). Este componente no suma, no promedia,
+ * no redondea: sólo muestra y escribe. Si un número está mal, está mal en
+ * la regla, no acá.
+ *
+ * Spec: docs/compras/FORECAST_COMERCIAL_L2_SPEC_RESEARCH_2026-09-10.md §4
+ * Plan: docs/compras/FORECAST_COMERCIAL_L2_BUILD_PLAN_2026-09-10.md §0, Phase 3
+ */
+
+export interface FilaHistorial {
+  productId: number;
+  sku: string;
+  nombre: string;
+  uom: string | null;
+  etiqueta: Etiqueta | null;
+  serie: { mes: string; pedido: number }[];
+  meses3: { mes: string; pedido: number; entregado: number; falta: number; critica: boolean }[];
+  anteriores: { mes: string; pedido: number; entregado: number; diverge: boolean }[];
+  clientes: { n: number; principal: string | null; share: number | null };
+  recomendacion: Recomendacion | null;
+  ventaPublico: number | null;
+  capturado: { quantity: number; motivo: Motivo } | null;
+  cicloAnterior: { mes: string; capturado: number | null; pedidoReal: number; entregadoReal: number } | null;
+}
+
+export interface Historial {
+  area: { slug: string; nombre: string; aplicaEstacional: boolean };
+  mes: string;
+  historialDisponible: boolean;
+  asOf: string | null;
+  bodega: string;
+  total: number;
+  filas: FilaHistorial[];
+}
+
+const n = (v: number) => Math.round(v).toLocaleString('es-GT');
+const MES_CORTO = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+const mesCorto = (label: string) => MES_CORTO[Number(label.slice(5, 7)) - 1];
+const mesCortoAnio = (label: string) => `${mesCorto(label)} ${label.slice(0, 4)}`;
+
+const CHIP: Record<Etiqueta, string> = {
+  estable: 'bg-emerald-50 text-emerald-800 border-emerald-200',
+  medio: 'bg-gray-100 text-gray-700 border-gray-200',
+  variable: 'bg-amber-50 text-amber-800 border-amber-200',
+  erratico: 'bg-red-50 text-red-800 border-red-200',
+};
+
+/** Six bars, no library: the shape is the information (spec §2.2). */
+function Sparkline({ serie }: { serie: { mes: string; pedido: number }[] }) {
+  const max = Math.max(1, ...serie.map((s) => s.pedido));
+  const w = 6, gap = 2, h = 18;
+  return (
+    <svg width={serie.length * (w + gap)} height={h} aria-label="Pedido de los últimos 6 meses" className="block">
+      {serie.map((s, i) => {
+        const bh = Math.max(1, Math.round((s.pedido / max) * h));
+        return (
+          <rect key={s.mes} x={i * (w + gap)} y={h - bh} width={w} height={bh}
+                className="fill-gray-400"><title>{`${mesCortoAnio(s.mes)}: ${n(s.pedido)}`}</title></rect>
+        );
+      })}
+    </svg>
+  );
+}
+
+/** What the leader sees for one client set. Name + share only at ≥ 50 % (Q-C). */
+function Clientes({ c }: { c: FilaHistorial['clientes'] }) {
+  if (c.n === 0) return <span className="text-gray-300">sin pedidos</span>;
+  if (c.principal && c.share !== null && c.share >= 0.5) {
+    return (
+      <span title={`Un solo cliente concentra el ${Math.round(c.share * 100)} % de lo pedido en 3 meses (${c.n} clientes en total). Si ese cliente cambia, este número cambia.`}>
+        <span className="text-gray-800">{c.principal}</span>
+        <span className="text-amber-800 font-medium"> · {Math.round(c.share * 100)} %</span>
+        <span className="text-gray-400"> de {c.n}</span>
+      </span>
+    );
+  }
+  return (
+    <span title={`${c.n} clientes distintos en los últimos 3 meses; el mayor pesa ${Math.round((c.share ?? 0) * 100)} %`}>
+      {c.n} clientes <span className="text-gray-400">(mayor {Math.round((c.share ?? 0) * 100)} %)</span>
+    </span>
+  );
+}
+
+function fraseFactor(r: Recomendacion, mes: string, area: string): string | null {
+  if (r.indiceMes === null) return null;
+  const f = r.indiceMes.toFixed(2);
+  return r.aplicado
+    ? `${mesCorto(mes)} = ${f}× un mes normal en ${area}`
+    : `${mesCorto(mes)} suele ser ${f}× un mes normal en ${area} (no se aplica en este canal)`;
+}
+
+interface Props {
+  area: string;
+  mes: string;
+  /** Read-only for the roles that look but do not capture. */
+  soloLectura: boolean;
+  /** Called after any write so the shell can refresh its own counts. */
+  onCambio?: () => void;
+}
+
+export function TablaRecomendacion({ area, mes, soloLectura, onCambio }: Props) {
+  const [h, setH] = useState<Historial | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  // productId -> what the input shows. Absent = the pre-filled value.
+  const [edits, setEdits] = useState<Record<number, string>>({});
+  // productId -> quantity saved in THIS session (✓), or 0 for cleared.
+  const [guardado, setGuardado] = useState<Record<number, number>>({});
+  const [guardando, setGuardando] = useState(false);
+  const [aviso, setAviso] = useState<string | null>(null);
+  const [ultimaEdicion, setUltimaEdicion] = useState<Date | null>(null);
+  const [verComoSeCalcula, setVerComoSeCalcula] = useState(false);
+
+  const cargar = useCallback(async () => {
+    setH(null); setError(null); setEdits({}); setGuardado({});
+    try {
+      const r = await fetch(`/api/comercial/historial?area=${encodeURIComponent(area)}&mes=${encodeURIComponent(mes)}`);
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.error ?? 'No se pudo cargar el historial');
+      setH(j);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'No se pudo cargar el historial');
+    }
+  }, [area, mes]);
+
+  useEffect(() => { cargar(); }, [cargar]);
+
+  /** The number in the cell: edited > saved this session > captured > recommendation. */
+  const valorDe = useCallback((f: FilaHistorial): string => {
+    if (f.productId in edits) return edits[f.productId];
+    if (f.productId in guardado) return guardado[f.productId] ? String(guardado[f.productId]) : '';
+    if (f.capturado) return String(f.capturado.quantity);
+    return f.recomendacion ? String(f.recomendacion.valor) : '';
+  }, [edits, guardado]);
+
+  /** A code captured by hand keeps its reason; an approved recommendation is `base`. */
+  const motivoDe = (f: FilaHistorial): Motivo =>
+    f.capturado && f.capturado.motivo !== 'base' ? f.capturado.motivo : 'base';
+
+  async function enviar(filas: { productId: number; quantity: number; motivo: Motivo }[]) {
+    const r = await fetch('/api/comercial/forecast', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ month: mes, filas }),
+    });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error ?? 'No se pudo guardar');
+    return j as { guardadas: number; quitadas: number };
+  }
+
+  async function guardarFila(f: FilaHistorial) {
+    const texto = valorDe(f).trim();
+    const q = texto === '' ? 0 : Number(texto);
+    if (!Number.isFinite(q) || q < 0) { setAviso(`${f.sku}: la cantidad no es válida`); return; }
+    // Only an EDITED cell writes on blur. Tabbing through the column must
+    // not approve rows one by one; that is what «Aprobar todo» is for.
+    if (!(f.productId in edits)) return;
+    setGuardando(true); setAviso(null);
+    try {
+      await enviar([{ productId: f.productId, quantity: q, motivo: motivoDe(f) }]);
+      setGuardado((g) => ({ ...g, [f.productId]: q }));
+      setEdits((e) => Object.fromEntries(Object.entries(e).filter(([k]) => Number(k) !== f.productId)));
+      setUltimaEdicion(new Date());
+      onCambio?.();
+    } catch (e) {
+      setAviso(e instanceof Error ? e.message : 'No se pudo guardar');
+    } finally {
+      setGuardando(false);
+    }
+  }
+
+  async function aprobarTodo() {
+    if (!h) return;
+    const filas = h.filas
+      .map((f) => ({ f, texto: valorDe(f).trim() }))
+      .filter(({ texto }) => texto !== '' && Number.isFinite(Number(texto)) && Number(texto) > 0)
+      .map(({ f, texto }) => ({ productId: f.productId, quantity: Number(texto), motivo: motivoDe(f) }));
+    if (filas.length === 0) { setAviso('No hay nada que aprobar'); return; }
+    setGuardando(true); setAviso(null);
+    try {
+      const r = await enviar(filas);
+      setGuardado((g) => {
+        const nuevo = { ...g };
+        for (const x of filas) nuevo[x.productId] = x.quantity;
+        return nuevo;
+      });
+      setEdits({});
+      setUltimaEdicion(new Date());
+      setAviso(`Se guardaron ${r.guardadas} códigos para ${etiquetaMes(mes)}.`);
+      onCambio?.();
+    } catch (e) {
+      setAviso(e instanceof Error ? e.message : 'No se pudo guardar');
+    } finally {
+      setGuardando(false);
+    }
+  }
+
+  const cargadas = useMemo(() => {
+    if (!h) return 0;
+    return h.filas.filter((f) =>
+      f.productId in guardado ? guardado[f.productId] > 0 : !!f.capturado).length;
+  }, [h, guardado]);
+
+  if (error) return <div className="text-sm text-red-700">{error}</div>;
+  if (!h) return <div className="text-sm text-gray-500">Cargando el historial del canal…</div>;
+
+  if (!h.historialDisponible) {
+    return (
+      <section className="bg-white border border-gray-200 rounded-lg p-5">
+        <p className="text-sm text-gray-700">
+          <strong>Sin historial en este canal.</strong> Todavía no hay pedidos de {h.area.nombre} en Odoo,
+          así que no hay recomendación que mostrar. Podés cargar códigos a mano abajo.
+        </p>
+      </section>
+    );
+  }
+
+  const mesesBase = h.filas[0]?.meses3.map((m) => m.mes) ?? [];
+  const esTiendas = h.area.slug === 'tiendas';
+  const fechaHora = (d: Date) => d.toLocaleTimeString('es-GT', { hour: '2-digit', minute: '2-digit' });
+
+  return (
+    <section className="bg-white border border-gray-200 rounded-lg p-5 space-y-3">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <div>
+          <h2 className="text-sm font-medium text-gray-900">
+            Los {h.filas.length} códigos con más riesgo de faltante en {h.area.nombre} — {etiquetaMes(mes)}
+          </h2>
+          <p className="text-xs text-gray-500">
+            De {h.total} códigos con pedidos en los últimos 6 meses. Ordenados por lo que faltó y por lo que
+            queda en {h.bodega === 'San Jose VN' ? 'San José' : h.bodega}. Cualquier otro código se agrega abajo.
+            {h.asOf && <> · Historial de Odoo al {new Date(h.asOf).toLocaleString('es-GT', { dateStyle: 'short', timeStyle: 'short' })}</>}
+            {' · '}
+            <button type="button" onClick={() => setVerComoSeCalcula((v) => !v)} className="underline hover:text-gray-800">
+              ¿Cómo se calcula?
+            </button>
+          </p>
+        </div>
+        {!soloLectura && (
+          <div className="flex items-center gap-3">
+            <span className="text-xs text-gray-500">
+              Cargado: {cargadas} de {h.filas.length}
+              {ultimaEdicion && <> · última edición {fechaHora(ultimaEdicion)}</>}
+            </span>
+            <button
+              type="button" onClick={aprobarTodo} disabled={guardando}
+              className="px-4 py-2 text-sm bg-gray-900 text-white rounded-md hover:bg-gray-800 disabled:opacity-50"
+            >
+              {guardando ? 'Guardando…' : `Aprobar todo (${h.filas.length})`}
+            </button>
+          </div>
+        )}
+      </div>
+
+      {verComoSeCalcula && <ComoSeCalcula area={h.area} />}
+      {aviso && <p className="text-xs text-emerald-700">{aviso}</p>}
+
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="text-left text-xs text-gray-500 border-b border-gray-200 align-bottom">
+              <th className="py-2 pr-3 font-medium sticky left-0 bg-white">Código</th>
+              <th className="py-2 pr-3 font-medium" title="Pedido de tu canal, últimos 6 meses">6 meses</th>
+              {mesesBase.map((m) => (
+                <th key={m} className="py-2 pr-3 font-medium text-right whitespace-nowrap"
+                    title="Pedido por tu canal / entregado por el almacén. Lo que falta no se vuelve a pedir al mes siguiente; Odoo no registra el motivo.">
+                  {mesCorto(m)}<span className="block font-normal text-gray-400">pedido / entregado</span>
+                </th>
+              ))}
+              <th className="py-2 pr-3 font-medium text-right whitespace-nowrap"
+                  title={`Mismo mes en años anteriores, en tu canal. Ámbar cuando se aleja más de ${Math.round(DIVERGENCIA_ANIO_ANTERIOR * 100)} % de la recomendación.`}>
+                {mesCorto(mes)} años anteriores
+              </th>
+              <th className="py-2 pr-3 font-medium" title="Quién lo compra en tu canal (últimos 3 meses)">Clientes</th>
+              <th className="py-2 pr-3 font-medium text-right whitespace-nowrap"
+                  title="Promedio de los promedios de 3 y 6 meses de lo PEDIDO por tu canal; por el factor del mes donde aplica. «Normalmente» es el rango donde cayó la realidad para códigos así de parejos.">
+                Recomendación
+              </th>
+              {!soloLectura && <th className="py-2 pr-3 font-medium text-right">Mi forecast</th>}
+            </tr>
+          </thead>
+          <tbody>
+            {h.filas.map((f) => {
+              const r = f.recomendacion;
+              const valor = valorDe(f);
+              const ok = f.productId in guardado;
+              return (
+                <tr key={f.productId} className="border-b border-gray-100 align-top">
+                  <td className="py-2 pr-3 sticky left-0 bg-white max-w-[16rem]">
+                    <div>
+                      <span className="font-mono text-xs text-gray-500">{f.sku}</span>{' '}
+                      {f.etiqueta && (
+                        <span className={`inline-block text-[10px] px-1.5 py-0.5 rounded border align-middle ${CHIP[f.etiqueta]}`}
+                              title="Qué tan parejo vendió este código en tu canal los últimos 6 meses: estable, medio, variable o errático. Cuanto más errático, menos vale la recomendación y más vale lo que vos sabés.">
+                          {ETIQUETA_TEXTO[f.etiqueta]}
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-gray-800 truncate" title={f.nombre}>{f.nombre}</div>
+                    {f.cicloAnterior && f.cicloAnterior.capturado !== null && (
+                      <div className="text-xs text-gray-500" data-testid="ciclo-anterior">
+                        Tu forecast de {mesCorto(f.cicloAnterior.mes)}: {n(f.cicloAnterior.capturado)} · real {n(f.cicloAnterior.pedidoReal)}
+                      </div>
+                    )}
+                  </td>
+                  <td className="py-2 pr-3"><Sparkline serie={f.serie} /></td>
+                  {f.meses3.map((m) => (
+                    <td key={m.mes} className="py-2 pr-3 text-right tabular-nums whitespace-nowrap">
+                      <span className="text-gray-800">{n(m.pedido)}</span>
+                      <span className="text-gray-400"> / </span>
+                      <span className="text-gray-600">{n(m.entregado)}</span>
+                      {m.falta > 0 && (
+                        <span className={`block text-xs ${m.critica ? 'text-red-700 font-medium' : 'text-gray-400'}`}
+                              data-testid={m.critica ? 'falta-critica' : 'falta'}
+                              title={m.critica
+                                ? `Faltó el ${Math.round((m.falta / m.pedido) * 100)} % de lo pedido (${n(m.falta)} unidades): ≥ ${FALTA_CRITICA.pctMin * 100} % y ≥ ${FALTA_CRITICA.unidadesMin} unidades es crítico`
+                                : `Faltaron ${n(m.falta)} unidades`}>
+                          falta {n(m.falta)}{m.critica ? ' !' : ''}
+                        </span>
+                      )}
+                    </td>
+                  ))}
+                  <td className="py-2 pr-3 text-right tabular-nums whitespace-nowrap">
+                    {f.anteriores.length === 0
+                      ? <span className="text-gray-300">—</span>
+                      : f.anteriores.map((a) => (
+                        <span key={a.mes} className={`block ${a.diverge ? 'text-amber-800 font-medium' : 'text-gray-600'}`}
+                              data-testid={a.diverge ? 'anterior-diverge' : 'anterior'}
+                              title={`${mesCortoAnio(a.mes)}: pedido ${n(a.pedido)}, entregado ${n(a.entregado)}`}>
+                          {a.mes.slice(0, 4)}: {n(a.pedido)}
+                        </span>
+                      ))}
+                  </td>
+                  <td className="py-2 pr-3 text-xs text-gray-600 max-w-[14rem]">
+                    <Clientes c={f.clientes} />
+                    {esTiendas && f.ventaPublico !== null && (
+                      <span className="block text-gray-400" title="Venta al público en las tiendas (facturado, promedio mensual de 3 meses). Es contexto: el forecast es lo que las tiendas piden al CD.">
+                        venta al público {n(f.ventaPublico)}/mes
+                      </span>
+                    )}
+                  </td>
+                  <td className="py-2 pr-3 text-right tabular-nums whitespace-nowrap">
+                    {r ? (
+                      <>
+                        <span className="font-medium text-gray-900">{n(r.valor)}</span>
+                        <span className="block text-xs text-gray-500" title={`Promedio 3 meses ${n(r.avg3)} · promedio 6 meses ${n(r.avg6)} · base ${n(r.base)}${r.aplicado ? ` · × ${r.factor.toFixed(2)}` : ''}`}>
+                          normalmente {n(r.rango[0])}–{n(r.rango[1])}
+                        </span>
+                        {fraseFactor(r, mes, h.area.nombre) && (
+                          <span className="block text-xs text-gray-400" data-testid="factor">
+                            {fraseFactor(r, mes, h.area.nombre)}
+                          </span>
+                        )}
+                      </>
+                    ) : <span className="text-gray-300">sin historial</span>}
+                  </td>
+                  {!soloLectura && (
+                    <td className="py-2 pr-3 text-right whitespace-nowrap">
+                      <input
+                        type="number" min={0} value={valor}
+                        aria-label={`Mi forecast ${f.sku}`}
+                        onChange={(e) => setEdits((x) => ({ ...x, [f.productId]: e.target.value }))}
+                        onBlur={() => guardarFila(f)}
+                        onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+                        className="w-24 px-2 py-1 text-sm text-right border border-gray-300 rounded-md tabular-nums"
+                      />
+                      <span className="inline-block w-4 ml-1 text-emerald-700" aria-label={ok ? 'guardado' : undefined}>
+                        {ok ? '✓' : (f.capturado ? <span className="text-gray-300" title="Ya cargado antes">·</span> : '')}
+                      </span>
+                    </td>
+                  )}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      <p className="text-xs text-gray-500">
+        Se muestran {TOP_N} códigos como máximo. Poné 0 o dejá vacío para no cargar un código.
+      </p>
+    </section>
+  );
+}
+
+/**
+ * The formula and its honest accuracy, in the leader's words. Numbers from
+ * the spec §3.4 (backtest 2025-10 .. 2026-08, top-80 % SKUs per channel).
+ */
+function ComoSeCalcula({ area }: { area: Historial['area'] }) {
+  return (
+    <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 text-xs text-gray-700 space-y-2">
+      <p>
+        <strong>Recomendación</strong> = promedio entre el promedio de los últimos 3 meses y el de los últimos 6,
+        de lo que <em>pidió</em> tu canal (no de lo entregado: lo entregado ya trae los faltantes).
+        {area.aplicaEstacional
+          ? ' Después se multiplica por el factor del mes de tu categoría, sacado de cuatro años de historia (2022–2025): así diciembre no se calcula como un mes normal.'
+          : ' En este canal el factor del mes se muestra pero no se aplica: al probarlo contra la historia empeoraba el resultado.'}
+      </p>
+      <p>
+        <strong>Qué tan buena es.</strong> Probada contra lo que realmente se pidió cada mes entre octubre 2025 y
+        agosto 2026: para los códigos que hacen el 80 % del volumen, la recomendación cae dentro de ±25 % del
+        real en unos <strong>65 %</strong> de los códigos en Mayoreo y Petén, <strong>48 %</strong> en Zacapa y
+        <strong> 45 %</strong> en Institucional, Tiendas y Supermercados. La etiqueta (estable · medio · variable ·
+        errático) dice en cuáles confiar más: un código <em>estable</em> acierta 61 % de las veces; uno <em>errático</em>, 19 %.
+      </p>
+      <p>
+        <strong>Lo que la app no sabe y vos sí:</strong> un cliente que entra o se va, una promoción, una
+        licitación. Por eso está la columna de clientes y por eso el número se puede corregir.
+      </p>
+    </div>
+  );
+}

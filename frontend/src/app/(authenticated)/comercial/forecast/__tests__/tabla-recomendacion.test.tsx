@@ -1,0 +1,214 @@
+/**
+ * Nivel 2 — la tabla del jefe de canal. Monta el árbol REAL de ForecastClient
+ * con fetch mockeado por URL, y prueba lo que la spec promete en pantalla:
+ * el faltante crítico en rojo, el año anterior en ámbar cuando diverge, el
+ * cliente dominante sólo al 50 %, «Aprobar todo» manda exactamente las filas
+ * visibles, un 0 limpia, y un canal sin historial muestra el formulario y
+ * ningún número inventado.
+ */
+import { render, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { ForecastClient } from '../ForecastClient';
+
+const DATOS = {
+  filas: [], productos: [], proyeccion: [],
+  areas: [{ slug: 'supermercados', nombre: 'Supermercados' }, { slug: 'mayoreo', nombre: 'Mayoreo' }],
+  miArea: 'supermercados', puedeCapturar: true,
+  mesesAbiertos: ['2026-09-01', '2026-10-01', '2026-11-01'],
+};
+
+function fila(over: Record<string, unknown>) {
+  return {
+    productId: 1, sku: '77205190', nombre: 'BANDEJA No.2', uom: 'Unidades', etiqueta: 'medio',
+    serie: ['2026-03', '2026-04', '2026-05', '2026-06', '2026-07', '2026-08'].map((mes, i) => ({ mes, pedido: 100 + i })),
+    meses3: [
+      { mes: '2026-06', pedido: 2430, entregado: 1868, falta: 562, critica: true },
+      { mes: '2026-07', pedido: 2237, entregado: 2230, falta: 7, critica: false },
+      { mes: '2026-08', pedido: 1522, entregado: 1522, falta: 0, critica: false },
+    ],
+    anteriores: [{ mes: '2025-10', pedido: 1874, entregado: 1874, diverge: false }],
+    clientes: { n: 3, principal: 'OPERADORA DE TIENDAS, S.A.', share: 0.52 },
+    recomendacion: {
+      avg3: 2063, avg6: 1997, base: 2030, factor: 0.8265, indiceMes: 0.8265, aplicado: true,
+      valor: 2030, rango: [1502, 2497], etiqueta: 'medio',
+    },
+    ventaPublico: null, capturado: null, cicloAnterior: null,
+    ...over,
+  };
+}
+
+const HISTORIAL = {
+  area: { slug: 'supermercados', nombre: 'Supermercados', aplicaEstacional: true },
+  mes: '2026-10-01', historialDisponible: true, asOf: '2026-09-11T02:00:00Z', bodega: 'San Jose VN',
+  total: 162,
+  filas: [
+    fila({}),
+    fila({
+      productId: 2, sku: '88201006', nombre: 'PAJILLA', etiqueta: 'estable',
+      meses3: [
+        { mes: '2026-06', pedido: 100, entregado: 100, falta: 0, critica: false },
+        { mes: '2026-07', pedido: 100, entregado: 90, falta: 10, critica: false },
+        { mes: '2026-08', pedido: 100, entregado: 100, falta: 0, critica: false },
+      ],
+      anteriores: [{ mes: '2025-10', pedido: 400, entregado: 400, diverge: true }],
+      clientes: { n: 12, principal: 'ALGUIEN', share: 0.3 },
+      recomendacion: {
+        avg3: 100, avg6: 100, base: 100, factor: 1, indiceMes: 0.87, aplicado: false,
+        valor: 100, rango: [83, 122], etiqueta: 'estable',
+      },
+    }),
+    fila({
+      productId: 3, sku: '11111111', nombre: 'YA CARGADO', etiqueta: 'estable',
+      meses3: [
+        { mes: '2026-06', pedido: 50, entregado: 50, falta: 0, critica: false },
+        { mes: '2026-07', pedido: 50, entregado: 50, falta: 0, critica: false },
+        { mes: '2026-08', pedido: 50, entregado: 50, falta: 0, critica: false },
+      ],
+      anteriores: [],
+      clientes: { n: 5, principal: 'OTRO', share: 0.2 },
+      recomendacion: {
+        avg3: 50, avg6: 50, base: 50, factor: 1, indiceMes: null, aplicado: false,
+        valor: 50, rango: [42, 61], etiqueta: 'estable',
+      },
+      capturado: { quantity: 500, motivo: 'temporada' },
+      cicloAnterior: { mes: '2026-08', capturado: 1200, pedidoReal: 1300, entregadoReal: 1250 },
+    }),
+  ],
+};
+
+let puts: { url: string; body: Record<string, unknown> }[];
+
+function mockFetch(historial: unknown = HISTORIAL) {
+  puts = [];
+  global.fetch = jest.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input);
+    if (url.startsWith('/api/comercial/historial')) {
+      return { ok: true, json: async () => historial } as Response;
+    }
+    if (url === '/api/comercial/forecast' && init?.method === 'PUT') {
+      const body = JSON.parse(String(init.body));
+      puts.push({ url, body });
+      return { ok: true, json: async () => ({ guardadas: body.filas.length, quitadas: 0, filas: [] }) } as Response;
+    }
+    return { ok: true, json: async () => DATOS } as Response;
+  }) as unknown as typeof fetch;
+}
+
+beforeEach(() => {
+  jest.useFakeTimers({ now: new Date('2026-09-10T12:00:00Z') });
+  mockFetch();
+});
+afterEach(() => jest.useRealTimers());
+
+async function montar() {
+  const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime });
+  render(<ForecastClient />);
+  await waitFor(() => expect(screen.getByText('77205190')).toBeInTheDocument());
+  return user;
+}
+
+it('el faltante crítico va en rojo con «!», el no crítico en gris', async () => {
+  await montar();
+  const criticas = screen.getAllByTestId('falta-critica');
+  expect(criticas).toHaveLength(1);
+  expect(criticas[0]).toHaveTextContent('falta 562 !');
+  expect(criticas[0].className).toMatch(/text-red-700/);
+  const normales = screen.getAllByTestId('falta');
+  expect(normales.map((e) => e.textContent)).toEqual(['falta 7', 'falta 10']);
+});
+
+it('el año anterior va en ámbar sólo cuando diverge', async () => {
+  await montar();
+  expect(screen.getAllByTestId('anterior-diverge')).toHaveLength(1);
+  expect(screen.getByTestId('anterior-diverge')).toHaveTextContent('2025: 400');
+  expect(screen.getAllByTestId('anterior')).toHaveLength(1);
+});
+
+it('el cliente dominante se nombra al 50 %; abajo de eso sólo cuenta', async () => {
+  await montar();
+  expect(screen.getByText('OPERADORA DE TIENDAS, S.A.')).toBeInTheDocument();
+  expect(screen.getByText('· 52 %')).toBeInTheDocument();
+  expect(screen.queryByText('ALGUIEN')).not.toBeInTheDocument();
+  expect(screen.getByText(/12 clientes/)).toBeInTheDocument();
+});
+
+it('la recomendación trae su rango y la frase del factor, aplicado o no', async () => {
+  await montar();
+  expect(screen.getByText('normalmente 1,502–2,497')).toBeInTheDocument();
+  const frases = screen.getAllByTestId('factor').map((e) => e.textContent);
+  expect(frases).toContain('Oct = 0.83× un mes normal en Supermercados');
+  expect(frases).toContain('Oct suele ser 0.87× un mes normal en Supermercados (no se aplica en este canal)');
+});
+
+it('la celda arranca con la recomendación, o con lo ya cargado, y muestra el ciclo anterior', async () => {
+  await montar();
+  expect(screen.getByLabelText('Mi forecast 77205190')).toHaveValue(2030);
+  expect(screen.getByLabelText('Mi forecast 11111111')).toHaveValue(500);
+  expect(screen.getByTestId('ciclo-anterior')).toHaveTextContent('Tu forecast de Ago: 1,200 · real 1,300');
+});
+
+it('«Aprobar todo» manda exactamente las filas visibles, base salvo lo cargado a mano', async () => {
+  const user = await montar();
+  await user.click(screen.getByRole('button', { name: /Aprobar todo \(3\)/ }));
+  await waitFor(() => expect(puts).toHaveLength(1));
+  expect(puts[0].body).toEqual({
+    month: '2026-10-01',
+    filas: [
+      { productId: 1, quantity: 2030, motivo: 'base' },
+      { productId: 2, quantity: 100, motivo: 'base' },
+      { productId: 3, quantity: 500, motivo: 'temporada' },
+    ],
+  });
+  await waitFor(() => expect(screen.getByText(/Se guardaron 3 códigos para Octubre 2026/)).toBeInTheDocument());
+  expect(screen.getByText(/Cargado: 3 de 3/)).toBeInTheDocument();
+});
+
+it('editar una celda la guarda al salir; un 0 la limpia; pasar sin editar no escribe', async () => {
+  const user = await montar();
+  const input = screen.getByLabelText('Mi forecast 77205190');
+  await user.clear(input);
+  await user.type(input, '1800');
+  await user.tab();
+  await waitFor(() => expect(puts).toHaveLength(1));
+  expect(puts[0].body).toEqual({ month: '2026-10-01', filas: [{ productId: 1, quantity: 1800, motivo: 'base' }] });
+
+  // tab through the next input without touching it: nothing is written
+  await user.tab();
+  expect(puts).toHaveLength(1);
+
+  const otro = screen.getByLabelText('Mi forecast 88201006');
+  await user.clear(otro);
+  await user.type(otro, '0');
+  await user.tab();
+  await waitFor(() => expect(puts).toHaveLength(2));
+  expect(puts[1].body.filas).toEqual([{ productId: 2, quantity: 0, motivo: 'base' }]);
+});
+
+it('un canal sin historial muestra el formulario y ningún número', async () => {
+  mockFetch({
+    area: { slug: 'supermercados', nombre: 'Supermercados', aplicaEstacional: true },
+    mes: '2026-10-01', historialDisponible: false, asOf: null, bodega: 'San Jose VN', total: 0, filas: [],
+  });
+  render(<ForecastClient />);
+  await waitFor(() => expect(screen.getByText(/Sin historial en este canal/)).toBeInTheDocument());
+  expect(screen.queryByText(/Aprobar todo/)).not.toBeInTheDocument();
+  expect(screen.queryByText(/normalmente/)).not.toBeInTheDocument();
+  // the four-field form is still there
+  expect(screen.getByPlaceholderText(/77205049/)).toBeInTheDocument();
+});
+
+it('quien sólo lee elige un canal y ve la tabla sin editar', async () => {
+  global.fetch = jest.fn(async (input: RequestInfo | URL) => {
+    const url = String(input);
+    if (url.startsWith('/api/comercial/historial')) return { ok: true, json: async () => HISTORIAL } as Response;
+    return { ok: true, json: async () => ({ ...DATOS, miArea: null, puedeCapturar: false }) } as Response;
+  }) as unknown as typeof fetch;
+  const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime });
+  render(<ForecastClient />);
+  await waitFor(() => expect(screen.getByText(/Ver la tabla de un canal/)).toBeInTheDocument());
+  await user.selectOptions(screen.getByRole('combobox'), 'supermercados');
+  await waitFor(() => expect(screen.getByText('77205190')).toBeInTheDocument());
+  expect(screen.queryByLabelText(/Mi forecast/)).not.toBeInTheDocument();
+  expect(screen.queryByText(/Aprobar todo/)).not.toBeInTheDocument();
+  expect(within(screen.getByRole('table')).getByText('normalmente 1,502–2,497')).toBeInTheDocument();
+});
