@@ -19,25 +19,49 @@
  * sólo cuando su suma supera la proyección de compras. Fundirlos con el primero
  * borraría la única distinción que la reunión mensual necesita.
  */
-export type Motivo = 'extraordinaria' | 'temporada' | 'critico';
+export type Motivo = 'extraordinaria' | 'temporada' | 'critico' | 'base';
 
-export const MOTIVOS: { valor: Motivo; etiqueta: string; ayuda: string }[] = [
+/**
+ * `base` (Level 2, 2026-09-10) is the APPROVED RECOMMENDATION: the leader
+ * accepted the app's number for a code. It is none of the three reasons
+ * above — not a commitment, not a projection to review — and it NEVER sums
+ * into the Sugerido: the wiring of channel forecasts into purchasing is on
+ * hold (plan §1 Q5). It is written by the recommendation table, not chosen
+ * by hand, so it is not offered in the capture form's radio (`manual: false`).
+ */
+export const MOTIVOS: { valor: Motivo; etiqueta: string; ayuda: string; manual: boolean }[] = [
   {
     valor: 'extraordinaria',
     etiqueta: 'Compra extraordinaria',
     ayuda: 'Ya tengo a quién entregárselo. Se suma directo al pedido.',
+    manual: true,
   },
   {
     valor: 'temporada',
     etiqueta: 'Compra por temporada',
     ayuda: 'Lo espero por la temporada. Se revisa en la reunión si el total pasa la proyección.',
+    manual: true,
   },
   {
     valor: 'critico',
     etiqueta: 'Faltante o crítico',
     ayuda: 'Me está faltando. Se revisa en la reunión si el total pasa la proyección.',
+    manual: true,
+  },
+  {
+    valor: 'base',
+    etiqueta: 'Recomendación aprobada',
+    ayuda: 'No entra sola al pedido; se compara en la reunión.',
+    manual: false,
   },
 ];
+
+export const MOTIVOS_VALIDOS: Motivo[] = MOTIVOS.map((m) => m.valor);
+
+/** An approved recommendation: shown beside the others, summed into nothing. */
+export function esBase(m: Motivo): boolean {
+  return m === 'base';
+}
 
 /** Suma directo al pedido, sin pasar por la reunión. */
 export function sumaDirecto(m: Motivo): boolean {
@@ -182,6 +206,8 @@ export interface Consolidado {
   total: number;
   directo: number;
   aRevision: number;
+  /** Approved recommendations (`base`): visible, compared, never added. */
+  base: number;
   /** Proyección de la app para ese producto. null cuando no hay dato. */
   proyeccion: number | null;
   /** La proyección comercial supera a la de la app: se revisa en la reunión. */
@@ -200,7 +226,7 @@ export function consolidar(
       const proyeccion = proyeccionPorProducto.get(f.product_id) ?? null;
       c = {
         product_id: f.product_id, sku: f.sku, nombre: f.nombre, month: f.month,
-        porArea: {}, total: 0, directo: 0, aRevision: 0,
+        porArea: {}, total: 0, directo: 0, aRevision: 0, base: 0,
         proyeccion, superaProyeccion: false,
       };
       porClave.set(clave, c);
@@ -208,6 +234,7 @@ export function consolidar(
     c.porArea[f.area] = (c.porArea[f.area] ?? 0) + f.quantity;
     c.total += f.quantity;
     if (sumaDirecto(f.motivo)) c.directo += f.quantity;
+    else if (esBase(f.motivo)) c.base += f.quantity;
     else c.aRevision += f.quantity;
   }
   for (const c of porClave.values()) {

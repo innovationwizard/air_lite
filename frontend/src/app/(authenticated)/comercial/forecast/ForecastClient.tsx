@@ -248,7 +248,7 @@ function Captura({ datos, mes, onCambio }: { datos: Datos; mes: string; onCambio
         <fieldset className="mt-4">
           <legend className="text-xs font-medium text-gray-700 mb-1.5">¿Por qué?</legend>
           <div className="space-y-1.5">
-            {MOTIVOS.map((m) => (
+            {MOTIVOS.filter((m) => m.manual).map((m) => (
               <label key={m.valor} className="flex items-start gap-2.5 cursor-pointer">
                 <input
                   type="radio" name="motivo" checked={motivo === m.valor}

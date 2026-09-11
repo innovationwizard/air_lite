@@ -53,9 +53,9 @@ describe('consolidarComercial', () => {
       fila({ product_id: 5, quantity: 200, motivo: 'temporada', area: 'peten' }),
     ], 'San Jose VN');
     expect(r.get(5)?.porArea).toEqual({
-      mayoreo: { directo: 500, aRevision: 0 },
-      tiendas: { directo: 300, aRevision: 0 },
-      peten: { directo: 0, aRevision: 200 },
+      mayoreo: { directo: 500, aRevision: 0, base: 0 },
+      tiendas: { directo: 300, aRevision: 0, base: 0 },
+      peten: { directo: 0, aRevision: 200, base: 0 },
     });
     // Y el desglose reconcilia con los totales, o son dos numeros distintos.
     const pa = r.get(5)!.porArea;
@@ -70,7 +70,7 @@ describe('consolidarComercial', () => {
       fila({ product_id: 6, quantity: 400, motivo: 'extraordinaria', area: 'zacapa' }),
       fila({ product_id: 6, quantity: 150, motivo: 'critico', area: 'zacapa' }),
     ], 'San Jose VN');
-    expect(r.get(6)?.porArea.zacapa).toEqual({ directo: 400, aRevision: 150 });
+    expect(r.get(6)?.porArea.zacapa).toEqual({ directo: 400, aRevision: 150, base: 0 });
   });
 
   it('un producto solo de proyeccion no mueve el Sugerido ni un punto', () => {
@@ -90,6 +90,36 @@ describe('consolidarComercial', () => {
       fila({ product_id: 3, quantity: 40, motivo: 'extraordinaria', bodega: null }),
     ], 'San Jose VN');
     expect(r.get(3)?.directo).toBe(60);
+  });
+
+  it('una recomendacion aprobada (base) se ve y no entra a ningun lado', () => {
+    // Nivel 2 (2026-09-10): el jefe de canal aprueba ~50 codigos con la
+    // recomendacion de la app. Ese numero sale de los mismos p3/p6 que el
+    // motor ya promedia; sumarlo a `adic` compraria la misma demanda dos
+    // veces, y mandarlo a revision lo mezclaria con la proyeccion del canal.
+    // Va a su propio balde. El cableado al Sugerido esta en pausa (Q5).
+    const r = consolidarComercial([
+      fila({ product_id: 11, quantity: 1245, motivo: 'base' }),
+      fila({ product_id: 11, quantity: 100, motivo: 'extraordinaria' }),
+      fila({ product_id: 11, quantity: 40, motivo: 'critico', area: 'tiendas' }),
+    ], 'San Jose VN');
+    expect(r.get(11)?.directo).toBe(100);
+    expect(r.get(11)?.aRevision).toBe(40);
+    expect(r.get(11)?.base).toBe(1245);
+    expect(r.get(11)?.porArea).toEqual({
+      mayoreo: { directo: 100, aRevision: 0, base: 1245 },
+      tiendas: { directo: 0, aRevision: 40, base: 0 },
+    });
+  });
+
+  it('con solo filas base el aditivo vale exactamente cero', () => {
+    const r = consolidarComercial([
+      fila({ product_id: 12, quantity: 800, motivo: 'base' }),
+      fila({ product_id: 12, quantity: 300, motivo: 'base', area: 'zacapa' }),
+    ], 'San Jose VN');
+    expect(r.get(12)?.directo).toBe(0);
+    expect(r.get(12)?.aRevision).toBe(0);
+    expect(r.get(12)?.base).toBe(1100);
   });
 
   it('sin capturas no devuelve nada, y el aditivo cae a cero', () => {

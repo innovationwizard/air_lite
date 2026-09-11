@@ -1,7 +1,7 @@
 import {
-  sumaDirecto, mesesAbiertos, mesDentroDelHorizonte, primerDiaMes, etiquetaMes,
-  cicloDelMes, mesPorDefecto, estadoCiclo, consolidar, MAX_CODIGOS_POR_MES,
-  type FilaForecast,
+  sumaDirecto, esBase, MOTIVOS, MOTIVOS_VALIDOS, mesesAbiertos, mesDentroDelHorizonte,
+  primerDiaMes, etiquetaMes, cicloDelMes, mesPorDefecto, estadoCiclo, consolidar,
+  MAX_CODIGOS_POR_MES, type FilaForecast,
 } from '../forecast';
 
 describe('motivos', () => {
@@ -11,6 +11,16 @@ describe('motivos', () => {
     expect(sumaDirecto('extraordinaria')).toBe(true);
     expect(sumaDirecto('temporada')).toBe(false);
     expect(sumaDirecto('critico')).toBe(false);
+    expect(sumaDirecto('base')).toBe(false);
+  });
+
+  it('base es la recomendacion aprobada: valida, no manual, no suma', () => {
+    expect(MOTIVOS_VALIDOS).toContain('base');
+    expect(esBase('base')).toBe(true);
+    expect(esBase('temporada')).toBe(false);
+    // The capture form's radio never offers it: the table writes it.
+    expect(MOTIVOS.filter((m) => m.manual).map((m) => m.valor))
+      .toEqual(['extraordinaria', 'temporada', 'critico']);
   });
 });
 
@@ -147,6 +157,19 @@ describe('consolidar', () => {
     expect(c[0].directo).toBe(30);
     expect(c[0].aRevision).toBe(150);
     expect(c[0].porArea).toEqual({ mayoreo: 100, tiendas: 50, institucional: 30 });
+  });
+
+  it('base va a su propio balde: ni directo, ni a revision, ni dispara revision', () => {
+    const c = consolidar([
+      fila({ area: 'mayoreo', quantity: 1000, motivo: 'base' }),
+      fila({ area: 'tiendas', quantity: 50, motivo: 'critico' }),
+    ], new Map([[1, 500]]));
+    expect(c[0].total).toBe(1050);
+    expect(c[0].directo).toBe(0);
+    expect(c[0].aRevision).toBe(50);
+    expect(c[0].base).toBe(1000);
+    // 1000 > 500 but it is an approved recommendation, not a projection
+    expect(c[0].superaProyeccion).toBe(false);
   });
 
   it('marca revision cuando la PROYECCION supera la de la app', () => {

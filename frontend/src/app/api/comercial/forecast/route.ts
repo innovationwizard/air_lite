@@ -3,12 +3,11 @@ import { requireAuth } from '@/lib/auth/server';
 import { CAN_VIEW_FORECAST_COMERCIAL, CAN_CAPTURE_FORECAST, isAuthorized } from '@/lib/auth/roles';
 import { createServiceRoleClient } from '@/lib/supabase/server';
 import {
-  MAX_CODIGOS_POR_MES, mesDentroDelHorizonte, mesesAbiertos, type Motivo,
+  MAX_CODIGOS_POR_MES, MOTIVOS_VALIDOS, esBase, mesDentroDelHorizonte, mesesAbiertos,
+  type Motivo,
 } from '@/lib/comercial/forecast';
 
 export const dynamic = 'force-dynamic';
-
-const MOTIVOS_VALIDOS: Motivo[] = ['extraordinaria', 'temporada', 'critico'];
 
 function badRequest(msg: string) {
   return NextResponse.json({ error: msg }, { status: 400 });
@@ -98,15 +97,44 @@ export async function GET() {
   });
 }
 
+interface FilaEntrada { productId: number; quantity: number; motivo: Motivo; note: string | null }
+
+/** One line of the body, validated. Returns the error text or the row. */
+function validarFila(raw: unknown): { ok: true; fila: FilaEntrada } | { ok: false; msg: string } {
+  const f = (raw ?? {}) as Record<string, unknown>;
+  const { productId, quantity, motivo, note } = f;
+  if (!Number.isInteger(productId) || (productId as number) <= 0) {
+    return { ok: false, msg: 'productId inválido' };
+  }
+  // 0 is allowed ONLY in a batch: it means "clear this code" (the leader
+  // emptied the cell). A single PUT keeps the > 0 rule below.
+  if (typeof quantity !== 'number' || !Number.isFinite(quantity) || quantity < 0) {
+    return { ok: false, msg: 'La cantidad debe ser un número mayor o igual que cero' };
+  }
+  if (typeof motivo !== 'string' || !MOTIVOS_VALIDOS.includes(motivo as Motivo)) {
+    return { ok: false, msg: 'motivo inválido' };
+  }
+  if (note !== undefined && note !== null && (typeof note !== 'string' || note.length > 500)) {
+    return { ok: false, msg: 'La nota admite hasta 500 caracteres' };
+  }
+  return { ok: true, fila: { productId: productId as number, quantity, motivo: motivo as Motivo,
+                             note: (note as string | null) ?? null } };
+}
+
 /**
- * PUT /api/comercial/forecast — carga o corrige UN código.
+ * PUT /api/comercial/forecast — carga o corrige códigos.
  *
- *   { productId, month, quantity, motivo, note?, area? }
+ *   one:   { productId, month, quantity, motivo, note?, area? }
+ *   batch: { month, filas: [{ productId, quantity, motivo, note? }], area? }   (nivel 2, «Aprobar todo»)
  *
  * Es upsert sobre (área, mes, producto), no inserción: volver a cargar un
  * código CORRIGE la cantidad en vez de sumar una fila. En una captura hecha
  * contra reloj el duplicado silencioso es el error más caro, porque infla el
  * pedido sin que nadie lo note hasta que llega de más.
+ *
+ * THE CAP (Q3, 2026-09-10): the 50-code limit applies to codes the leader
+ * adds BY HAND, never to approved recommendations (`base`) — the ranked
+ * list is itself 50 rows and approving it must never be blocked.
  */
 export async function PUT(request: Request) {
   const auth = await requireAuth(CAN_CAPTURE_FORECAST);
@@ -123,58 +151,80 @@ export async function PUT(request: Request) {
   if (!permiso.ok) return NextResponse.json({ error: permiso.msg }, { status: 403 });
   const area = permiso.area;
 
-  const { productId, month, quantity, motivo, note } = body;
-
-  if (!Number.isInteger(productId) || (productId as number) <= 0) {
-    return badRequest('productId inválido');
-  }
+  const { month } = body;
   if (typeof month !== 'string' || !mesDentroDelHorizonte(month, new Date())) {
     return badRequest(`El mes debe ser uno de los abiertos: ${mesesAbiertos(new Date()).join(', ')}`);
   }
-  if (typeof quantity !== 'number' || !Number.isFinite(quantity) || quantity <= 0) {
-    return badRequest('La cantidad debe ser un número mayor que cero');
-  }
-  if (typeof motivo !== 'string' || !MOTIVOS_VALIDOS.includes(motivo as Motivo)) {
-    return badRequest('motivo inválido');
-  }
-  if (note !== undefined && note !== null && (typeof note !== 'string' || note.length > 500)) {
-    return badRequest('La nota admite hasta 500 caracteres');
+
+  const esLote = Array.isArray(body.filas);
+  const entradas: FilaEntrada[] = [];
+  if (esLote) {
+    const filas = body.filas as unknown[];
+    if (filas.length === 0) return badRequest('filas está vacío');
+    if (filas.length > 500) return badRequest('Máximo 500 filas por lote');
+    for (const raw of filas) {
+      const v = validarFila(raw);
+      if (!v.ok) return badRequest(v.msg);
+      entradas.push(v.fila);
+    }
+    const ids = new Set(entradas.map((f) => f.productId));
+    if (ids.size !== entradas.length) return badRequest('Un código aparece dos veces en el lote');
+  } else {
+    const v = validarFila(body);
+    if (!v.ok) return badRequest(v.msg);
+    if (v.fila.quantity <= 0) return badRequest('La cantidad debe ser un número mayor que cero');
+    entradas.push(v.fila);
   }
 
   const db = createServiceRoleClient();
 
-  const { data: producto } = await db
-    .from('products').select('id').eq('id', productId).maybeSingle();
-  if (!producto) return badRequest('Ese código no existe en el catálogo');
+  const { data: existentes } = await db
+    .from('products').select('id').in('id', entradas.map((f) => f.productId));
+  const conocidos = new Set((existentes ?? []).map((p) => p.id as number));
+  const desconocido = entradas.find((f) => !conocidos.has(f.productId));
+  if (desconocido) return badRequest(`El código ${desconocido.productId} no existe en el catálogo`);
 
-  // Tope de códigos por área y mes. Se cuenta ANTES de escribir, y sólo aplica
-  // si el código es nuevo: corregir la cantidad de uno ya cargado nunca puede
-  // quedar bloqueado por el tope.
-  const { data: yaCargado } = await db.from('comercial_forecast')
-    .select('id').eq('area', area).eq('month', month).eq('product_id', productId).maybeSingle();
-  if (!yaCargado) {
-    const { count } = await db.from('comercial_forecast')
-      .select('id', { count: 'exact', head: true }).eq('area', area).eq('month', month);
-    if ((count ?? 0) >= MAX_CODIGOS_POR_MES) {
-      return badRequest(
-        `Ya cargaste ${MAX_CODIGOS_POR_MES} códigos para ese mes, que es el máximo acordado. `
-        + 'Corregí alguno o quitá uno antes de agregar otro.');
+  // Tope de códigos por área y mes — sólo sobre los manuales y sólo si el
+  // código es nuevo: corregir uno ya cargado nunca queda bloqueado por el
+  // tope, y una recomendación aprobada (`base`) no cuenta contra él.
+  const { data: cargados } = await db.from('comercial_forecast')
+    .select('product_id, motivo').eq('area', area).eq('month', month);
+  const yaCargados = new Map((cargados ?? []).map((c) => [c.product_id as number, c.motivo as Motivo]));
+  const manualesHoy = (cargados ?? []).filter((c) => !esBase(c.motivo as Motivo)).length;
+  const manualesNuevos = entradas.filter(
+    (f) => f.quantity > 0 && !esBase(f.motivo) && !yaCargados.has(f.productId)).length;
+  if (manualesHoy + manualesNuevos > MAX_CODIGOS_POR_MES) {
+    return badRequest(
+      `Ya cargaste ${MAX_CODIGOS_POR_MES} códigos para ese mes, que es el máximo acordado. `
+      + 'Corregí alguno o quitá uno antes de agregar otro.');
+  }
+
+  const aBorrar = entradas.filter((f) => f.quantity <= 0).map((f) => f.productId);
+  const aEscribir = entradas.filter((f) => f.quantity > 0).map((f) => ({
+    product_id: f.productId, month, quantity: f.quantity, motivo: f.motivo, area,
+    note: f.note, created_by: auth.id,
+  }));
+
+  if (aBorrar.length) {
+    const { error } = await db.from('comercial_forecast').delete()
+      .eq('area', area).eq('month', month).in('product_id', aBorrar);
+    if (error) {
+      return NextResponse.json({ error: 'No se pudo quitar', detail: error.message }, { status: 500 });
     }
   }
-
-  const { data, error } = await db.from('comercial_forecast')
-    .upsert({
-      product_id: productId, month, quantity, motivo, area,
-      note: (note as string | null) ?? null, created_by: auth.id,
-    }, { onConflict: 'area,month,product_id' })
-    .select('id, product_id, month, quantity, motivo, area, note')
-    .single();
-
-  if (error) {
-    return NextResponse.json(
-      { error: 'No se pudo guardar', detail: error.message }, { status: 500 });
+  let filas: unknown[] = [];
+  if (aEscribir.length) {
+    const { data, error } = await db.from('comercial_forecast')
+      .upsert(aEscribir, { onConflict: 'area,month,product_id' })
+      .select('id, product_id, month, quantity, motivo, area, note');
+    if (error) {
+      return NextResponse.json({ error: 'No se pudo guardar', detail: error.message }, { status: 500 });
+    }
+    filas = data ?? [];
   }
-  return NextResponse.json({ fila: data });
+  return esLote
+    ? NextResponse.json({ guardadas: filas.length, quitadas: aBorrar.length, filas })
+    : NextResponse.json({ fila: filas[0] ?? null });
 }
 
 /** DELETE /api/comercial/forecast — quita un código del mes. */

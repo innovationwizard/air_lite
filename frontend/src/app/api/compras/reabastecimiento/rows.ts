@@ -15,7 +15,7 @@ import {
   sugerido,
   doh,
 } from '@/app/(authenticated)/compras/reabastecimiento/engine';
-import { mesPorDefecto, sumaDirecto, type Motivo } from '@/lib/comercial/forecast';
+import { esBase, mesPorDefecto, sumaDirecto, type Motivo } from '@/lib/comercial/forecast';
 import {
   evaluarTendencia, evaluarDivergencia, evaluarAlerta, tieneReferenciaAnioAnterior,
   type Tendencia, type Divergencia, type Alerta,
@@ -128,7 +128,7 @@ export interface LiveRow {
    * reunión. Es la misma regla que ya separa `adicComercial` de `sugBodega`,
    * aplicada un nivel más adentro.
    */
-  adicPorArea: Record<string, { directo: number; aRevision: number }>;
+  adicPorArea: Record<string, { directo: number; aRevision: number; base: number }>;
   transitoDetalle: { fecha: string | null; qty: number; orden: string | null }[];
   p6: number; p3: number; h: number;
   f6: number | null; f3: number | null;
@@ -200,8 +200,15 @@ export function volumenM3(raw: number | string | null | undefined): number | nul
 export interface AporteComercial {
   directo: number;
   aRevision: number;
+  /**
+   * Recomendaciones aprobadas (`base`, nivel 2). Se ven y se comparan; no
+   * entran a `adic` ni a la revisión: el cableado del forecast de canal al
+   * Sugerido está en pausa (plan L2 §1 Q5), y sumarlas duplicaría la demanda
+   * que p3/p6 ya traen.
+   */
+  base: number;
   /** slug del canal → lo que ese canal pidió. */
-  porArea: Record<string, { directo: number; aRevision: number }>;
+  porArea: Record<string, { directo: number; aRevision: number; base: number }>;
 }
 
 export function consolidarComercial(
@@ -212,11 +219,14 @@ export function consolidarComercial(
   for (const c of filas) {
     if (c.bodega !== null && c.bodega !== bodega) continue;
     const acc = porProducto.get(c.product_id)
-      ?? { directo: 0, aRevision: 0, porArea: {} as AporteComercial['porArea'] };
-    const canal = acc.porArea[c.area] ?? { directo: 0, aRevision: 0 };
+      ?? { directo: 0, aRevision: 0, base: 0, porArea: {} as AporteComercial['porArea'] };
+    const canal = acc.porArea[c.area] ?? { directo: 0, aRevision: 0, base: 0 };
     if (sumaDirecto(c.motivo as Motivo)) {
       acc.directo += c.quantity;
       canal.directo += c.quantity;
+    } else if (esBase(c.motivo as Motivo)) {
+      acc.base += c.quantity;
+      canal.base += c.quantity;
     } else {
       acc.aRevision += c.quantity;
       canal.aRevision += c.quantity;
