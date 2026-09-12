@@ -241,8 +241,31 @@ describe('ROLLOUT_FOCUS — confinamiento de varias rutas', () => {
     ]);
   });
 
+  /**
+   * `ventas` (2026-09-11, Jorge: "tiendas user should be able to access
+   * forecast comercial ONLY"). The tiendas@ login was seeing the whole
+   * Riesgos Empresariales group and could open /poc and /preocupaciones/*.
+   * Both halves are pinned: the confinement (sidebar + middleware redirect)
+   * AND the permission arrays, so lifting ROLLOUT_FOCUS later does not
+   * silently reopen those pages.
+   */
+  it('ventas queda acotada al forecast comercial, y las páginas viejas ya no le abren', () => {
+    expect(focusRoutes('ventas')).toEqual(['/comercial/forecast']);
+    expect(getDefaultPage('ventas')).toBe('/comercial/forecast');
+    const rutas = focusRoutes('ventas')!;
+    for (const fuera of ['/preocupaciones/desabastecimiento', '/preocupaciones/capital-congelado',
+                         '/poc/programacion', '/backtest', '/compras', '/status', '/']) {
+      expect(isWithinFocus(fuera, rutas)).toBe(false);
+    }
+    // Even with the confinement lifted, the pages themselves stay closed.
+    for (const ruta of ['/preocupaciones', '/backtest', '/poc']) {
+      expect(isAuthorized('ventas', PAGE_PERMISSIONS[ruta])).toBe(false);
+    }
+    expect(isAuthorized('ventas', PAGE_PERMISSIONS['/comercial'])).toBe(true);
+  });
+
   it('los roles sin entrada NO están confinados', () => {
-    for (const rol of ['superuser', 'admin', 'ventas', 'operaciones']) {
+    for (const rol of ['superuser', 'admin', 'operaciones']) {
       expect(focusRoutes(rol)).toBeUndefined();
     }
     expect(focusRoutes(null)).toBeUndefined();
@@ -296,13 +319,15 @@ describe('RBAC — cobertura de PAGE_PERMISSIONS', () => {
   });
 
   it('cerrar el agujero de /poc no cambió el acceso que la interfaz ya daba', () => {
-    for (const rol of ['admin', 'gerencia', 'compras', 'ventas', 'compras_internacionales', 'financiero', 'testuser']) {
+    for (const rol of ['admin', 'gerencia', 'compras', 'compras_internacionales', 'financiero', 'testuser']) {
       expect(isAuthorized(rol, CAN_VIEW_POC)).toBe(true);
     }
-    // `operaciones` nunca vio esta página en ningún grupo del menú, y
-    // `project_manager` está acotado a /status.
+    // `operaciones` nunca vio esta página en ningún grupo del menú,
+    // `project_manager` está acotado a /status, y `ventas` salió el
+    // 2026-09-11 (sólo forecast comercial).
     expect(isAuthorized('operaciones', CAN_VIEW_POC)).toBe(false);
     expect(isAuthorized('project_manager', CAN_VIEW_POC)).toBe(false);
+    expect(isAuthorized('ventas', CAN_VIEW_POC)).toBe(false);
     expect(isAuthorized('superuser', CAN_VIEW_POC)).toBe(true);
   });
 

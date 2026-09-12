@@ -49,8 +49,12 @@ import {
   Role,
 } from '@/lib/auth/roles';
 
-/** Roles that can see the legacy Riesgos Empresariales grouping — excludes silo roles that now have dedicated sections */
-const CAN_VIEW_RISKS: Role[] = ['superuser', 'admin', 'gerencia', 'ventas', 'compras_internacionales', 'financiero'];
+/**
+ * Roles that can see the legacy Riesgos Empresariales grouping — excludes silo
+ * roles that now have dedicated sections. `ventas` dropped 2026-09-11: the
+ * channel heads (tiendas@, …) get Forecast Comercial and nothing else.
+ */
+const CAN_VIEW_RISKS: Role[] = ['superuser', 'admin', 'gerencia', 'compras_internacionales', 'financiero'];
 
 /** Roles that can see the legacy Prueba de Concepto grouping — compras sees these items in its own silo section */
 // CAN_VIEW_POC lives in roles.ts and the middleware enforces it too — it was

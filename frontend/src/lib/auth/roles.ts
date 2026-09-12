@@ -65,8 +65,14 @@ export const CAN_VIEW_SYSTEM: Role[] = ['superuser'];
 /** Roles that can view admin pages (user management, etc.) */
 export const CAN_VIEW_ADMIN: Role[] = ['superuser', 'admin'];
 
+/**
+ * `ventas` was removed 2026-09-11 (Jorge): the channel heads' accounts
+ * (tiendas@, etc.) may open the Forecast Comercial and NOTHING else — the
+ * tiendas login was seeing the whole Riesgos Empresariales group. See
+ * ROLLOUT_FOCUS.ventas for the other half of that fix.
+ */
 export const CAN_VIEW_OPERATIONAL: Role[] = [
-  'superuser', 'admin', 'gerencia', 'compras', 'ventas', 'compras_internacionales', 'financiero', 'testuser', 'operaciones', 'project_manager',
+  'superuser', 'admin', 'gerencia', 'compras', 'compras_internacionales', 'financiero', 'testuser', 'operaciones', 'project_manager',
   'ceo', 'sales_manager',
 ];
 
@@ -155,10 +161,11 @@ export const CAN_VIEW_POC_ONLY: Role[] = ['testuser'];
  * closing the hole neither widens nor narrows anyone's reach. `operaciones` is
  * absent because no sidebar group ever showed it this page, despite a stale
  * comment that said otherwise; `project_manager` is absent because it is scoped
- * to /status alone.
+ * to /status alone. `ventas` was dropped 2026-09-11 — the channel heads get
+ * the Forecast Comercial and nothing else (see CAN_VIEW_OPERATIONAL).
  */
 export const CAN_VIEW_POC: Role[] = [
-  'superuser', 'admin', 'gerencia', 'compras', 'ventas', 'compras_internacionales', 'financiero', 'testuser',
+  'superuser', 'admin', 'gerencia', 'compras', 'compras_internacionales', 'financiero', 'testuser',
   'ceo', 'sales_manager',
 ];
 
@@ -219,6 +226,15 @@ export const ROLLOUT_FOCUS: Partial<Record<Role, string[]>> = {
   // (palabras de Jorge: "clones... fine tune later").
   ceo: ['/comercial/forecast'],
   sales_manager: ['/comercial/forecast'],
+  /**
+   * `ventas` (2026-09-11, Jorge: "tiendas user should be able to access
+   * forecast comercial ONLY"). These are the channel-head logins (tiendas@,
+   * etc.) that capture their own channel's forecast. Without this entry the
+   * role fell through to the legacy Riesgos Empresariales group and /poc.
+   * The permission arrays were narrowed too (CAN_VIEW_OPERATIONAL,
+   * CAN_VIEW_POC), so lifting this confinement later does NOT reopen them.
+   */
+  ventas: ['/comercial/forecast'],
 };
 
 /** Routes a role is confined to, or `undefined` when it is not confined. */
