@@ -254,7 +254,15 @@ function engineRowOf(r: ApiRow, exist: number, trans: number): ProductRow {
   };
 }
 
-export function VivoClient() {
+/**
+ * `soloLectura` (2026-09-11) — la página lo decide en el servidor a partir de
+ * CAN_EDIT_COMPRAS. Con él, las casillas que escriben (tránsito manual,
+ * sugerido de bodega, cobertura) se pintan como texto y el botón de snapshot
+ * no existe: el ceo mira la herramienta de Wilmer, no la opera. Los POST
+ * están cerrados en el API de todos modos; esto evita ofrecer un botón que
+ * sólo puede devolver 403.
+ */
+export function VivoClient({ soloLectura = false }: { soloLectura?: boolean } = {}) {
   const [payload, setPayload] = useState<ApiPayload | null>(null);
   const [bodega, setBodega] = useState<string>('General');
   const [loading, setLoading] = useState(true);
@@ -538,6 +546,7 @@ export function VivoClient() {
         <QtyInput
           value={r.trans}
           edited={r.transOverridden}
+          readOnly={soloLectura}
           label={`Tránsito ${r.cod}`}
           onCommit={(v) => commitEdit(r, 'transito', v)}
           onClear={r.transOverridden
@@ -604,6 +613,7 @@ export function VivoClient() {
         <QtyInput
           value={r.sugBodega}
           edited={r.sugBodega !== null}
+          readOnly={soloLectura}
           label={`Sugerido de bodega — ${r.cod}`}
           onCommit={(v) => commitSugBodega(r, v)}
           onClear={r.sugBodega !== null ? () => commitSugBodega(r, null) : undefined}
@@ -627,7 +637,7 @@ export function VivoClient() {
       </td>
     </tr>
   );
-  }, [commitEdit, commitSugBodega, areas, origenLabel]);
+  }, [commitEdit, commitSugBodega, areas, origenLabel, soloLectura]);
 
   return (
     <div className="p-6 max-w-[1240px] mx-auto">
@@ -812,6 +822,7 @@ export function VivoClient() {
                 }}
                 filasEnPantalla={MAX_FILAS_RENDER}
               />
+              {soloLectura ? null : (
               <SnapshotButton
                 bodega={bodega}
                 filtros={{
@@ -821,6 +832,7 @@ export function VivoClient() {
                 orden={orden}
                 visibleCount={list.length}
               />
+              )}
             </div>
           </div>
 
@@ -840,6 +852,7 @@ export function VivoClient() {
               bodega={bodega}
               dias={payload.meta.coberturaDias}
               guardando={coberturaGuardando}
+              readOnly={soloLectura}
               onCommit={(d) => void commitCobertura(d)}
             />
           ) : null}
@@ -1284,10 +1297,12 @@ function RangoFiltro({
   );
 }
 
-export function QtyInput({ value, edited, unknown, label, onCommit, onClear, clearTip }: {
+export function QtyInput({ value, edited, unknown, label, onCommit, onClear, clearTip, readOnly }: {
   value: number | null;
   edited: boolean;
   unknown?: boolean;
+  /** Sólo lectura: el número como texto, sin casilla ni ✕ — nada que invite a escribir. */
+  readOnly?: boolean;
   label: string;
   onCommit: (v: number) => void;
   /** Present only while a manual capture exists — appends a clear entry. */
@@ -1325,6 +1340,14 @@ export function QtyInput({ value, edited, unknown, label, onCommit, onClear, cle
     const v = parseFloat(draft);
     if (Number.isFinite(v) && v >= 0 && v !== value) onCommit(v);
   };
+  if (readOnly) {
+    return (
+      <span aria-label={label} className={`inline-block min-w-[72px] text-right tabular-nums ${edited ? 'text-teal-700 font-semibold' : ''}`}
+            title={edited ? 'Captura manual' : undefined}>
+        {unknown ? '¿?' : value === null ? '—' : fmt(value)}
+      </span>
+    );
+  }
   return (
     <span className="inline-flex items-center gap-1">
       {unknown && <span title="Sin dato — no es cero" className="text-gray-400 font-bold">¿?</span>}
@@ -1367,11 +1390,21 @@ export function QtyInput({ value, edited, unknown, label, onCommit, onClear, cle
  * Se guarda al salir del campo o con Enter, sólo si cambió y es válido
  * (entero 1–365, el CHECK de la tabla). Escape devuelve el valor guardado.
  */
-function CoberturaInput({ bodega, dias, guardando, onCommit }: {
-  bodega: string; dias: number; guardando: boolean; onCommit: (dias: number) => void;
+function CoberturaInput({ bodega, dias, guardando, readOnly, onCommit }: {
+  bodega: string; dias: number; guardando: boolean; readOnly?: boolean; onCommit: (dias: number) => void;
 }) {
   const [texto, setTexto] = useState(String(dias));
   useEffect(() => { setTexto(String(dias)); }, [dias]);
+  if (readOnly) {
+    return (
+      <div className="mx-3 mb-3 inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-1.5 text-xs text-gray-700"
+           title={`Cuántos días de demanda cubre el Sugerido en ${bodega}. Lo fija Compras.`}>
+        <span className="font-semibold">Sugerido a</span>
+        <span className="tabular-nums">{dias}</span>
+        <span className="text-gray-500">días</span>
+      </div>
+    );
+  }
   const valor = texto.trim() === '' ? NaN : Number(texto);
   const valido = esCoberturaValida(valor);
   const commit = () => {

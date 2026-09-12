@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/server';
-import { CAN_VIEW_COMPRAS } from '@/lib/auth/roles';
+import { CAN_EDIT_COMPRAS } from '@/lib/auth/roles';
 import { createServiceRoleClient } from '@/lib/supabase/server';
 import { esCoberturaValida, COBERTURA_MIN_DIAS, COBERTURA_MAX_DIAS } from '@/lib/compras/cobertura';
 import { badRequest, knownBodegas } from '../lib';
@@ -32,10 +32,10 @@ export const dynamic = 'force-dynamic';
  * append-only table still reads as a log of what changed and by whom.
  *
  * RBAC in two layers: `check_route_access` (route_permissions, migration
- * 20260904000003) + `requireAuth(CAN_VIEW_COMPRAS)` here.
+ * 20260904000003) + `requireAuth(CAN_EDIT_COMPRAS)` here.
  */
 export async function POST(request: Request) {
-  const auth = await requireAuth(CAN_VIEW_COMPRAS);
+  const auth = await requireAuth(CAN_EDIT_COMPRAS);
   if (auth instanceof Response) return auth;
 
   let body: Record<string, unknown>;

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/server';
-import { CAN_VIEW_COMPRAS } from '@/lib/auth/roles';
+import { CAN_EDIT_COMPRAS } from '@/lib/auth/roles';
 import { createServiceRoleClient } from '@/lib/supabase/server';
 import { GENERAL_BODEGA, badRequest, isPositiveInt, knownBodegas } from '../lib';
 import { MAX_MANUAL_QTY } from '@/lib/compras/qty';
@@ -27,10 +27,10 @@ export const dynamic = 'force-dynamic';
  * las bodegas físicas.
  *
  * RBAC en dos capas: `check_route_access` (route_permissions, migración
- * 20260901000008) + `requireAuth(CAN_VIEW_COMPRAS)` acá.
+ * 20260901000008) + `requireAuth(CAN_EDIT_COMPRAS)` acá.
  */
 export async function POST(request: Request) {
-  const auth = await requireAuth(CAN_VIEW_COMPRAS);
+  const auth = await requireAuth(CAN_EDIT_COMPRAS);
   if (auth instanceof Response) return auth;
 
   let body: Record<string, unknown>;

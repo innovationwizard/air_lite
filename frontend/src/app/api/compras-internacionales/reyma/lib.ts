@@ -5,7 +5,7 @@
  */
 import { NextResponse } from 'next/server';
 import { requireAuth, type AuthUser } from '@/lib/auth/server';
-import { CAN_VIEW_COMPRAS_INTERNACIONALES } from '@/lib/auth/roles';
+import { CAN_EDIT_COMPRAS_INTERNACIONALES, CAN_VIEW_COMPRAS_INTERNACIONALES } from '@/lib/auth/roles';
 import { createServiceRoleClient } from '@/lib/supabase/server';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
@@ -26,13 +26,14 @@ export function badRequest(message: string): NextResponse {
 }
 
 /**
- * Auth + parse wrapper for the POST handlers: requireAuth(CAN_VIEW_COMPRAS_INTERNACIONALES),
+ * Auth + parse wrapper for the POST handlers: requireAuth(CAN_EDIT_COMPRAS_INTERNACIONALES) —
+ * the view list minus the read-only roles (ceo) —,
  * JSON body parse, service client. Returns a Response early on failure.
  */
 export async function withWriteAuth(
   request: Request,
 ): Promise<Response | { user: AuthUser; body: Record<string, unknown>; service: SupabaseClient }> {
-  const auth = await requireAuth(CAN_VIEW_COMPRAS_INTERNACIONALES);
+  const auth = await requireAuth(CAN_EDIT_COMPRAS_INTERNACIONALES);
   if (auth instanceof Response) return auth;
   let body: Record<string, unknown>;
   try {
@@ -45,13 +46,13 @@ export async function withWriteAuth(
 
 /**
  * Auth wrapper for the multipart upload path (A12). Same gate as
- * `withWriteAuth` — `requireAuth(CAN_VIEW_COMPRAS_INTERNACIONALES)` — but it does NOT
+ * `withWriteAuth` — `requireAuth(CAN_EDIT_COMPRAS_INTERNACIONALES)` — but it does NOT
  * parse a JSON body: the caller reads `request.formData()` itself, because a
  * PDF must not be pulled through `JSON.parse`.
  */
 export async function withUploadAuth(
 ): Promise<Response | { user: AuthUser; service: SupabaseClient }> {
-  const auth = await requireAuth(CAN_VIEW_COMPRAS_INTERNACIONALES);
+  const auth = await requireAuth(CAN_EDIT_COMPRAS_INTERNACIONALES);
   if (auth instanceof Response) return auth;
   return { user: auth, service: createServiceRoleClient() };
 }

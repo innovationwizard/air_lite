@@ -24,11 +24,12 @@
  * see the migration's header comment for why that's a deliberate choice, not
  * an oversight.
  *
- * RBAC: middleware `check_route_access` + in-handler requireAuth(CAN_VIEW_COMPRAS).
+ * RBAC: middleware `check_route_access` + in-handler requireAuth(CAN_EDIT_COMPRAS)
+ * for POST, requireAuth(CAN_VIEW_COMPRAS) for GET.
  */
 import { NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/server';
-import { CAN_VIEW_COMPRAS } from '@/lib/auth/roles';
+import { CAN_EDIT_COMPRAS, CAN_VIEW_COMPRAS } from '@/lib/auth/roles';
 import { createServiceRoleClient } from '@/lib/supabase/server';
 import { vista } from '@/lib/compras/tabla';
 import { computeKpis, computeAlza, computeTopProveedores } from '@/lib/compras/statusMetrics';
@@ -43,7 +44,9 @@ const MAX_SNAPSHOT_FILAS = 5000;
 const MAX_HISTORY = 50;
 
 export async function POST(request: Request) {
-  const auth = await requireAuth(CAN_VIEW_COMPRAS);
+  // Congelar un snapshot escribe en el historial de Wilmer: los roles de sólo
+  // lectura (ceo) no lo hacen — ver CAN_EDIT_COMPRAS.
+  const auth = await requireAuth(CAN_EDIT_COMPRAS);
   if (auth instanceof Response) return auth;
 
   let body: Record<string, unknown>;

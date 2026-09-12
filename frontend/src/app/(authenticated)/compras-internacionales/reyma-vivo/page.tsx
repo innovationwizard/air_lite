@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation';
 import { getAuthUser } from '@/lib/auth/server';
-import { isAuthorized, CAN_VIEW_COMPRAS_INTERNACIONALES, getDefaultPage } from '@/lib/auth/roles';
+import { isAuthorized, CAN_EDIT_COMPRAS_INTERNACIONALES, CAN_VIEW_COMPRAS_INTERNACIONALES, getDefaultPage } from '@/lib/auth/roles';
 import { VivoClient } from './VivoClient';
 
 export const dynamic = 'force-dynamic';
@@ -19,5 +19,6 @@ export default async function ReymaVivoPage() {
   if (!user) redirect('/login');
   if (!isAuthorized(user.role, CAN_VIEW_COMPRAS_INTERNACIONALES)) redirect(getDefaultPage(user.role));
 
-  return <VivoClient />;
+  // Quien ve pero no escribe (ceo) recibe el modelo sin casillas ni botones de guardar.
+  return <VivoClient soloLectura={!isAuthorized(user.role, CAN_EDIT_COMPRAS_INTERNACIONALES)} />;
 }

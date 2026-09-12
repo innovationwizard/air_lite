@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation';
 import { getAuthUser } from '@/lib/auth/server';
-import { isAuthorized, CAN_VIEW_COMPRAS, getDefaultPage } from '@/lib/auth/roles';
+import { isAuthorized, CAN_EDIT_COMPRAS, CAN_VIEW_COMPRAS, getDefaultPage } from '@/lib/auth/roles';
 import { VivoClient } from './VivoClient';
 
 export const dynamic = 'force-dynamic';
@@ -25,5 +25,6 @@ export default async function ReabastecimientoVivoPage() {
   if (!user) redirect('/login');
   if (!isAuthorized(user.role, CAN_VIEW_COMPRAS)) redirect(getDefaultPage(user.role));
 
-  return <VivoClient />;
+  // Quien ve pero no escribe (ceo) recibe la tabla sin casillas ni snapshot.
+  return <VivoClient soloLectura={!isAuthorized(user.role, CAN_EDIT_COMPRAS)} />;
 }

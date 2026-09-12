@@ -20,6 +20,18 @@ import {
   CAN_MODIFY_SETTINGS,
   CAN_MANAGE_SUPPLIER_GROUPS,
   CAN_VIEW_STATUS,
+  CAN_EDIT_COMPRAS,
+  CAN_EDIT_COMPRAS_INTERNACIONALES,
+  CAN_RUN_BACKTEST,
+  CAN_VIEW_OPERATIONAL,
+  CAN_VIEW_FORECAST_COMERCIAL,
+  CAN_CAPTURE_FORECAST,
+  CAN_DESBLOQUEAR_FORECAST,
+  CAN_VIEW_OA,
+  CAN_VIEW_OPERACIONES,
+  CAN_VIEW_ADMIN,
+  CAN_VIEW_SYSTEM,
+  type Role,
 } from '@/lib/auth/roles';
 
 const NON_SUPERUSER = [
@@ -262,6 +274,92 @@ describe('ROLLOUT_FOCUS — confinamiento de varias rutas', () => {
       expect(isAuthorized('ventas', PAGE_PERMISSIONS[ruta])).toBe(false);
     }
     expect(isAuthorized('ventas', PAGE_PERMISSIONS['/comercial'])).toBe(true);
+  });
+
+  /**
+   * Jorge, 2026-09-11: "Compras read only and Compras internacionales read
+   * only. His dedicated page has not been built yet." Luis Roberto sees the
+   * live pages of Wilmer and Alexis — the same ones THEY are confined to —
+   * and keeps landing on the forecast until his own page exists. The loading
+   * tools (proveedores, facturas) are not views, so they stay out.
+   */
+  it.each(['ceo', 'sales_manager'])('%s mira las páginas en vivo de compras y compras internacionales, y aterriza en el forecast', (rol) => {
+    const rutas = focusRoutes(rol)!;
+    expect(getDefaultPage(rol)).toBe('/comercial/forecast');
+    for (const dentro of [
+      '/compras/reabastecimiento-vivo', '/compras/reabastecimiento-vivo/historial',
+      '/compras-internacionales/reyma-vivo', '/compras-internacionales/carvajal-vivo',
+      '/compras-internacionales/darnel-vivo', '/compras-internacionales/asia-vivo',
+    ]) {
+      expect(rutas).toContain(dentro);
+    }
+    // Wilmer's and Alexis' own confinements are the reference: the ceo sees
+    // nothing THEY don't, except the pages that exist only to write.
+    const deWilmer = focusRoutes('compras')!;
+    const deAlexis = focusRoutes('compras_internacionales')!;
+    for (const ruta of rutas) {
+      expect([...deWilmer, ...deAlexis]).toContain(ruta);
+    }
+    for (const fuera of [
+      '/compras-internacionales/facturas',           // carga de PDFs — herramienta de Alexis
+      '/compras-internacionales/reyma',              // la réplica xlsx, no el vivo
+      '/status', '/backtest', '/gerencia/forecast', '/admin', '/',
+    ]) {
+      expect(isWithinFocus(fuera, rutas)).toBe(false);
+    }
+    // `proveedores` rides under the vivo prefix, so the confinement alone
+    // does not stop it — the page's own gate (Wilmer-only) does, and the
+    // sidebar never lists it for the ceo.
+    expect(rutas).not.toContain('/compras/reabastecimiento-vivo/proveedores');
+    expect(isAuthorized(rol, CAN_MANAGE_SUPPLIER_GROUPS)).toBe(false);
+  });
+
+  /**
+   * "Read only" is a property of the WRITE lists, not of the confinement:
+   * the ceo is in every CAN_VIEW_* of the two silos and in neither CAN_EDIT_*.
+   * The API-side twin is migration 20260911000008 (route_permissions).
+   */
+  it.each(['ceo', 'sales_manager'])('%s ve pero no escribe en compras ni en compras internacionales', (rol) => {
+    expect(isAuthorized(rol, CAN_VIEW_COMPRAS)).toBe(true);
+    expect(isAuthorized(rol, CAN_VIEW_COMPRAS_INTERNACIONALES)).toBe(true);
+    expect(isAuthorized(rol, CAN_EDIT_COMPRAS)).toBe(false);
+    expect(isAuthorized(rol, CAN_EDIT_COMPRAS_INTERNACIONALES)).toBe(false);
+    expect(isAuthorized(rol, CAN_MANAGE_SUPPLIER_GROUPS)).toBe(false);
+    // The owners of each tool still write in it.
+    expect(isAuthorized('compras', CAN_EDIT_COMPRAS)).toBe(true);
+    expect(isAuthorized('compras_internacionales', CAN_EDIT_COMPRAS_INTERNACIONALES)).toBe(true);
+    // And the edit lists never widen past the view lists.
+    for (const r of CAN_EDIT_COMPRAS) expect(CAN_VIEW_COMPRAS).toContain(r);
+    for (const r of CAN_EDIT_COMPRAS_INTERNACIONALES) expect(CAN_VIEW_COMPRAS_INTERNACIONALES).toContain(r);
+  });
+
+  /**
+   * Jorge, 2026-09-11: "Give role sales_manager the exact same access and
+   * permissions as role ceo." One deliberate exception survived — Raquel
+   * unlocks a locked forecast (CAN_DESBLOQUEAR_FORECAST), Luis Roberto does
+   * not ("keep the unlock"). This test enumerates EVERY role list, so a new
+   * list that includes one and not the other fails here instead of drifting.
+   */
+  it('sales_manager es ceo en toda lista de roles, salvo el desbloqueo del forecast', () => {
+    const listas: Record<string, Role[]> = {
+      CAN_VIEW_COMPRAS, CAN_VIEW_POC, CAN_EDIT_STATUS_PLAN, CAN_VIEW_GERENCIA,
+      CAN_VIEW_COMPRAS_INTERNACIONALES, CAN_MANAGE_USERS, CAN_MODIFY_SETTINGS,
+      CAN_MANAGE_SUPPLIER_GROUPS, CAN_VIEW_STATUS, CAN_EDIT_COMPRAS,
+      CAN_EDIT_COMPRAS_INTERNACIONALES, CAN_RUN_BACKTEST, CAN_VIEW_OPERATIONAL,
+      CAN_VIEW_FORECAST_COMERCIAL, CAN_CAPTURE_FORECAST, CAN_VIEW_OA,
+      CAN_VIEW_OPERACIONES, CAN_VIEW_ADMIN, CAN_VIEW_SYSTEM,
+    };
+    for (const [nombre, lista] of Object.entries(listas)) {
+      expect({ lista: nombre, sm: lista.includes('sales_manager') })
+        .toEqual({ lista: nombre, sm: lista.includes('ceo') });
+    }
+    expect(CAN_DESBLOQUEAR_FORECAST).toContain('sales_manager');
+    expect(CAN_DESBLOQUEAR_FORECAST).not.toContain('ceo');
+    expect(focusRoutes('sales_manager')).toEqual(focusRoutes('ceo'));
+    for (const [ruta, roles] of Object.entries(PAGE_PERMISSIONS)) {
+      expect({ ruta, sm: isAuthorized('sales_manager', roles) })
+        .toEqual({ ruta, sm: isAuthorized('ceo', roles) });
+    }
   });
 
   it('los roles sin entrada NO están confinados', () => {

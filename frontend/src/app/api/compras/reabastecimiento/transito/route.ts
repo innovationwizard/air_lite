@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/server';
-import { CAN_VIEW_COMPRAS } from '@/lib/auth/roles';
+import { CAN_EDIT_COMPRAS } from '@/lib/auth/roles';
 import { createServiceRoleClient } from '@/lib/supabase/server';
 import { validateManualQtyOrClear } from '@/lib/compras/qty';
 import { badRequest, isPositiveInt, knownBodegas } from '../lib';
@@ -19,7 +19,7 @@ export const dynamic = 'force-dynamic';
  * per product×bodega.
  */
 export async function POST(request: Request) {
-  const auth = await requireAuth(CAN_VIEW_COMPRAS);
+  const auth = await requireAuth(CAN_EDIT_COMPRAS);
   if (auth instanceof Response) return auth;
 
   let body: Record<string, unknown>;

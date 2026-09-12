@@ -117,6 +117,11 @@ export const CAN_CAPTURE_FORECAST: Role[] = ['superuser', 'admin', 'ventas'];
  * Quién DESBLOQUEA un forecast comercial bloqueado («Bloquear cambios»,
  * 2026-09-11). El jefe de canal bloquea; sólo gerencia de ventas o admin
  * abren — si el que bloqueó pudiera abrir, el registro no probaría nada.
+ *
+ * Ésta es la ÚNICA lista donde `sales_manager` y `ceo` difieren, y es a
+ * propósito (Jorge, 2026-09-11, al igualar los dos roles: "keep the unlock").
+ * Sin admin en producción, quitarla dejaría al superusuario como el único que
+ * puede abrir un forecast.
  */
 export const CAN_DESBLOQUEAR_FORECAST: Role[] = ['superuser', 'admin', 'sales_manager'];
 
@@ -138,6 +143,29 @@ export const CAN_VIEW_COMPRAS: Role[] = [
 /** Roles that can access the Compras Internacionales silo (Alexis' tool) */
 export const CAN_VIEW_COMPRAS_INTERNACIONALES: Role[] = [
   'superuser', 'admin', 'gerencia', 'compras_internacionales', 'ceo', 'sales_manager',
+];
+
+/**
+ * Quién ESCRIBE en el silo de Compras (tránsito manual, sugerido de bodega,
+ * cobertura, snapshots). Es CAN_VIEW_COMPRAS menos los roles de sólo lectura:
+ * Luis Roberto (`ceo`, 2026-09-11, Jorge: "Compras read only and Compras
+ * internacionales read only. His dedicated page has not been built yet") y
+ * Raquel (`sales_manager`, mismo día: "the exact same access and permissions
+ * as role ceo") miran la herramienta de Wilmer pero no la operan — un número
+ * que ellos digiten en la tabla de Wilmer aparecería como captura de Wilmer,
+ * y el historial dejaría de probar nada.
+ *
+ * La otra mitad de la lectura es la migración 20260911000008: les quita todo
+ * método que no sea GET en /api/compras/* y /api/compras-internacionales/*,
+ * así que el middleware corta antes de que el handler mire esta lista.
+ */
+export const CAN_EDIT_COMPRAS: Role[] = [
+  'superuser', 'admin', 'gerencia', 'compras',
+];
+
+/** Quién ESCRIBE en Compras Internacionales (precio, proyección, plan, pedido, NC, ETA, facturas). Misma regla que CAN_EDIT_COMPRAS. */
+export const CAN_EDIT_COMPRAS_INTERNACIONALES: Role[] = [
+  'superuser', 'admin', 'gerencia', 'compras_internacionales',
 ];
 
 /** Roles that can access the Gerencia silo (Luis-facing validation) */
@@ -184,6 +212,14 @@ export const CAN_VIEW_POC: Role[] = [
  * while remaining perfectly visible to superuser. **The first entry is the
  * landing page**; every entry is reachable.
  */
+/** Las páginas que ven `ceo` y `sales_manager` — una sola lista para los dos (ver su entrada abajo). */
+const FOCO_DIRECCION: string[] = [
+  '/comercial/forecast',
+  '/compras/reabastecimiento-vivo', '/compras/reabastecimiento-vivo/historial',
+  '/compras-internacionales/reyma-vivo', '/compras-internacionales/carvajal-vivo',
+  '/compras-internacionales/darnel-vivo', '/compras-internacionales/asia-vivo',
+];
+
 export const ROLLOUT_FOCUS: Partial<Record<Role, string[]>> = {
   compras: [
     '/compras/reabastecimiento-vivo', '/compras/reabastecimiento-vivo/historial',
@@ -224,8 +260,24 @@ export const ROLLOUT_FOCUS: Partial<Record<Role, string[]>> = {
   // superuser) pese a ser clones de `gerencia` — así que `/comercial/forecast`,
   // no `/status`, es su aterrizaje. Ajustar cuando se afinen estos roles
   // (palabras de Jorge: "clones... fine tune later").
-  ceo: ['/comercial/forecast'],
-  sales_manager: ['/comercial/forecast'],
+  //
+  // `ceo` afinado 2026-09-11 (Jorge): "Compras read only and Compras
+  // internacionales read only. His dedicated page has not been built yet."
+  // Ve las páginas EN VIVO de Wilmer y de Alexis — las mismas que ellos tienen
+  // en su propio confinamiento — y sigue aterrizando en el forecast comercial
+  // mientras no exista la suya. Fuera a propósito: `proveedores` (gestión de
+  // grupos, Wilmer-only por CAN_MANAGE_SUPPLIER_GROUPS) y `facturas` +
+  // `facturas/pendientes` (son la herramienta de CARGA de Alexis, no una
+  // vista). Lo de «read only» no vive acá sino en CAN_EDIT_COMPRAS /
+  // CAN_EDIT_COMPRAS_INTERNACIONALES y en la migración 20260911000008.
+  //
+  // `sales_manager` = `ceo`, mismo día (Jorge: "the exact same access and
+  // permissions as role ceo"). Es la MISMA lista, no una copia: si una se
+  // mueve, la otra se mueve con ella. La única diferencia entre los dos roles
+  // que sobrevivió a propósito es CAN_DESBLOQUEAR_FORECAST (Raquel abre un
+  // forecast bloqueado; Luis Roberto no) — ver ese comentario.
+  ceo: FOCO_DIRECCION,
+  sales_manager: FOCO_DIRECCION,
   /**
    * `ventas` (2026-09-11, Jorge: "tiendas user should be able to access
    * forecast comercial ONLY"). These are the channel-head logins (tiendas@,

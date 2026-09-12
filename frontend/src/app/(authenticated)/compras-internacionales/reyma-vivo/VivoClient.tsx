@@ -110,7 +110,18 @@ type TabId = (typeof TABS)[number]['id'];
  * mismo código. Un segundo componente sería la forma garantizada de que los dos
  * se separen.
  */
-export function VivoClient({ modelo = 'reyma' }: { modelo?: string } = {}) {
+/**
+ * `soloLectura` (2026-09-11) — lo decide la página en el servidor a partir de
+ * CAN_EDIT_COMPRAS_INTERNACIONALES. Con él, cada casilla que escribe (precio,
+ * proyección, ETA/nota, tarifa NC) se pinta como texto y los botones que
+ * persisten (Guardar proyecciones/plan/pedido/NC, Ejecutar conciliación,
+ * Es la misma / No lo es) no existen. Lo que sólo calcula en el navegador
+ * (Generar plan/pedido, Imprimir/PDF) se queda: mirar no es operar. El ceo
+ * mira el modelo de Alexis sin que un número suyo aparezca como override de
+ * Alexis. Los POST están cerrados en el API igual; esto evita un botón que
+ * sólo puede devolver 403.
+ */
+export function VivoClient({ modelo = 'reyma', soloLectura = false }: { modelo?: string; soloLectura?: boolean } = {}) {
   const [payload, setPayload] = useState<ReymaVivoPayload | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saveMsg, setSaveMsg] = useState<string | null>(null);
@@ -285,16 +296,17 @@ export function VivoClient({ modelo = 'reyma' }: { modelo?: string } = {}) {
           }}
           flash={flash}
           onSaved={load}
+          soloLectura={soloLectura}
         />
       )}
-      {tab === 'pedido' && <TabPedido payload={payload} computed={computed} flash={flash} onSaved={load} />}
+      {tab === 'pedido' && <TabPedido payload={payload} computed={computed} flash={flash} onSaved={load} soloLectura={soloLectura} />}
       {tab === 'mrp' && (
-        <TabMrp payload={payload} mrpSorted={computed.mrpSorted} flash={flash} onSaved={load} />
+        <TabMrp payload={payload} mrpSorted={computed.mrpSorted} flash={flash} onSaved={load} soloLectura={soloLectura} />
       )}
-      {tab === 'nc' && <TabNc payload={payload} flash={flash} onSaved={load} />}
-      {tab === 'cumplimiento' && <TabCumplimiento payload={payload} />}
+      {tab === 'nc' && <TabNc payload={payload} flash={flash} onSaved={load} soloLectura={soloLectura} />}
+      {tab === 'cumplimiento' && <TabCumplimiento payload={payload} soloLectura={soloLectura} />}
       {tab === 'ventas' && <TabVentas payload={payload} computed={computed} />}
-      {tab === 'datos' && <TabDatos payload={payload} flash={flash} onSaved={load} />}
+      {tab === 'datos' && <TabDatos payload={payload} flash={flash} onSaved={load} soloLectura={soloLectura} />}
     </div>
   );
 }
@@ -318,6 +330,7 @@ function TabModelo({
   onClearOverride,
   flash,
   onSaved,
+  soloLectura,
 }: {
   payload: ReymaVivoPayload;
   computed: Computed;
@@ -326,6 +339,7 @@ function TabModelo({
   onClearOverride: (codigo: string) => void;
   flash: (m: string) => void;
   onSaved: () => void;
+  soloLectura: boolean;
 }) {
   // C3: búsqueda, filtro por categoría, agrupar, ordenar por nivel (pedidos de Alexis en la demo)
   const [q, setQ] = useState('');
@@ -456,6 +470,9 @@ function TabModelo({
                   )}
                 </td>
                 <td className={TDR}>
+                  {soloLectura ? (
+                    <span title="Precio de compra — lo fija Compras Internacionales">{r.precio ? r.precio.toFixed(2) : '—'}</span>
+                  ) : (
                   <input
                     key={`${r.cod}-${r.precio}`}
                     type="number"
@@ -467,6 +484,7 @@ function TabModelo({
                     className="w-20 rounded border border-yellow-300 bg-yellow-50 px-1 py-0.5 text-right text-xs tabular-nums focus:outline-none focus:ring-1 focus:ring-emerald-400"
                     title="Precio de compra editable (C2) — se guarda al salir de la celda; alimenta NC y verificación de precios"
                   />
+                  )}
                 </td>
                 <td className={TDR}>{qty(r.sj)}</td>
                 <td className={TDR}>{qty(r.z11)}</td>
@@ -489,6 +507,7 @@ function TabModelo({
                         >
                           AJ
                         </span>
+                        {!soloLectura && (
                         <button
                           onClick={() => onClearOverride(r.cod)}
                           title="Volver a la proyección automática (promedio móvil)"
@@ -496,8 +515,14 @@ function TabModelo({
                         >
                           <X className="h-3 w-3" />
                         </button>
+                        )}
                       </>
                     )}
+                    {soloLectura ? (
+                      <span className="tabular-nums" title={r.proyOverride ? 'Override persistido (AJ)' : `Promedio móvil ${payload.config.mesesPromedioMovil} meses`}>
+                        {qty(r.proyeccion)}
+                      </span>
+                    ) : (
                     <input
                       type="number"
                       step="any"
@@ -516,6 +541,7 @@ function TabModelo({
                             : `Promedio móvil ${payload.config.mesesPromedioMovil} meses — editable ("yo corrijo")`
                       }
                     />
+                    )}
                   </span>
                 </td>
                 <td className={TDR}>{qty(d.r)}</td>
@@ -536,11 +562,13 @@ function TabMrp({
   mrpSorted,
   flash,
   onSaved,
+  soloLectura,
 }: {
   payload: ReymaVivoPayload;
   mrpSorted: MrpDerived[];
   flash: (m: string) => void;
   onSaved: () => void;
+  soloLectura: boolean;
 }) {
   const [bodega, setBodega] = useState<'SJ' | 'ZAC' | 'PET' | 'Z11'>('SJ');
   const [objetivo, setObjetivo] = useState(OBJETIVO_SEMANAS_REGIONAL_DEFAULT);
@@ -644,7 +672,7 @@ function TabMrp({
       )}
       {bodega === 'SJ' && (
       <>
-      <PlanPanel payload={payload} mrpSorted={mrpSorted} flash={flash} onSaved={onSaved} />
+      <PlanPanel payload={payload} mrpSorted={mrpSorted} flash={flash} onSaved={onSaved} soloLectura={soloLectura} />
       <div className="bg-white rounded-lg border border-slate-200 p-4">
       <div className="mb-2 text-[11px] text-slate-500">
         Ordenado por nivel de inventario (menor cobertura = mayor prioridad). Inv. Disp. Bodega = San José + Patios −
@@ -722,9 +750,11 @@ const MOTIVO_ETIQUETA: Record<Excepcion['motivo'], string> = {
 };
 
 function PanelConciliacion({
-  mes, efectivos, persistidos, excepciones, odooSinPdf,
+  mes, efectivos, persistidos, excepciones, odooSinPdf, soloLectura,
 }: {
   mes: string;
+  /** Sólo mira: sin «Ejecutar conciliación» ni decidir excepciones. */
+  soloLectura: boolean;
   /** Salida del motor: los enlaces que YA están descontando del facturado. */
   efectivos: Enlace[];
   /** Filas de reyma_factura_match: el rastro auditable + los overrides. */
@@ -777,12 +807,14 @@ function PanelConciliacion({
           )}
           {odooSinPdf.length > 0 && ` · ${odooSinPdf.length} bill(s) de Odoo sin PDF`}
         </span>
+        {!soloLectura && (
         <button
           type="button" onClick={correr} disabled={ocupado}
           className="rounded border border-slate-300 bg-white px-2 py-0.5 font-medium hover:bg-slate-100 disabled:opacity-50"
         >
           Ejecutar conciliación
         </button>
+        )}
         <button
           type="button" onClick={() => setAbierto((v) => !v)}
           className="rounded border border-slate-300 bg-white px-2 py-0.5 hover:bg-slate-100"
@@ -828,7 +860,9 @@ function PanelConciliacion({
                           <td className="px-2 py-1 text-slate-500">
                             {fila
                               ? `${fila.autor} · ${fila.fecha.slice(0, 10)}`
-                              : 'sin registrar — apretá «Ejecutar conciliación» para dejar el rastro'}
+                              : soloLectura
+                                ? 'sin registrar — Compras Internacionales lo deja con «Ejecutar conciliación»'
+                                : 'sin registrar — apretá «Ejecutar conciliación» para dejar el rastro'}
                           </td>
                         </tr>
                       );
@@ -872,6 +906,7 @@ function PanelConciliacion({
                             <td className="px-2 py-0.5">{c.evidencia.fechaPdf}</td>
                             <td className="px-2 py-0.5">{c.evidencia.fechaOdoo ?? '—'}</td>
                             <td className="px-2 py-0.5">
+                              {soloLectura ? <span className="text-slate-400">—</span> : (<>
                               <button
                                 type="button" disabled={ocupado}
                                 onClick={() => decidir(x, c.odooFactura, 'confirmado')}
@@ -886,6 +921,7 @@ function PanelConciliacion({
                               >
                                 No lo es
                               </button>
+                              </>)}
                             </td>
                           </tr>
                         ))}
@@ -910,7 +946,7 @@ function PanelConciliacion({
   );
 }
 
-function TabCumplimiento({ payload }: { payload: ReymaVivoPayload }) {
+function TabCumplimiento({ payload, soloLectura }: { payload: ReymaVivoPayload; soloLectura: boolean }) {
   const og = payload.ordenGlobal;
   const pedido = payload.ultimoPedido;
   const rowsByCod = useMemo(() => new Map(payload.rows.map((r) => [r.cod, r])), [payload.rows]);
@@ -1027,6 +1063,7 @@ function TabCumplimiento({ payload }: { payload: ReymaVivoPayload }) {
         persistidos={payload.enlacesFactura}
         excepciones={conciliacion?.excepciones ?? []}
         odooSinPdf={conciliacion?.odooSinPdf ?? []}
+        soloLectura={soloLectura}
       />
       {saldos.directasExcluidas.cajas > 0 && (
         <div className="mb-3 rounded border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] text-slate-600">
@@ -1243,11 +1280,13 @@ function PlanPanel({
   mrpSorted,
   flash,
   onSaved,
+  soloLectura,
 }: {
   payload: ReymaVivoPayload;
   mrpSorted: MrpDerived[];
   flash: (m: string) => void;
   onSaved: () => void;
+  soloLectura: boolean;
 }) {
   const [dias, setDias] = useState<string[]>(DIAS_DEFAULT);
   const [maxPorDia, setMaxPorDia] = useState(3);
@@ -1313,7 +1352,7 @@ function PlanPanel({
         >
           Generar plan
         </button>
-        {plan && (
+        {plan && !soloLectura && (
           <button
             onClick={async () => {
               const payloadPlan = {
@@ -1474,11 +1513,13 @@ function TabPedido({
   computed,
   flash,
   onSaved,
+  soloLectura,
 }: {
   payload: ReymaVivoPayload;
   computed: Computed;
   flash: (m: string) => void;
   onSaved: () => void;
+  soloLectura: boolean;
 }) {
   const [mes, setMes] = useState<string>(mesSiguiente());
   const [lineas, setLineas] = useState<PedidoLinea[] | null>(null);
@@ -1556,6 +1597,7 @@ function TabPedido({
         </button>
         {lineas && (
           <>
+            {!soloLectura && (
             <button
               onClick={async () => {
                 const e = await postJson('/api/compras-internacionales/reyma/pedido', {
@@ -1569,6 +1611,7 @@ function TabPedido({
             >
               <Save className="h-3 w-3" /> Guardar pedido
             </button>
+            )}
             <button onClick={imprimir} className="rounded border border-slate-400 bg-slate-50 px-3 py-1 font-medium text-slate-700 hover:bg-slate-100">
               Imprimir / PDF
             </button>
@@ -1658,10 +1701,12 @@ function TabNc({
   payload,
   flash,
   onSaved,
+  soloLectura,
 }: {
   payload: ReymaVivoPayload;
   flash: (m: string) => void;
   onSaved: () => void;
+  soloLectura: boolean;
 }) {
   const [tarifa, setTarifa] = useState<number>(payload.ncConfig.tarifaUsd);
   const [hasta, setHasta] = useState<string>(payload.ncConfig.vigenteHasta ?? '');
@@ -1706,6 +1751,7 @@ function TabNc({
           Nota de crédito Vasos de Duroport — control vivo (facturado × tarifa)
         </h3>
         <div className="mb-3 flex flex-wrap items-center gap-2 text-xs">
+          {!soloLectura && (<>
           <span className="text-slate-600">Tarifa USD/caja:</span>
           <input
             type="number" step="0.01" min={0} value={tarifa}
@@ -1734,6 +1780,7 @@ function TabNc({
           >
             <Save className="h-3 w-3" /> Guardar
           </button>
+          </>)}
           <span className="text-[11px] text-slate-500">
             Vigente: {payload.ncConfig.tarifaUsd} USD/caja
             {payload.ncConfig.vigenteHasta ? ` hasta ${payload.ncConfig.vigenteHasta}` : ' (sin fecha de fin anunciada)'} ·{' '}
@@ -1895,10 +1942,12 @@ function TabDatos({
   payload,
   flash,
   onSaved,
+  soloLectura,
 }: {
   payload: ReymaVivoPayload;
   flash: (m: string) => void;
   onSaved: () => void;
+  soloLectura: boolean;
 }) {
   const directas = payload.transitoDetalle.filter((t) => t.esEntregaDirecta);
   const [etaEdits, setEtaEdits] = useState<Record<string, { eta: string; nota: string }>>({});
@@ -1914,9 +1963,11 @@ function TabDatos({
           calculada (fecha impresa de la factura + los días hábiles de esa bodega). Se muestran las
           dos porque una calculada se ve igual que una real: un espacio vacío en la de Alexis es una
           fecha que nadie confirmó, no una fecha que falte.{' '}
+          {!soloLectura && (
           <a href="/compras-internacionales/facturas" className="font-medium text-emerald-700 hover:underline">
             Cargar una factura →
           </a>
+          )}
         </div>
         <div className="overflow-x-auto">
           <table className="text-xs border-collapse min-w-full">
@@ -1949,6 +2000,9 @@ function TabDatos({
                       hoy 20 de 26 facturas están mostrando fórmula. Una celda
                       vacía en «ETA Alexis» es una pregunta que se ve. */}
                   <td className={TD}>
+                    {soloLectura ? (
+                      <span title={t.notaAutor ? `Anotado por ${t.notaAutor}` : undefined}>{t.eta ?? '—'}</span>
+                    ) : (
                     <span className="inline-flex items-center gap-1">
                       <input
                         type="date"
@@ -1973,6 +2027,7 @@ function TabDatos({
                         <Save className="h-3.5 w-3.5" />
                       </button>
                     </span>
+                    )}
                   </td>
                   <td
                     className={`${TD} ${
@@ -1989,6 +2044,9 @@ function TabDatos({
                     {t.etaCalculada ?? '—'}
                   </td>
                   <td className={TD}>
+                    {soloLectura ? (
+                      <span className="text-[11px]">{t.nota ?? (t.fechaPlaneada ? `PO plan: ${t.fechaPlaneada}` : '—')}</span>
+                    ) : (
                     <input
                       type="text"
                       value={edit.nota}
@@ -1996,6 +2054,7 @@ function TabDatos({
                       onChange={(e) => setEtaEdits({ ...etaEdits, [t.poName]: { ...edit, nota: e.target.value } })}
                       className="w-36 rounded border border-slate-200 px-1 py-0.5 text-[11px]"
                     />
+                    )}
                   </td>
                   <td className={TD}>
                     {t.esEntregaDirecta ? (
