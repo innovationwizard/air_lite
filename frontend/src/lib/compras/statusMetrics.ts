@@ -11,12 +11,15 @@
  *
  * Pure, no DOM/React dependency — usable from a Next.js route handler.
  */
+import { m3Sugerido } from '@/lib/compras/cubicaje';
 
 /** The minimal shape either the client's `ApiRow` or the server's `LiveRow` satisfies. */
 export interface FilaMetrica {
   prov: string;
   doh: number;
   sug: number;
+  /** m³ por unidad. null = sin medir — nunca 0 (ver lib/compras/cubicaje.ts). */
+  volM3: number | null;
   flags: { tendenciaCreciente: boolean };
   tendencia: { estado: string };
 }
@@ -26,16 +29,33 @@ export interface Kpis {
   need: number;
   totSug: number;
   crit: number;
+  /**
+   * W21 (Wilmer, 2026-08-26) — m³ of the Sugerido, summed over the rows that
+   * need buying. Products WITHOUT a measured volume contribute nothing and are
+   * counted in `sinCubicaje` instead, so the total can never be read as
+   * complete when it is not: he books furgones against this number.
+   */
+  m3Sug: number;
+  /** Rows with sug > 0 and no measured m³ — the holes in `m3Sug`. */
+  sinCubicaje: number;
 }
 
 /** Computed over the currently filtered/sorted view — "what he's looking at right now". */
 export function computeKpis(list: readonly FilaMetrica[]): Kpis {
   const need = list.filter((r) => r.sug > 0);
+  let m3Sug = 0;
+  let sinCubicaje = 0;
+  for (const r of need) {
+    const m3 = m3Sugerido(r.sug, r.volM3);
+    if (m3 === null) sinCubicaje += 1; else m3Sug += m3;
+  }
   return {
     total: list.length,
     need: need.length,
     totSug: need.reduce((a, r) => a + r.sug, 0),
     crit: list.filter((r) => r.doh < 3).length,
+    m3Sug,
+    sinCubicaje,
   };
 }
 

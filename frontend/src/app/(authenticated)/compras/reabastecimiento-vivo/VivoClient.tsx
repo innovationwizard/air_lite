@@ -13,6 +13,7 @@ import {
   type Orden, siguienteOrden, vista,
 } from '@/lib/compras/tabla';
 import { computeKpis, computeAlza, computeTopProveedores } from '@/lib/compras/statusMetrics';
+import { fmtM3, m3Sugerido } from '@/lib/compras/cubicaje';
 import { BODEGA_LABEL, ordenarBodegas } from '@/lib/compras/bodega';
 import { COBERTURA_OPCIONES } from '@/lib/compras/cobertura';
 import { ExportarExcel } from './ExportarExcel';
@@ -152,6 +153,13 @@ const COL_TIP = {
     + '⚠️ El forecast se escala a los DÍAS QUE CUBRE esta bodega — 30 por defecto, '
     + '15 en Zacapa y Petén desde el 2026-08-21 a pedido de Wilmer, porque se resurten '
     + 'desde San José y no del proveedor. La ventana de proyección y el DOH NO cambian.',
+  m3:
+    'CUBICAJE del Sugerido: Sugerido × m³ por unidad (el volumen del producto en Odoo). '
+    + 'Es lo que pidió Wilmer el 2026-08-26: "los metros cúbicos del sugerido… tengo un límite '
+    + 'de 3 furgones locales, entonces yo tengo que cubicar no más de eso". '
+    + '¿? = el producto NO tiene volumen medido en Odoo — no es cero, y por eso no entra al '
+    + 'total de arriba. ⚠️ La unidad del volumen de Odoo todavía no está verificada contra la '
+    + 'UoM de stock, y las bolsas están mal medidas (O7, remedición pendiente).',
 } as const;
 
 interface ApiRow {
@@ -573,6 +581,9 @@ export function VivoClient() {
         {r.flags.seasonalLowConfidence ? <span className="text-amber-500">*</span> : null}
         {r.flags.seasonalExcluded ? <span className="text-indigo-500">†</span> : null}
       </td>
+      <td className="px-3 py-2 border-b border-gray-100 text-right">
+        <M3Cell sug={r.sug} volM3={r.volM3} />
+      </td>
     </tr>
   );
   }, [commitEdit, commitSugBodega, areas]);
@@ -649,13 +660,26 @@ export function VivoClient() {
       )}
 
       {/* KPIs */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-5">
         <Kpi label="Productos" value={fmt(kpis.total)} sub={`bodega ${bodega}`} icon={<Boxes size={16} />}
              tip={`Productos visibles con los filtros actuales. ${BODEGA_TIP[bodega] ?? ''}`} />
         <Kpi label="Requieren compra" value={fmt(kpis.need)} sub="sugerido > 0" accent
              tip="Productos con Sugerido > 0 (tras filtros)." />
         <Kpi label="Unidades sugeridas" value={fmt(kpis.totSug)} sub="total a comprar" accent
              tip="Suma del Sugerido de los productos que requieren compra (tras filtros)." />
+        {/* W21 — the running total he books furgones against. The holes are
+            said on the card itself, not in a tooltip: a total that reads as
+            complete when 40 lines are unmeasured is the one reading that
+            under-fills a truck. */}
+        <Kpi label="m³ sugerido" value={fmtM3(kpis.m3Sug)}
+             sub={kpis.sinCubicaje > 0
+               ? `⚠ ${fmt(kpis.sinCubicaje)} sin cubicaje — total incompleto`
+               : 'cubicaje del total a comprar'}
+             accent warn={kpis.sinCubicaje > 0}
+             tip={'Suma de Sugerido × m³ por unidad de los productos que requieren compra (tras filtros). '
+               + 'Los productos sin volumen medido en Odoo NO suman: se cuentan aparte como «sin cubicaje». '
+               + 'La unidad del volumen de Odoo no está verificada contra la UoM de stock y las bolsas '
+               + 'están mal medidas (O7) — no reserves furgones con esta cifra sin revisar esas filas.'} />
         <Kpi label="Quiebre inminente" value={fmt(kpis.crit)} sub="DOH < 3 días" danger
              tip="Productos con DOH < 3 días (banda crítica del semáforo, tras filtros)." />
       </div>
@@ -823,6 +847,7 @@ export function VivoClient() {
                     <Th tip={COL_TIP.sugBodega}>Pide bodega</Th>
                     <Th tip={COL_TIP.sug} sortKey="sug" orden={orden} onSort={onSort}
                         filtroKey="sug" rango={rangos.sug} onRango={onRango}>Sugerido</Th>
+                    <Th tip={COL_TIP.m3}>m³</Th>
                   </tr>
                 </thead>
                 <tbody className="tabular-nums">
@@ -1266,9 +1291,9 @@ export function QtyInput({ value, edited, unknown, label, onCommit, onClear, cle
   );
 }
 
-function Kpi({ label, value, sub, icon, accent, danger, tip }: {
+function Kpi({ label, value, sub, icon, accent, danger, warn, tip }: {
   label: string; value: string; sub: string;
-  icon?: React.ReactNode; accent?: boolean; danger?: boolean; tip?: string;
+  icon?: React.ReactNode; accent?: boolean; danger?: boolean; warn?: boolean; tip?: string;
 }) {
   return (
     <div title={tip} className={`bg-white border border-gray-200 rounded-xl p-4 shadow-sm ${tip ? 'cursor-help' : ''}`}>
@@ -1280,8 +1305,33 @@ function Kpi({ label, value, sub, icon, accent, danger, tip }: {
       }`}>
         {value}
       </div>
-      <div className="text-xs text-gray-500 mt-0.5">{sub}</div>
+      <div className={`text-xs mt-0.5 ${warn ? 'text-amber-700 font-semibold' : 'text-gray-500'}`}>{sub}</div>
     </div>
+  );
+}
+
+/**
+ * W21 — m³ de la línea: Sugerido × m³ por unidad.
+ *
+ * Sin volumen medido se pinta ¿? y NUNCA 0: un 0 dice «no ocupa espacio» y es
+ * lo que haría subestimar un furgón (ver lib/compras/cubicaje.ts). Con Sugerido
+ * 0 el m³ es 0 de verdad y va en gris, igual que el Sugerido de al lado.
+ */
+function M3Cell({ sug, volM3 }: { sug: number; volM3: number | null }) {
+  const m3 = m3Sugerido(sug, volM3);
+  if (m3 === null) {
+    return (
+      <span className="text-amber-600 font-semibold cursor-help"
+            title="Sin cubicaje: el producto no tiene volumen medido en Odoo. No es cero — no entra al total de arriba.">
+        ¿?
+      </span>
+    );
+  }
+  return (
+    <span className={sug > 0 ? 'text-gray-800' : 'text-gray-400'}
+          title={`${fmt(sug)} × ${volM3} m³ por unidad`}>
+      {fmtM3(m3)}
+    </span>
   );
 }
 

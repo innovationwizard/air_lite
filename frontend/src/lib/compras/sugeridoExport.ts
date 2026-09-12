@@ -41,7 +41,7 @@
  *    corregir la propuesta ÷cobertura; sin propuesta que corregir, sobra —
  *    y él manipula en Excel, que es lo que pidió: *"poderme mover, ordenar y
  *    manipular la información… partirla"*.
- *  · CUBICAJE CON LOS HUECOS DECLARADOS. Ver el bloque m³ más abajo.
+ *  · CUBICAJE CON LOS HUECOS DECLARADOS. Ver `lib/compras/cubicaje.ts`.
  *
  * ⚠️ Nombre del archivo: «Sugerido», NUNCA «Carvajal_Prioridades Semana N»
  * (A6.16, acordado con él: *"le vamos a poner sugerido"*). El nombre viejo
@@ -49,6 +49,7 @@
  * — la mitad de D2 era eso.
  */
 import { type SheetSpec } from '@/lib/xlsx/writer';
+import { m3Sugerido, sinCubicaje } from '@/lib/compras/cubicaje';
 import { type Alerta, type Tendencia } from '@/lib/compras/tendencia';
 import { type ClaveOrden, type Filtros, type Orden } from '@/lib/compras/tabla';
 
@@ -196,33 +197,11 @@ export function describirFiltros(f: Filtros): string[] {
 }
 
 /**
- * m³ — CON LOS HUECOS DECLARADOS (decisión de Jorge, 2026-09-07).
- *
- * `ml/probe_cubicaje.py` lo advierte y la advertencia se respeta: *"Un
- * cubicaje incompleto o en la unidad equivocada es PEOR que no tenerlo: lo
- * usaría para reservar camiones."* Wilmer tiene un tope físico duro — *"tengo
- * un límite de 3 furgones locales, entonces yo tengo que cubicar no más de
- * eso"*.
- *
- * Medido el 2026-09-07 sobre los productos de esta página: 1,115 de 1,333
- * tienen `volume_m3 > 0` (83.6%); 218 no tienen ninguno.
- *
- * Por eso: sin medida el m³ va VACÍO, nunca 0 — un 0 dice «no ocupa espacio»
- * y es lo que haría subestimar un furgón — y la hoja «Origen» dice cuántas
- * filas quedaron sin medida, para que una suma de la columna no se pueda leer
- * como completa. Siguen abiertas la verificación de unidad y la remedición de
- * las bolsas (O7); ambas se declaran ahí también.
+ * m³ — la fórmula vive en `lib/compras/cubicaje.ts` (es la misma que usa la
+ * pantalla y el snapshot de estado). Se re-exporta para que el botón y las
+ * pruebas sigan encontrándola acá.
  */
-export function m3Sugerido(sug: number, volM3: number | null): number | null {
-  if (typeof volM3 !== 'number' || !Number.isFinite(volM3) || volM3 <= 0) return null;
-  if (!Number.isFinite(sug)) return null;
-  return sug * volM3;
-}
-
-/** Cuántas filas exportadas no tienen cubicaje medido. */
-export function sinCubicaje(filas: readonly FilaExport[]): number {
-  return filas.filter((f) => m3Sugerido(f.sug, f.volM3) === null).length;
-}
+export { m3Sugerido, sinCubicaje } from '@/lib/compras/cubicaje';
 
 /**
  * Las columnas del archivo — las MISMAS que están en pantalla, en el mismo

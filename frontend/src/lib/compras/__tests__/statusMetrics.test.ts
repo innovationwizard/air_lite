@@ -2,7 +2,7 @@ import { computeKpis, computeAlza, computeTopProveedores, type FilaMetrica } fro
 
 function fila(over: Partial<FilaMetrica>): FilaMetrica {
   return {
-    prov: 'Carvajal', doh: 10, sug: 0,
+    prov: 'Carvajal', doh: 10, sug: 0, volM3: 0.5,
     flags: { tendenciaCreciente: false }, tendencia: { estado: 'sin-tendencia' },
     ...over,
   };
@@ -15,11 +15,31 @@ describe('computeKpis', () => {
       fila({ sug: 0, doh: 1 }),    // doesn't need, crítico
       fila({ sug: 5, doh: 10 }),   // needs, not crítico
     ];
-    expect(computeKpis(list)).toEqual({ total: 3, need: 2, totSug: 15, crit: 2 });
+    expect(computeKpis(list)).toEqual({
+      total: 3, need: 2, totSug: 15, crit: 2, m3Sug: 7.5, sinCubicaje: 0,
+    });
   });
 
   it('is empty-safe', () => {
-    expect(computeKpis([])).toEqual({ total: 0, need: 0, totSug: 0, crit: 0 });
+    expect(computeKpis([])).toEqual({
+      total: 0, need: 0, totSug: 0, crit: 0, m3Sug: 0, sinCubicaje: 0,
+    });
+  });
+
+  // W21 — a product without a measured volume must never add 0 to the
+  // total as if it took no space: it is counted as a hole instead.
+  it('sums m³ only over measured rows that need buying, and counts the holes', () => {
+    const list = [
+      fila({ sug: 1000, volM3: 0.0042 }), // 4.2 m³
+      fila({ sug: 10, volM3: null }),     // needs buying, unmeasured → hole
+      fila({ sug: 10, volM3: 0 }),        // 0 is "unmeasured", not "no space" → hole
+      fila({ sug: 0, volM3: null }),      // nothing to buy → not a hole
+      fila({ sug: 0, volM3: 0.5 }),       // nothing to buy → adds nothing
+    ];
+    const k = computeKpis(list);
+    expect(k.m3Sug).toBeCloseTo(4.2, 10);
+    expect(k.sinCubicaje).toBe(2);
+    expect(k.need).toBe(3);
   });
 });
 
