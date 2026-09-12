@@ -464,6 +464,26 @@ problem — and corrected the comment for the historical record.
   still exists.
 - **The migration file's cosmetic doc-comment fix** (Part G.3, "15" → "17")
   is written locally but not committed/pushed as of this log.
+- ~~**ML service on Railway had no Odoo credentials**~~ — found and fixed
+  2026-09-12. `GET /reyma/productos/buscar` was deployed but answered 502
+  *"Odoo no está configurado"*: the API service's Railway variables only
+  ever needed Supabase; the Odoo vars lived on the cron services. Jorge
+  added `ODOO_URL`/`ODOO_DB`/`ODOO_USERNAME`/`ODOO_API_KEY` (read-only
+  creds) to the API service; re-probed live, 200 OK. While it was broken
+  the page reported "no apareció nada en Odoo" — a lie on that path —
+  `PendientesClient.tsx` now shows the real error instead (2026-09-12).
+  Still true after the fix: the CFDI text *"CHAROLA TERMICA 2P…"* finds
+  nothing (CHAROLA/BANDEJA synonym gap above).
+- **`CH2PRXN → 77201001` mapped by hand, 2026-09-12** (Jorge: *"why would
+  you suggest Alexis do the mapping if you already know the codes"* — peak
+  season, the codes were known since 09-02, no reason to route it through
+  him). One `reyma_products` row (odoo_product_id 9397, `FARDO500`,
+  cubicaje 0.07862, `en_alcance=true`) + one `reyma_clave_map` row, both
+  authored as Jorge/Claude Code. Verified live: a synthetic CH2PRXN/XPK line
+  through `/reyma/factura/pendiente/reintentar` resolves to 77201001 with
+  nothing retained. F173634 itself is still not loaded — the PDF was never
+  on disk here; it needs one drag-and-drop at `/compras-internacionales/facturas`
+  (destino + ETA, same as any invoice) or the PDF sent to Jorge for the CLI.
 - **Not yet seen by Alexis.** Neither the new `/facturas/pendientes` page
   nor the renamed URLs/sidebar have been used by him yet — Jorge said
   re-explaining the new link is a five-minute task, but that conversation

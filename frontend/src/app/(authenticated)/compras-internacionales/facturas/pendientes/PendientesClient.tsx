@@ -123,6 +123,11 @@ function TarjetaPendiente({
   const [buscado, setBuscado] = useState(false);
   const [candidatos, setCandidatos] = useState<Candidato[]>([]);
   const [otros, setOtros] = useState<Candidato[]>([]);
+  // Distinto de «no apareció nada»: si el servicio de búsqueda falló (Odoo no
+  // configurado en el ML, timeout…), decirlo tal cual. Tratarlo como resultado
+  // vacío le dice a Alexis que el producto no existe cuando ni se preguntó —
+  // y de ahí salen reportes de «no acepta el código».
+  const [errorBusqueda, setErrorBusqueda] = useState<string | null>(null);
   const [codigoManual, setCodigoManual] = useState('');
   const [resolviendo, setResolviendo] = useState<string | null>(null); // código en vuelo
 
@@ -130,13 +135,20 @@ function TarjetaPendiente({
     const q = query.trim();
     if (q.length < 2) return;
     setBuscando(true);
+    setErrorBusqueda(null);
     try {
       const r = await fetch(`/api/compras-internacionales/reyma/clave-pendiente/buscar?q=${encodeURIComponent(q)}`);
       const j = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        setCandidatos([]); setOtros([]);
+        setErrorBusqueda(typeof j.error === 'string' ? j.error : 'No se pudo buscar en Odoo.');
+        return;
+      }
       setCandidatos(Array.isArray(j.candidatos) ? j.candidatos : []);
       setOtros(Array.isArray(j.otros) ? j.otros : []);
     } catch {
       setCandidatos([]); setOtros([]);
+      setErrorBusqueda('No se pudo buscar en Odoo (error de red).');
     } finally {
       setBuscando(false);
       setBuscado(true);
@@ -226,7 +238,14 @@ function TarjetaPendiente({
             </button>
           </div>
 
-          {buscado && !buscando && candidatos.length === 0 && otros.length === 0 && (
+          {buscado && !buscando && errorBusqueda && (
+            <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-[12px] text-amber-900">
+              La búsqueda en Odoo no funcionó: {errorBusqueda} Esto no dice nada sobre el
+              producto — si ya sabés el código, escribilo abajo y confirmá; sirve igual.
+            </p>
+          )}
+
+          {buscado && !buscando && !errorBusqueda && candidatos.length === 0 && otros.length === 0 && (
             <p className="mt-2 text-[12px] text-slate-500">
               No apareció nada en Odoo con ese texto. Probá con otra palabra de la descripción,
               o escribí el código directamente abajo si ya lo sabés.
