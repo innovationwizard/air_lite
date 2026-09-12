@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/server';
 import { CAN_VIEW_COMPRAS } from '@/lib/auth/roles';
 import { createServiceRoleClient } from '@/lib/supabase/server';
-import { esCoberturaValida, COBERTURA_OPCIONES } from '@/lib/compras/cobertura';
+import { esCoberturaValida, COBERTURA_MIN_DIAS, COBERTURA_MAX_DIAS } from '@/lib/compras/cobertura';
 import { badRequest, knownBodegas } from '../lib';
 
 export const dynamic = 'force-dynamic';
@@ -12,15 +12,15 @@ export const dynamic = 'force-dynamic';
  *
  * Sets the coverage horizon (how many days of demand the Sugerido covers)
  * for one bodega. Was a single hardcoded default (30, or 15 for Zacapa/Petén
- * per Wilmer's 2026-08-21 request — see migration 20260821000006); now a
- * dropdown filter, independent per bodega (Jorge, 2026-09-04).
+ * per Wilmer's 2026-08-21 request — see migration 20260821000006); a
+ * dropdown filter from 2026-09-04; a TYPED number from 2026-09-11 (Wilmer:
+ * a 35-day lead time means «sugerido 65», which no menu offered).
  *
  * `bodega_cobertura` already existed for exactly this, append-only ("the
  * latest row per bodega wins", per its own migration) — this route is its
- * missing write path. `dias` is restricted to COBERTURA_OPCIONES, not the
- * table's full 1-120 CHECK range: that's the DB's outer bound, this is what
- * the UI actually offers, and there's no reason to accept anything the
- * dropdown can't produce.
+ * missing write path. `dias` is validated against the table's own CHECK
+ * range (1-365 since 20260911000006, `lib/compras/cobertura.ts`) so the input, the route and the
+ * database agree on what a valid horizon is.
  *
  * `General` IS allowed here, unlike sugerido-bodega's rejection of it: that
  * route is about a physical CD's own request, which General genuinely isn't;
@@ -47,7 +47,7 @@ export async function POST(request: Request) {
 
   const { bodega, dias } = body;
   if (!esCoberturaValida(dias)) {
-    return badRequest(`dias debe ser uno de: ${COBERTURA_OPCIONES.join(', ')}`);
+    return badRequest(`dias debe ser un entero entre ${COBERTURA_MIN_DIAS} y ${COBERTURA_MAX_DIAS}`);
   }
 
   const service = createServiceRoleClient();

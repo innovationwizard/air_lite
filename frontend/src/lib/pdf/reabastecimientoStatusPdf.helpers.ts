@@ -44,6 +44,11 @@ export interface SnapshotFila {
   tendencia: { estado: string; alzaPct: number | null; motivo: string | null; meses: { month: string; qty: number }[] };
   alerta: { estado: string; motivo: string | null };
   doh: number; sug: number;
+  /**
+   * W18 (2026-09-11) — la bodega que abastece, en sus cifras. Los snapshots
+   * congelados antes no lo traen; null = sin origen o sin fila allá.
+   */
+  origen?: { exist: number; p3: number; doh: number; pending: number | null } | null;
   flags: {
     pendingUnknown: boolean; seasonalLowConfidence: boolean; seasonalExcluded: boolean;
     tendenciaCreciente: boolean; revisar: boolean; sinReferenciaAnioAnterior: boolean;
@@ -136,6 +141,7 @@ const ETIQUETAS_ORDEN: Record<string, string> = {
   cod: 'código', desc: 'descripción', prov: 'proveedor', exist: 'existencia',
   patio: 'patio', doh: 'DOH', trans: 'tránsito', pending: 'pendiente',
   adic: 'adicional', p6: 'prom. 6m', p3: 'prom. 3m', mtd: 'MTD', sug: 'sugerido',
+  origenExist: 'existencia de la bodega que abastece', origenDoh: 'DOH de la bodega que abastece',
 };
 
 export function describeFiltros(filtros: Filtros, orden: Orden | null): string {

@@ -16,9 +16,11 @@ import type { ClaveOrden, ClaveOrdenNumerica, Filtros, FiltroRango, Orden, Opera
 
 const CLAVES_ORDEN: readonly ClaveOrden[] = [
   'cod', 'desc', 'prov', 'exist', 'patio', 'doh', 'trans', 'pending', 'adic', 'p6', 'p3', 'mtd', 'sug',
+  'origenExist', 'origenDoh',
 ];
 const CLAVES_NUMERICAS: readonly ClaveOrdenNumerica[] = [
   'exist', 'patio', 'doh', 'trans', 'pending', 'adic', 'p6', 'p3', 'mtd', 'sug',
+  'origenExist', 'origenDoh',
 ];
 const MAX_TEXTO_LEN = 200;
 const MAX_PROVEEDOR_LEN = 200;

@@ -33,6 +33,8 @@ export interface FilaOrdenable {
   p3: number;
   mtd: number | null;
   sug: number;
+  /** W18 — la bodega que abastece; null = sin origen o el producto no está allá. */
+  origen: { exist: number; doh: number } | null;
   flags: { tendenciaCreciente: boolean };
   purchaseOk: boolean;
 }
@@ -44,7 +46,10 @@ export interface FilaOrdenable {
 export type ClaveOrden =
   | 'cod' | 'desc' | 'prov'
   | 'exist' | 'patio' | 'doh' | 'trans' | 'pending' | 'adic'
-  | 'p6' | 'p3' | 'mtd' | 'sug';
+  | 'p6' | 'p3' | 'mtd' | 'sug'
+  // W18 — ordenar por «DOH San José» es preguntar «¿cuáles me cubre un
+  // traslado?»; sin dato (sin origen) va al final, como todo null.
+  | 'origenExist' | 'origenDoh';
 
 /** Las columnas numéricas de `ClaveOrden` — las únicas que aceptan un filtro de rango. */
 export type ClaveOrdenNumerica = Exclude<ClaveOrden, 'cod' | 'desc' | 'prov'>;
@@ -103,6 +108,8 @@ export function valorNumerico(f: FilaOrdenable, clave: ClaveOrden): number | nul
     case 'p3': return f.p3;
     case 'mtd': return f.mtd;
     case 'sug': return f.sug;
+    case 'origenExist': return f.origen?.exist ?? null;
+    case 'origenDoh': return f.origen?.doh ?? null;
     default: return null;
   }
 }

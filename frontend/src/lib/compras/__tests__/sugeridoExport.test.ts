@@ -7,6 +7,7 @@ import { type Alerta, type Tendencia } from '@/lib/compras/tendencia';
 import {
   type ContextoExport, type FilaExport,
   COLUMNAS_SUGERIDO, construirHojaOrigen, construirHojaSugerido, construirLibroSugerido,
+  columnasSugerido,
   describirFiltros, describirOrden, etiquetaTendencia, m3Sugerido, nombreArchivo, sinCubicaje,
 } from '../sugeridoExport';
 
@@ -267,6 +268,46 @@ describe('hoja Origen — de dónde salió cada número', () => {
 
   it('no lleva autofiltro: es prosa, no una tabla', () => {
     expect(construirHojaOrigen([fila()], ctx()).autoFilter).toBe(false);
+  });
+});
+
+describe('W18 — columnas de la bodega que abastece', () => {
+  const conOrigen = fila({ origen: { exist: 50, p3: 200, doh: 6.5 } });
+  const sinOrigen = fila({ cod: '0002', origen: null });
+
+  it('sin etiqueta de origen (General, San José) las columnas NO existen', () => {
+    const headers = columnasSugerido([], null).map((c) => c.header);
+    expect(headers.some((h) => h.startsWith('Exist. ') && h !== 'Exist. neta')).toBe(false);
+  });
+
+  it('con origen van las tres, justo después del DOH propio y en ese orden', () => {
+    const headers = columnasSugerido([], 'San José').map((c) => c.header);
+    const i = headers.indexOf('DOH');
+    expect(headers.slice(i, i + 4)).toEqual(['DOH', 'Exist. San José', 'Ord. 3m San José', 'DOH San José']);
+  });
+
+  it('sobreviven a las columnas por canal, que se insertan después', () => {
+    const headers = columnasSugerido([{ slug: 'inst', nombre: 'Institucional' }], 'Zacapa').map((c) => c.header);
+    expect(headers.indexOf('DOH Zacapa')).toBeLessThan(headers.indexOf('Adic.'));
+    expect(headers).toContain('Institucional');
+  });
+
+  it('lleva las cifras de la bodega de origen; sin fila allá va VACÍO, no 0', () => {
+    const hoja = construirHojaSugerido([conOrigen, sinOrigen], [], 'San José');
+    const h = hoja.columns.map((c) => c.header);
+    expect(hoja.rows[0][h.indexOf('Exist. San José')]).toBe(50);
+    expect(hoja.rows[0][h.indexOf('Ord. 3m San José')]).toBe(200);
+    expect(hoja.rows[0][h.indexOf('DOH San José')]).toBe(6.5);
+    expect(hoja.rows[1][h.indexOf('Exist. San José')]).toBeNull();
+    expect(hoja.rows[1][h.indexOf('DOH San José')]).toBeNull();
+  });
+
+  it('el libro toma la etiqueta del contexto y la hoja Origen explica las columnas', () => {
+    const libro = construirLibroSugerido([conOrigen], ctx({ bodega: 'Zacapa', bodegaLabel: 'Zacapa', bodegaOrigenLabel: 'San José' }));
+    expect(libro[0].columns.map((c) => c.header)).toContain('DOH San José');
+    const origen = libro[1].rows.map((r) => r.join(' ')).join('\n');
+    expect(origen).toContain('Exist. / Ord. 3m / DOH San José');
+    expect(origen).toContain('abastece a Zacapa');
   });
 });
 

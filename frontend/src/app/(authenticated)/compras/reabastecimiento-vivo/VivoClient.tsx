@@ -15,7 +15,7 @@ import {
 import { computeKpis, computeAlza, computeTopProveedores } from '@/lib/compras/statusMetrics';
 import { fmtM3, m3Sugerido } from '@/lib/compras/cubicaje';
 import { BODEGA_LABEL, ordenarBodegas } from '@/lib/compras/bodega';
-import { COBERTURA_OPCIONES } from '@/lib/compras/cobertura';
+import { COBERTURA_MAX_DIAS, COBERTURA_MIN_DIAS, esCoberturaValida } from '@/lib/compras/cobertura';
 import { ExportarExcel } from './ExportarExcel';
 import { SnapshotButton } from './SnapshotButton';
 import { ProveedorFiltro, type ProveedorGrupo } from './ProveedorFiltro';
@@ -153,6 +153,18 @@ const COL_TIP = {
     + '⚠️ El forecast se escala a los DÍAS QUE CUBRE esta bodega — 30 por defecto, '
     + '15 en Zacapa y Petén desde el 2026-08-21 a pedido de Wilmer, porque se resurten '
     + 'desde San José y no del proveedor. La ventana de proyección y el DOH NO cambian.',
+  origenExist: (origen: string, bodega: string) =>
+    `EXISTENCIA NETA DE ${origen.toUpperCase()}, la bodega que abastece a ${bodega} — `
+    + 'la misma cifra que muestra su propia pestaña (existencias − reservado − pendiente en vivo). '
+    + 'Debajo, en gris, lo que ella misma vende al mes (Ord. 3m). Es para decidir COMPRAR o '
+    + 'TRASLADAR sin cambiar de pestaña — Wilmer, 2026-08-26: "si aquí me dijera que en '
+    + 'San José hay 50, pero la venta mensual de San José son 200, yo no voy a trasladar esos 50". '
+    + '— = el producto no existe en esa bodega (no es cero).',
+  origenDoh: (origen: string, bodega: string) =>
+    `DOH DE ${origen.toUpperCase()}: cuántos días le dura a la bodega que abastece a ${bodega} `
+    + 'lo que tiene, contra su propia venta. Mismo semáforo: en rojo o ámbar no puede prestar; '
+    + 'en azul (exceso, > 30 días) es candidata a traslado. Ordená por esta columna para ver '
+    + 'primero lo que un traslado cubriría.',
   m3:
     'CUBICAJE del Sugerido: Sugerido × m³ por unidad (el volumen del producto en Odoo). '
     + 'Es lo que pidió Wilmer el 2026-08-26: "los metros cúbicos del sugerido… tengo un límite '
@@ -171,6 +183,14 @@ interface ApiRow {
   abc: 'A' | 'B' | 'C' | 'D';
   /** m³ por unidad. null = sin medir — nunca 0, ver volumenM3 en rows.ts. */
   volM3: number | null;
+  /**
+   * W18 — la bodega que ABASTECE a ésta, en sus propias cifras (ver rows.ts).
+   * null = sin origen (meta.bodegaOrigen null) o el producto no está allá.
+   */
+  origen: {
+    exist: number; existencias: number; reserved: number; patio: number;
+    pending: number | null; p3: number; doh: number;
+  } | null;
   /** Odoo product.template "Can be Purchased" — drives el filtro «Solo comprables». */
   purchaseOk: boolean;
   exist: number; existencias: number; reserved: number; patio: number;
@@ -210,6 +230,8 @@ interface ApiMeta {
   } | null;
   /** Provenance of the live pendiente column — `error` set = every row is ¿? and this says why. */
   pendienteReserva?: { asOf: string | null; codigos: string[]; error: string | null };
+  /** W18 — the bodega that supplies this one (San José → Zacapa → Petén), or null. */
+  bodegaOrigen?: string | null;
 }
 interface Tiendas {
   porTienda: { tienda: string; f6: number; f3: number }[];
@@ -245,7 +267,7 @@ export function VivoClient() {
   const [onlyComprables, setOnlyComprables] = useState(false);
   // W16/W17 — null = el orden por defecto con el que la página siempre abrió.
   const [orden, setOrden] = useState<Orden | null>(null);
-  // W18 — «que pueda hacer subconjuntos… solo los que estén en X número o menos».
+  // Filtro de rango (2026-09-03) — «que pueda hacer subconjuntos… solo los que estén en X número o menos».
   // Uno por columna, combinados con Y (mismo criterio que el resto de filtros).
   const [rangos, setRangos] = useState<Partial<Record<ClaveOrdenNumerica, FiltroRango>>>({});
   // Grupos de proveedores (2026-09-04) — panel de gestión, Wilmer-only.
@@ -462,6 +484,13 @@ export function VivoClient() {
    */
   const areas = useMemo(() => payload?.areasComerciales ?? [], [payload]);
 
+  // W18 — cómo se llama la bodega que abastece a la que se está mirando
+  // (Zacapa ← San José, Petén ← Zacapa). Null = no hay columnas de origen.
+  const origenLabel = useMemo(() => {
+    const o = payload?.meta.bodegaOrigen ?? null;
+    return o === null ? null : (BODEGA_LABEL[o] ?? o);
+  }, [payload]);
+
   const renderFila = useCallback((r: ApiRow) => {
   const band = sev(r.doh);
   // El resaltado de fila lo dispara la alerta COMBINADA
@@ -494,6 +523,9 @@ export function VivoClient() {
           {r.doh.toFixed(1)}
         </span>
       </td>
+      {/* W18 — la bodega que abastece, al lado de la propia: comprar o
+          trasladar se decide comparando estas dos parejas de columnas. */}
+      {origenLabel ? <OrigenCells origen={r.origen} label={origenLabel} /> : null}
       <td className="px-3 py-2 border-b border-gray-100 text-right">
         <QtyInput
           value={r.trans}
@@ -586,7 +618,7 @@ export function VivoClient() {
       </td>
     </tr>
   );
-  }, [commitEdit, commitSugBodega, areas]);
+  }, [commitEdit, commitSugBodega, areas, origenLabel]);
 
   return (
     <div className="p-6 max-w-[1240px] mx-auto">
@@ -739,6 +771,7 @@ export function VivoClient() {
                   bodega,
                   bodegaLabel: BODEGA_LABEL[bodega] ?? bodega,
                   bodegaDetalle: BODEGA_TIP[bodega],
+                  bodegaOrigenLabel: origenLabel,
                   proveedorLabel,
                   filtros: {
                     texto: q, proveedor: prov, soloConSugerido: onlySug, soloCriticos: onlyCrit,
@@ -778,21 +811,12 @@ export function VivoClient() {
           ) : null}
 
           {payload?.meta ? (
-            <div className="mx-3 mb-3 inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-1.5 text-xs text-gray-700"
-                 title={`Cuántos días de demanda cubre el Sugerido en ${bodega}. Cada bodega tiene el suyo.`}>
-              <span className="font-semibold">Sugerido a</span>
-              <select
-                value={payload.meta.coberturaDias}
-                disabled={coberturaGuardando}
-                onChange={(e) => void commitCobertura(Number(e.target.value))}
-                className="rounded border border-gray-300 bg-white px-1.5 py-0.5 text-xs font-semibold text-gray-700
-                           focus:outline-none focus:ring-2 focus:ring-teal-600 disabled:opacity-50"
-              >
-                {COBERTURA_OPCIONES.map((d) => <option key={d} value={d}>{d}</option>)}
-              </select>
-              <span className="text-gray-500">días</span>
-              {coberturaGuardando && <Loader2 size={12} className="animate-spin text-gray-400" />}
-            </div>
+            <CoberturaInput
+              bodega={bodega}
+              dias={payload.meta.coberturaDias}
+              guardando={coberturaGuardando}
+              onCommit={(d) => void commitCobertura(d)}
+            />
           ) : null}
 
           {loading ? (
@@ -816,6 +840,18 @@ export function VivoClient() {
                         filtroKey="patio" rango={rangos.patio} onRango={onRango}>Patio</Th>
                     <Th tip={COL_TIP.doh} sortKey="doh" orden={orden} onSort={onSort}
                         filtroKey="doh" rango={rangos.doh} onRango={onRango}>DOH</Th>
+                    {origenLabel ? (
+                      <>
+                        <Th tip={COL_TIP.origenExist(origenLabel, BODEGA_LABEL[bodega] ?? bodega)}
+                            sortKey="origenExist" orden={orden} onSort={onSort}
+                            filtroKey="origenExist" rango={rangos.origenExist} onRango={onRango}
+                            accent>Exist. {origenLabel}</Th>
+                        <Th tip={COL_TIP.origenDoh(origenLabel, BODEGA_LABEL[bodega] ?? bodega)}
+                            sortKey="origenDoh" orden={orden} onSort={onSort}
+                            filtroKey="origenDoh" rango={rangos.origenDoh} onRango={onRango}
+                            accent>DOH {origenLabel}</Th>
+                      </>
+                    ) : null}
                     <Th tip={COL_TIP.trans} sortKey="trans" orden={orden} onSort={onSort}
                         filtroKey="trans" rango={rangos.trans} onRango={onRango}><span className="inline-flex items-center gap-1">Tránsito <Pencil size={11} /></span></Th>
                     <Th tip={COL_TIP.pend} sortKey="pending" orden={orden} onSort={onSort}
@@ -1088,15 +1124,17 @@ function TiendasPanel({ tiendas }: { tiendas: Tiendas }) {
  * son una cifra simple sobre la que «mayor a menor» signifique algo.
  */
 function Th({
-  children, left, tip, sortKey, orden, onSort, filtroKey, rango, onRango,
+  children, left, tip, sortKey, orden, onSort, filtroKey, rango, onRango, accent,
 }: {
   children: React.ReactNode;
   left?: boolean;
   tip?: string;
+  /** W18 — columnas de OTRA bodega (la que abastece): fondo celeste, igual que sus celdas. */
+  accent?: boolean;
   sortKey?: ClaveOrden;
   orden?: Orden | null;
   onSort?: (k: ClaveOrden) => void;
-  /** W18 — columna numérica que acepta un filtro ≤/≥, además de (u opcional a) ordenar. */
+  /** Filtro de rango (2026-09-03) — columna numérica que acepta un filtro ≤/≥, además de (u opcional a) ordenar. */
   filtroKey?: ClaveOrdenNumerica;
   rango?: FiltroRango;
   onRango?: (k: ClaveOrdenNumerica, r: FiltroRango | null) => void;
@@ -1109,7 +1147,7 @@ function Th({
       aria-sort={activa ? (orden!.dir === 'asc' ? 'ascending' : 'descending') : undefined}
       className={`${left ? 'text-left' : 'text-right'} font-semibold px-3 py-2.5 border-b border-gray-200 whitespace-nowrap ${
         ordenable ? 'cursor-pointer select-none hover:text-gray-900' : tip ? 'cursor-help' : ''
-      } ${activa ? 'text-teal-700' : ''}`}
+      } ${activa ? 'text-teal-700' : ''} ${accent ? 'bg-sky-50/60 text-sky-800' : ''}`}
       onClick={ordenable ? () => onSort!(sortKey!) : undefined}
     >
       <span className={`inline-flex items-center gap-1 ${left ? '' : 'flex-row-reverse'}`}>
@@ -1126,7 +1164,7 @@ function Th({
 }
 
 /**
- * W18 — «poder hacer subconjuntos… solo los que estén en X número o menos».
+ * Filtro de rango (2026-09-03) — «poder hacer subconjuntos… solo los que estén en X número o menos».
  *
  * Un filtro ≤/≥ por columna, uno por columna, combinados con Y en `tabla.ts`.
  * Vive en el encabezado (no en una barra aparte) para que quede junto al
@@ -1291,6 +1329,61 @@ export function QtyInput({ value, edited, unknown, label, onCommit, onClear, cle
   );
 }
 
+/**
+ * «Sugerido a N días» — un número que se DIGITA, no un menú (Wilmer,
+ * 2026-09-11): *«necesito enviar orden de compra a este proveedor que tienen
+ * un lead time de 35 días, entonces entiendo debería colocar sugerido 65 por
+ * mi lead time»*. Su horizonte es una suma (cobertura + lead time), y una
+ * lista de seis valores nunca la tiene.
+ *
+ * Se guarda al salir del campo o con Enter, sólo si cambió y es válido
+ * (entero 1–365, el CHECK de la tabla). Escape devuelve el valor guardado.
+ */
+function CoberturaInput({ bodega, dias, guardando, onCommit }: {
+  bodega: string; dias: number; guardando: boolean; onCommit: (dias: number) => void;
+}) {
+  const [texto, setTexto] = useState(String(dias));
+  useEffect(() => { setTexto(String(dias)); }, [dias]);
+  const valor = texto.trim() === '' ? NaN : Number(texto);
+  const valido = esCoberturaValida(valor);
+  const commit = () => {
+    if (!valido) { setTexto(String(dias)); return; }
+    if (valor !== dias) onCommit(valor);
+  };
+  return (
+    <div className="mx-3 mb-3 inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-1.5 text-xs text-gray-700"
+         title={`Cuántos días de demanda cubre el Sugerido en ${bodega}. Cada bodega tiene el suyo. `
+           + `Digitá el número: cobertura + lead time del proveedor (p. ej. 30 + 35 = 65). Entre ${COBERTURA_MIN_DIAS} y ${COBERTURA_MAX_DIAS}.`}>
+      <span className="font-semibold">Sugerido a</span>
+      <input
+        type="number"
+        inputMode="numeric"
+        min={COBERTURA_MIN_DIAS}
+        max={COBERTURA_MAX_DIAS}
+        step={1}
+        value={texto}
+        disabled={guardando}
+        aria-label={`Días que cubre el Sugerido en ${bodega}`}
+        aria-invalid={!valido}
+        onChange={(e) => setTexto(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') { e.preventDefault(); (e.target as HTMLInputElement).blur(); }
+          if (e.key === 'Escape') { setTexto(String(dias)); (e.target as HTMLInputElement).blur(); }
+        }}
+        className={`w-16 rounded border bg-white px-1.5 py-0.5 text-right text-xs font-semibold text-gray-700
+                    focus:outline-none focus:ring-2 focus:ring-teal-600 disabled:opacity-50 ${
+                    valido ? 'border-gray-300' : 'border-red-400 bg-red-50'}`}
+      />
+      <span className="text-gray-500">días</span>
+      {!valido && texto.trim() !== '' ? (
+        <span className="text-red-600">entre {COBERTURA_MIN_DIAS} y {COBERTURA_MAX_DIAS}</span>
+      ) : null}
+      {guardando && <Loader2 size={12} className="animate-spin text-gray-400" />}
+    </div>
+  );
+}
+
 function Kpi({ label, value, sub, icon, accent, danger, warn, tip }: {
   label: string; value: string; sub: string;
   icon?: React.ReactNode; accent?: boolean; danger?: boolean; warn?: boolean; tip?: string;
@@ -1307,6 +1400,48 @@ function Kpi({ label, value, sub, icon, accent, danger, warn, tip }: {
       </div>
       <div className={`text-xs mt-0.5 ${warn ? 'text-amber-700 font-semibold' : 'text-gray-500'}`}>{sub}</div>
     </div>
+  );
+}
+
+/**
+ * W18 — las dos celdas de la bodega que ABASTECE: su existencia neta (con su
+ * venta mensual debajo, que es lo que decide si puede prestar) y su DOH con
+ * el mismo semáforo. Sin fila allá se pinta — y no 0: «no está en San José»
+ * y «San José tiene 0» llevan a decisiones distintas.
+ */
+function OrigenCells({ origen, label }: { origen: ApiRow['origen']; label: string }) {
+  if (!origen) {
+    return (
+      <>
+        <td className="px-3 py-2 border-b border-gray-100 text-right bg-sky-50/40">
+          <span className="text-gray-300 cursor-help" title={`El producto no existe en ${label}`}>—</span>
+        </td>
+        <td className="px-3 py-2 border-b border-gray-100 text-right bg-sky-50/40">
+          <span className="text-gray-300">—</span>
+        </td>
+      </>
+    );
+  }
+  const band = sev(origen.doh);
+  const pendiente = origen.pending === null ? '¿?' : fmt(origen.pending);
+  return (
+    <>
+      <td className="px-3 py-2 border-b border-gray-100 text-right bg-sky-50/40"
+          title={`${label}: existencias ${fmt(origen.existencias)} − reservado ${fmt(origen.reserved)} `
+            + `− pendiente ${pendiente} = ${fmt(origen.exist)}`
+            + (origen.patio ? ` · patio ${fmt(origen.patio)} (no incluido)` : '')
+            + (origen.pending === null ? ' · ⚠ pendiente sin dato en esta carga' : '')}>
+        <span className="text-gray-800">{fmt(origen.exist)}</span>
+        {origen.pending === null ? <span className="text-amber-600 font-semibold">*</span> : null}
+        <span className="block text-[11px] text-gray-400 leading-tight">vende {fmt(origen.p3)}/mes</span>
+      </td>
+      <td className="px-3 py-2 border-b border-gray-100 text-right bg-sky-50/40"
+          title={`${label}: ${fmt(origen.exist)} ÷ (${fmt(origen.p3)} ÷ 26) = ${origen.doh.toFixed(1)} días`}>
+        <span className={`inline-block min-w-[44px] text-center px-2 py-0.5 rounded-full font-semibold text-xs ${SEV_PILL[band]}`}>
+          {origen.doh.toFixed(1)}
+        </span>
+      </td>
+    </>
   );
 }
 

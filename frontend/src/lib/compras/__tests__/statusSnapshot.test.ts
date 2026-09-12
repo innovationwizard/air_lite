@@ -59,6 +59,12 @@ describe('readSnapshotOrden', () => {
     expect(readSnapshotOrden({ clave: 'inventada', dir: 'asc' })).toMatch(/clave/);
   });
 
+  it('accepts the W18 origen keys, so a snapshot sorted by «DOH San José» round-trips', () => {
+    expect(readSnapshotOrden({ clave: 'origenDoh', dir: 'desc' })).toEqual({ clave: 'origenDoh', dir: 'desc' });
+    expect(readSnapshotFiltros({ rangos: { origenExist: { operador: 'gte', valor: 100 } } }))
+      .toEqual({ rangos: { origenExist: { operador: 'gte', valor: 100 } } });
+  });
+
   it('rejects a dir that is not asc/desc', () => {
     expect(readSnapshotOrden({ clave: 'doh', dir: 'up' })).toMatch(/dir/);
   });

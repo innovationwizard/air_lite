@@ -7,7 +7,7 @@ import {
 function fila(over: Partial<FilaOrdenable> & { cod: string }): FilaOrdenable {
   return {
     desc: '', prov: '', provGroupId: null, exist: 0, patio: 0, doh: 0, trans: 0, pending: null,
-    adic: 0, p6: 0, p3: 0, mtd: null, sug: 0,
+    adic: 0, p6: 0, p3: 0, mtd: null, sug: 0, origen: null,
     flags: { tendenciaCreciente: false },
     purchaseOk: true,
     ...over,
@@ -183,6 +183,33 @@ describe('filtrar — rangos ≤/≥ por columna', () => {
       .toEqual(['B', 'C']);
     expect(filtrar(filas, { rangos: { pending: { operador: 'lte', valor: 900 } } }).map((r) => r.cod))
       .toEqual(['B', 'C']);
+  });
+});
+
+describe('W18 — columnas de la bodega que abastece', () => {
+  const filas = [
+    fila({ cod: 'A', origen: { exist: 50, doh: 6.5 } }),
+    fila({ cod: 'B', origen: null }),               // no existe en la de origen
+    fila({ cod: 'C', origen: { exist: 5000, doh: 45 } }),
+  ];
+
+  it('ordena por DOH de origen — «¿cuáles me cubre un traslado?» primero', () => {
+    expect(ordenar(filas, { clave: 'origenDoh', dir: 'desc' }).map((f) => f.cod)).toEqual(['C', 'A', 'B']);
+  });
+
+  it('sin origen va al final en ambas direcciones — «no está allá» no es cero', () => {
+    expect(ordenar(filas, { clave: 'origenExist', dir: 'asc' }).map((f) => f.cod)).toEqual(['A', 'C', 'B']);
+    expect(ordenar(filas, { clave: 'origenExist', dir: 'desc' }).map((f) => f.cod)).toEqual(['C', 'A', 'B']);
+  });
+
+  it('un rango sobre la columna de origen deja fuera las filas sin origen', () => {
+    const out = filtrar(filas, { rangos: { origenDoh: { operador: 'gte', valor: 30 } } });
+    expect(out.map((f) => f.cod)).toEqual(['C']);
+  });
+
+  it('las claves nuevas son numéricas y arrancan descendentes', () => {
+    expect(esTexto('origenExist')).toBe(false);
+    expect(dirInicial('origenDoh')).toBe('desc');
   });
 });
 

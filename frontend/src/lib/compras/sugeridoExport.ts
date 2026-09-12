@@ -86,6 +86,12 @@ export interface FilaExport {
    * Odoo). null = sin medir — ver el bloque m³ abajo.
    */
   volM3: number | null;
+  /**
+   * W18 — la bodega que abastece a ésta (Zacapa ← San José, Petén ← Zacapa),
+   * en sus propias cifras. undefined/null = sin origen o sin fila allá; las
+   * columnas sólo se emiten cuando `ContextoExport.bodegaOrigenLabel` existe.
+   */
+  origen?: { exist: number; p3: number; doh: number } | null;
 }
 
 export interface ContextoExport {
@@ -95,6 +101,8 @@ export interface ContextoExport {
   bodegaLabel: string;
   /** Qué incluye y qué excluye esa bodega (el tooltip de la pestaña). */
   bodegaDetalle?: string;
+  /** W18 — cómo se llama la bodega que abastece a ésta, p. ej. 'San José'; ausente si no hay. */
+  bodegaOrigenLabel?: string | null;
   /** La etiqueta del filtro de proveedor, ya resuelta (grupo → su nombre). */
   proveedorLabel: string;
   filtros: Filtros;
@@ -165,6 +173,7 @@ const ETIQUETA_ORDEN: Record<ClaveOrden, string> = {
   exist: 'Exist. neta', patio: 'Patio', doh: 'DOH', trans: 'Tránsito',
   pending: 'Pend. reserva', adic: 'Adic.', p6: 'Ord. 6m', p3: 'Ord. 3m',
   mtd: 'Mes en curso', sug: 'Sugerido',
+  origenExist: 'Exist. de la bodega que abastece', origenDoh: 'DOH de la bodega que abastece',
 };
 
 /** Cómo está ordenada la tabla, en una frase. */
@@ -285,9 +294,11 @@ export const COLUMNAS_SUGERIDO: readonly {
  */
 export function columnasSugerido(
   areas: readonly { slug: string; nombre: string }[] = [],
+  bodegaOrigenLabel: string | null = null,
 ): typeof COLUMNAS_SUGERIDO {
-  if (areas.length === 0) return COLUMNAS_SUGERIDO;
-  const i = COLUMNAS_SUGERIDO.findIndex((c) => c.header === 'Adic.');
+  const base = columnasConOrigen(bodegaOrigenLabel);
+  if (areas.length === 0) return base;
+  const i = base.findIndex((c) => c.header === 'Adic.');
   const porCanal = areas.flatMap((a) => [
     {
       header: a.nombre, width: 12, type: 'number' as const,
@@ -298,14 +309,32 @@ export function columnasSugerido(
       valor: (f: FilaExport) => f.adicPorArea?.[a.slug]?.aRevision ?? 0,
     },
   ]);
-  return [...COLUMNAS_SUGERIDO.slice(0, i + 1), ...porCanal, ...COLUMNAS_SUGERIDO.slice(i + 1)];
+  return [...base.slice(0, i + 1), ...porCanal, ...base.slice(i + 1)];
+}
+
+/**
+ * W18 — las columnas de la bodega que ABASTECE, justo después del DOH propio
+ * y sólo cuando la bodega tiene origen (Zacapa ← San José, Petén ← Zacapa).
+ * Mismo lugar que en pantalla. VACÍO = el producto no existe en esa bodega,
+ * nunca 0: «no está en San José» y «San José tiene 0» son decisiones distintas.
+ */
+function columnasConOrigen(label: string | null): typeof COLUMNAS_SUGERIDO {
+  if (!label) return COLUMNAS_SUGERIDO;
+  const i = COLUMNAS_SUGERIDO.findIndex((c) => c.header === 'DOH');
+  const origen = [
+    { header: `Exist. ${label}`, width: 13, type: 'number' as const, valor: (f: FilaExport) => f.origen?.exist ?? null },
+    { header: `Ord. 3m ${label}`, width: 13, type: 'number' as const, valor: (f: FilaExport) => f.origen?.p3 ?? null },
+    { header: `DOH ${label}`, width: 11, type: 'decimal1' as const, valor: (f: FilaExport) => f.origen?.doh ?? null },
+  ];
+  return [...COLUMNAS_SUGERIDO.slice(0, i + 1), ...origen, ...COLUMNAS_SUGERIDO.slice(i + 1)];
 }
 
 export function construirHojaSugerido(
   filas: readonly FilaExport[],
   areas: readonly { slug: string; nombre: string }[] = [],
+  bodegaOrigenLabel: string | null = null,
 ): SheetSpec {
-  const columnas = columnasSugerido(areas);
+  const columnas = columnasSugerido(areas, bodegaOrigenLabel);
   return {
     name: 'Sugerido',
     columns: columnas.map((c) => ({ header: c.header, width: c.width, type: c.type })),
@@ -357,6 +386,17 @@ export function construirHojaOrigen(
       + 'este archivo no recalcula nada ni propone cantidades propias.',
     ],
     ['Sugerido cubre', `${ctx.coberturaDias} días de demanda en ${ctx.bodegaLabel}`],
+  );
+  if (ctx.bodegaOrigenLabel) {
+    rows.push([
+      `Exist. / Ord. 3m / DOH ${ctx.bodegaOrigenLabel}`,
+      `Las cifras de ${ctx.bodegaOrigenLabel}, la bodega que abastece a ${ctx.bodegaLabel}, `
+      + 'tal como se ven en su propia pestaña (exist. neta = existencias − reservado − pendiente '
+      + 'en vivo; DOH con el mismo motor). Para decidir comprar o trasladar. '
+      + 'VACÍO = el producto no existe en esa bodega, no es cero.',
+    ]);
+  }
+  rows.push(
     [
       'Ord. 6m / Ord. 3m',
       'Promedio mensual ORDENADO (sale.order.line en estado venta y hecho; '
@@ -435,5 +475,8 @@ export function construirLibroSugerido(
   filas: readonly FilaExport[], ctx: ContextoExport,
   areas: readonly { slug: string; nombre: string }[] = [],
 ): SheetSpec[] {
-  return [construirHojaSugerido(filas, areas), construirHojaOrigen(filas, ctx)];
+  return [
+    construirHojaSugerido(filas, areas, ctx.bodegaOrigenLabel ?? null),
+    construirHojaOrigen(filas, ctx),
+  ];
 }

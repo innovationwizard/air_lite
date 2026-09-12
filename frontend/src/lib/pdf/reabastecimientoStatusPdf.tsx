@@ -195,6 +195,10 @@ function FilaBlock({ f }: { f: SnapshotFila }) {
         Existencia {n(f.exist)} (bruta {n(f.existencias)}, reservada {n(f.reserved)}) · Patio {n(f.patio)} ·
         {' '}Pendiente {f.pending === null ? 'desconocido' : n(f.pending)} · Tránsito {n(f.trans)}
         {f.transOverridden ? ' (capturado a mano)' : ''} · DOH {n(f.doh, 1)}
+        {f.origen
+          ? ` · Bodega que abastece: exist. ${n(f.origen.exist)}${f.origen.pending === null ? ' (pendiente sin dato)' : ''}`
+            + ` · vende ${n(f.origen.p3)}/mes · DOH ${n(f.origen.doh, 1)}`
+          : ''}
       </Text>
       <Text style={styles.statLine}>
         Sugerido {n(f.sug)} · Adicional {n(f.adic)} (comercial {n(f.adicComercial)}) ·

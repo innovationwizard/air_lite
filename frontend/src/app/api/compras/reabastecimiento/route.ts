@@ -50,7 +50,7 @@ export async function GET(request: Request) {
 
     // Rows come from the SHARED builder the xlsx export also uses — see rows.ts.
     // tiendas comes from the SHARED lib.ts builder — the snapshot route uses it too.
-    const [{ rows, maxAsOf, monthStart, coberturaDias, groups, areasComerciales, pendienteReserva }, tiendas, lastSync] = await Promise.all([
+    const [{ rows, maxAsOf, monthStart, coberturaDias, groups, areasComerciales, pendienteReserva, bodegaOrigen }, tiendas, lastSync] = await Promise.all([
       buildRows(service, bodega),
       buildTiendas(service),
       service.from('sync_runs').select('id, status, started_at, finished_at, counts')
@@ -77,6 +77,9 @@ export async function GET(request: Request) {
         // Live-fetch provenance for the pendiente column: when `error` is
         // set, every row's pending is null and the page must say so.
         pendienteReserva,
+        // W18 — the bodega that supplies this one (San José → Zacapa → Petén),
+        // or null. Set = every row carries `origen` and the page shows its columns.
+        bodegaOrigen,
       },
     });
   } catch (e) {

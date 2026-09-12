@@ -1,5 +1,5 @@
 /**
- * W18 — filtro ≤/≥ por columna. Monta el árbol REAL de VivoClient (fetch
+ * Filtro de rango (2026-09-03) — filtro ≤/≥ por columna. Monta el árbol REAL de VivoClient (fetch
  * mockeado) en vez de un usuario abriendo el navegador con sesión de
  * Supabase, para probar el flujo completo: click en el ícono del
  * encabezado → popover → aplicar → filas visibles → limpiar.
