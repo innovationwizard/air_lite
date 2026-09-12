@@ -161,24 +161,44 @@ function diaUTC(d: Date): number {
 }
 
 /**
- * El mes que la pantalla debe abrir: el primero del horizonte cuya captura
- * sigue abierta.
+ * El mes que la pantalla debe abrir: el SIGUIENTE al mes en curso, siempre.
  *
  * No es un detalle de presentación. `mesesAbiertos` encabeza con el mes EN
- * CURSO, cuya captura cerró el mes pasado, así que abrir ahí es empujar al
- * jefe de canal a cargar un mes que ya se compró — y un valor por defecto
- * equivocado se equivoca a escala, en los seis canales a la vez. El día del
- * cierre cuenta como abierto: se cierra al terminar ese viernes, no al
- * empezarlo.
+ * CURSO, cuya compra ya se decidió, así que abrir ahí es empujar al jefe de
+ * canal a cargar un mes que ya se compró — y un valor por defecto equivocado
+ * se equivoca a escala, en los seis canales a la vez.
  *
- * Si ninguno sigue abierto (venció el horizonte entero), abre el último, que
- * es el más lejano y el único todavía accionable.
+ * Hasta el 2026-09-11 el valor por defecto SALTABA al mes siguiente en cuanto
+ * pasaba el cierre del 2º viernes. Eso mandó a los seis canales a noviembre
+ * la misma tarde en que todavía discutían octubre (Jorge: «The teams are
+ * still discussing forecasts for October. The app must not default to
+ * November!»). El cierre es una fecha del banner, no una compuerta: lo único
+ * que congela un mes es «Bloquear cambios». El mes que se discute durante
+ * septiembre es octubre, con cierre pasado o no; noviembre se discute en
+ * octubre.
+ *
+ * Si el horizonte fuera de un solo mes (no lo es), abre el único que hay.
  */
 export function mesPorDefecto(hoy: Date): string {
   const abiertos = mesesAbiertos(hoy);
-  const hoySinHora = diaUTC(hoy);
-  return abiertos.find((m) => cicloDelMes(m).cierre.getTime() >= hoySinHora)
-    ?? abiertos[abiertos.length - 1];
+  return abiertos[1] ?? abiertos[0];
+}
+
+/**
+ * «Hoy» según el calendario de Guatemala, como medianoche UTC de ese día —
+ * la forma que `mesesAbiertos`, `mesPorDefecto` y `estadoCiclo` esperan.
+ *
+ * Todo el módulo compara días con getUTC*. Pasarle `new Date()` a secas hace
+ * que a las 6 de la tarde en Guatemala (UTC−6) ya sea «mañana»: el 11 de
+ * septiembre por la tarde el banner daba la captura por cerrada y la
+ * pantalla abría en noviembre. El servidor (Vercel, UTC) tiene el mismo
+ * problema todo el día, no sólo por la tarde.
+ */
+export function hoyEnGuatemala(ahora: Date = new Date()): Date {
+  const partes = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Guatemala', year: 'numeric', month: '2-digit', day: '2-digit',
+  }).format(ahora); // en-CA → 'YYYY-MM-DD'
+  return new Date(`${partes}T00:00:00Z`);
 }
 
 /**

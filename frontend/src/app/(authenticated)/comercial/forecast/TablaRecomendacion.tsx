@@ -112,13 +112,17 @@ function Clientes({ c }: { c: FilaHistorial['clientes'] }) {
   );
 }
 
-/** Short on purpose: the channel is already in the page header (Jorge 2026-09-11). */
+/**
+ * Short on purpose: the channel is already in the page header, and the column
+ * is meant to stay narrow (Jorge 2026-09-11). «=» vs «suele ser» is the only
+ * inline hint of applied vs not; the hover title carries the explanation.
+ */
 function fraseFactor(r: Recomendacion, mes: string): string | null {
   if (r.indiceMes === null) return null;
   const f = r.indiceMes.toFixed(2);
   return r.aplicado
     ? `${mesCorto(mes)} = ${f}× mes normal`
-    : `${mesCorto(mes)} suele ser ${f}× mes normal (no se aplica)`;
+    : `${mesCorto(mes)} suele ser ${f}× mes normal`;
 }
 
 interface Props {

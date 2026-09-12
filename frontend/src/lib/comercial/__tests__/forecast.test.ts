@@ -1,6 +1,6 @@
 import {
   sumaDirecto, esBase, esModificado, MOTIVOS, MOTIVOS_VALIDOS, mesesAbiertos, mesDentroDelHorizonte,
-  primerDiaMes, etiquetaMes, cicloDelMes, mesPorDefecto, estadoCiclo, consolidar,
+  primerDiaMes, etiquetaMes, cicloDelMes, mesPorDefecto, estadoCiclo, hoyEnGuatemala, consolidar,
   MAX_CODIGOS_POR_MES, type FilaForecast,
 } from '../forecast';
 
@@ -105,20 +105,27 @@ describe('mes por defecto', () => {
    * se equivoca en los seis canales a la vez y sin que nadie lo note.
    */
   it('el 10 de septiembre abre en OCTUBRE, no en el mes en curso', () => {
-    // La captura de septiembre cerro el 14 de agosto; la de octubre cierra
-    // manana. Abrir en septiembre mandaba a cargar un mes ya comprado.
+    // La compra de septiembre ya se decidio. Abrir en septiembre mandaba a
+    // cargar un mes ya comprado.
     expect(mesPorDefecto(new Date('2026-09-10T18:00:00Z'))).toBe('2026-10-01');
   });
 
-  it('el dia del cierre todavia cuenta como abierto', () => {
-    // Cierra al TERMINAR ese viernes, no al empezarlo: quien entra el 11 a las
-    // 9 de la manana sigue a tiempo.
+  /**
+   * 2026-09-11 (Jorge): «The teams are still discussing forecasts for
+   * October. The app must not default to November!». Hasta ese dia el valor
+   * por defecto saltaba a noviembre en cuanto pasaba el cierre del 2º
+   * viernes; el cierre es del banner, no una compuerta.
+   */
+  it('pasado el cierre SIGUE en octubre: el cierre no mueve el mes por defecto', () => {
     expect(mesPorDefecto(new Date('2026-09-11T09:00:00Z'))).toBe('2026-10-01');
-    expect(mesPorDefecto(new Date('2026-09-11T23:59:00Z'))).toBe('2026-10-01');
+    expect(mesPorDefecto(new Date('2026-09-12T09:00:00Z'))).toBe('2026-10-01');
+    expect(mesPorDefecto(new Date('2026-09-25T09:00:00Z'))).toBe('2026-10-01');
+    expect(mesPorDefecto(new Date('2026-09-30T23:59:00Z'))).toBe('2026-10-01');
   });
 
-  it('pasado el cierre salta al mes siguiente', () => {
-    expect(mesPorDefecto(new Date('2026-09-12T09:00:00Z'))).toBe('2026-11-01');
+  it('cambia de mes solo cuando cambia el calendario', () => {
+    expect(mesPorDefecto(new Date('2026-10-01T00:00:00Z'))).toBe('2026-11-01');
+    expect(mesPorDefecto(new Date('2026-12-15T12:00:00Z'))).toBe('2027-01-01');
   });
 
   it('siempre devuelve un mes del horizonte', () => {
@@ -126,6 +133,30 @@ describe('mes por defecto', () => {
       const hoy = new Date(`${dia}T12:00:00Z`);
       expect(mesesAbiertos(hoy)).toContain(mesPorDefecto(hoy));
     }
+  });
+});
+
+describe('hoy en Guatemala', () => {
+  /**
+   * El modulo compara dias con getUTC*. A las 6 de la tarde en Guatemala
+   * (UTC−6) ya es manana en UTC: el 11 de septiembre por la tarde el banner
+   * daba la captura por cerrada. El servidor en UTC lo sufre todo el dia.
+   */
+  it('a las 9 de la noche del 11 en Guatemala sigue siendo el 11', () => {
+    // 2026-09-12T03:16Z == 2026-09-11 21:16 en Guatemala
+    expect(hoyEnGuatemala(new Date('2026-09-12T03:16:00Z')).toISOString()).toBe('2026-09-11T00:00:00.000Z');
+    expect(estadoCiclo('2026-10-01', hoyEnGuatemala(new Date('2026-09-12T03:16:00Z'))).cerrada).toBe(false);
+  });
+
+  it('y a las 6:01 UTC ya es el 12 alla tambien', () => {
+    expect(hoyEnGuatemala(new Date('2026-09-12T06:01:00Z')).toISOString()).toBe('2026-09-12T00:00:00.000Z');
+  });
+
+  it('al filo del mes no adelanta el horizonte', () => {
+    // 30 de septiembre, 8 de la noche en Guatemala = 1 de octubre 02:00 UTC
+    const hoy = hoyEnGuatemala(new Date('2026-10-01T02:00:00Z'));
+    expect(mesesAbiertos(hoy)[0]).toBe('2026-09-01');
+    expect(mesPorDefecto(hoy)).toBe('2026-10-01');
   });
 });
 

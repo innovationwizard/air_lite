@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { etiquetaMes, estadoCiclo, mesPorDefecto } from '@/lib/comercial/forecast';
+import { etiquetaMes, estadoCiclo, mesPorDefecto, hoyEnGuatemala } from '@/lib/comercial/forecast';
 import { Captura } from './Captura';
 import { Consolidado } from './Consolidado';
 import { TablaRecomendacion } from './TablaRecomendacion';
@@ -39,7 +39,7 @@ export function ForecastClient() {
       // `mesesAbiertos[0]` es el mes EN CURSO, cuya captura cerró el mes
       // pasado: abrir ahí mandaba a los seis canales a cargar un mes ya
       // comprado. Se abre en el primero cuya captura sigue viva.
-      setMes((m) => m || mesPorDefecto(new Date()));
+      setMes((m) => m || mesPorDefecto(hoyEnGuatemala()));
     } catch (e) {
       setError(e instanceof Error ? e.message : 'No se pudo cargar');
     }
@@ -146,7 +146,7 @@ const fechaLarga = (d: Date) =>
  * es la clase de fricción que dejó la hoja anterior a medio llenar.
  */
 function BannerCiclo({ mes }: { mes: string }) {
-  const { cierre, reunion, cerrada, diasRestantes } = estadoCiclo(mes, new Date());
+  const { cierre, reunion, cerrada, diasRestantes } = estadoCiclo(mes, hoyEnGuatemala());
   return (
     <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 text-sm">
       <span className="text-gray-800">

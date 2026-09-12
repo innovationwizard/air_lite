@@ -5,6 +5,7 @@ import { createServiceRoleClient } from '@/lib/supabase/server';
 import {
   MAX_CODIGOS_POR_MES, MOTIVOS_VALIDOS, esBase, mesDentroDelHorizonte, mesesAbiertos, primerDiaMes,
   type Motivo,
+  hoyEnGuatemala,
 } from '@/lib/comercial/forecast';
 import { cargarContexto, cargarDemanda, computarFilas, esPadre, mesAnterior, type CapturaRow } from '../historial/lib';
 import { areaPermitida } from '@/lib/comercial/permisos';
@@ -74,7 +75,7 @@ export async function GET() {
         .select('product_id, p3').eq('bodega', 'General').in('product_id', ids)).data ?? []
     : [];
 
-  const hoy = new Date();
+  const hoy = hoyEnGuatemala();
   // Active locks («Bloquear cambios»): the leader's own, or every area's for
   // the readers. Keyed `area|month` so the screen can tell locked from open.
   const { data: locks } = misAreas
@@ -216,8 +217,8 @@ export async function PUT(request: Request) {
   const area = permiso.area;
 
   const { month } = body;
-  if (typeof month !== 'string' || !mesDentroDelHorizonte(month, new Date())) {
-    return badRequest(`El mes debe ser uno de los abiertos: ${mesesAbiertos(new Date()).join(', ')}`);
+  if (typeof month !== 'string' || !mesDentroDelHorizonte(month, hoyEnGuatemala())) {
+    return badRequest(`El mes debe ser uno de los abiertos: ${mesesAbiertos(hoyEnGuatemala()).join(', ')}`);
   }
 
   const db = createServiceRoleClient();

@@ -3,7 +3,7 @@ import { requireAuth } from '@/lib/auth/server';
 import { CAN_VIEW_FORECAST_COMERCIAL } from '@/lib/auth/roles';
 import { createServiceRoleClient } from '@/lib/supabase/server';
 import { fetchAll } from '@/lib/supabase/paginado';
-import { esModificado, mesDentroDelHorizonte, mesPorDefecto, mesesAbiertos } from '@/lib/comercial/forecast';
+import { esModificado, mesDentroDelHorizonte, mesPorDefecto, mesesAbiertos, hoyEnGuatemala } from '@/lib/comercial/forecast';
 import { TOP_N, bodegaQueSirve } from '@/lib/comercial/recomendacion';
 import { cargarContexto, cargarDemanda, cargarForecastCompras, computarFilas, esPadre, type CapturaRow } from './lib';
 
@@ -37,7 +37,7 @@ export async function GET(request: Request) {
 
   const url = new URL(request.url);
   const areaPedida = url.searchParams.get('area');
-  const hoy = new Date();
+  const hoy = hoyEnGuatemala();
   const mes = url.searchParams.get('mes') ?? mesPorDefecto(hoy);
   if (!mesDentroDelHorizonte(mes, hoy)) {
     return NextResponse.json(

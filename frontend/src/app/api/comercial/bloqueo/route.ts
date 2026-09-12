@@ -5,7 +5,7 @@ import {
 } from '@/lib/auth/roles';
 import { createServiceRoleClient } from '@/lib/supabase/server';
 import { fetchAll } from '@/lib/supabase/paginado';
-import { mesDentroDelHorizonte, mesesAbiertos } from '@/lib/comercial/forecast';
+import { mesDentroDelHorizonte, mesesAbiertos, hoyEnGuatemala } from '@/lib/comercial/forecast';
 import { areaPermitida } from '@/lib/comercial/permisos';
 import { bodegaQueSirve } from '@/lib/comercial/recomendacion';
 import {
@@ -61,7 +61,7 @@ export async function POST(request: Request) {
   if (!permiso.ok) return NextResponse.json({ error: permiso.msg }, { status: 403 });
   const area = permiso.area;
   const { month } = body;
-  const hoy = new Date();
+  const hoy = hoyEnGuatemala();
   if (!esMesValido(month) || !mesDentroDelHorizonte(month, hoy)) {
     return NextResponse.json(
       { error: `El mes debe ser uno de los abiertos: ${mesesAbiertos(hoy).join(', ')}` }, { status: 400 });

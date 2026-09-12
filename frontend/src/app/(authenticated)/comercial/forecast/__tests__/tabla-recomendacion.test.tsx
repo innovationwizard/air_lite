@@ -226,7 +226,7 @@ it('la recomendación trae su rango y la frase del factor, aplicado o no', async
   expect(screen.getByText('normalmente 1,502–2,497')).toBeInTheDocument();
   const frases = screen.getAllByTestId('factor').map((e) => e.textContent);
   expect(frases).toContain('Oct = 0.83× mes normal');
-  expect(frases).toContain('Oct suele ser 0.87× mes normal (no se aplica)');
+  expect(frases).toContain('Oct suele ser 0.87× mes normal');
 });
 
 it('la caja arranca VACÍA con la sugerencia en gris, o con lo ya cargado, y muestra el ciclo anterior', async () => {
