@@ -1,4 +1,4 @@
-import { ordenarBodegas, BODEGA_LABEL } from '../bodega';
+import { ordenarBodegas, ordenarAreas, BODEGA_LABEL } from '../bodega';
 
 describe('ordenarBodegas', () => {
   it('reorders to the canonical General → San José → Zacapa → Petén sequence', () => {
@@ -32,5 +32,31 @@ describe('BODEGA_LABEL', () => {
     expect(BODEGA_LABEL.General).toBeUndefined();
     expect(BODEGA_LABEL.Zacapa).toBeUndefined();
     expect(BODEGA_LABEL['Petén']).toBeUndefined();
+  });
+});
+
+describe('ordenarAreas', () => {
+  const a = (slug: string, nombre: string) => ({ slug, nombre });
+
+  it('puts client types first (by name) and the sedes after, Zacapa before Petén', () => {
+    // The alphabetical order the DB returns — sedes mixed in with client types.
+    const alfabetico = [
+      a('institucional', 'Institucional'), a('mayoreo', 'Mayoreo'), a('peten', 'Petén'),
+      a('supermercados', 'Supermercados'), a('tiendas', 'Tiendas'), a('zacapa', 'Zacapa'),
+    ];
+    expect(ordenarAreas(alfabetico).map((x) => x.slug))
+      .toEqual(['institucional', 'mayoreo', 'supermercados', 'tiendas', 'zacapa', 'peten']);
+  });
+
+  it('treats an unknown slug as a client type, not a sede', () => {
+    expect(ordenarAreas([a('zacapa', 'Zacapa'), a('exportacion', 'Exportación')]).map((x) => x.slug))
+      .toEqual(['exportacion', 'zacapa']);
+  });
+
+  it('does not mutate the input array', () => {
+    const input = [a('zacapa', 'Zacapa'), a('mayoreo', 'Mayoreo')];
+    const copy = [...input];
+    ordenarAreas(input);
+    expect(input).toEqual(copy);
   });
 });

@@ -24,7 +24,7 @@ import {
 } from '@/lib/compras/tendencia';
 import { fetchAll } from '@/lib/supabase/paginado';
 import { fetchPendienteReserva, pendientePorSku } from '@/lib/compras/pendienteReserva';
-import { bodegaOrigen } from '@/lib/compras/bodega';
+import { bodegaOrigen, ordenarAreas } from '@/lib/compras/bodega';
 import { GENERAL_BODEGA, round1 } from './lib';
 
 /**
@@ -411,8 +411,9 @@ export async function buildRows(
         // grupo), así que es el desempate único de esta tabla.
         fetchAll<SupplierGroupMemberRef>(() =>
           service.from('supplier_group_members').select('supplier_id, group_id'), 'supplier_id'),
-        // Catálogo de canales comerciales — seis filas hoy; el orden por
-        // nombre es el orden de las columnas, para que no bailen entre cargas.
+        // Catálogo de canales comerciales — seis filas hoy. El orden de las
+        // columnas lo fija `ordenarAreas` (tipos de cliente, luego sedes);
+        // `order('nombre')` sólo hace la lectura determinista.
         service.from('comercial_areas').select('slug, nombre, padre').eq('activa', true).order('nombre'),
         // W18 — lectura ESTRECHA de la bodega de origen: sólo las columnas
         // que se muestran, no un segundo `buildRows`. Sin origen, ninguna
@@ -425,7 +426,8 @@ export async function buildRows(
       (areasCom?.data as { slug: string; nombre: string; padre: string | null }[] | null) ?? [];
     // Columns are TOP-LEVEL areas only; a child rolls into its parent.
     const padreDe = new Map(todasLasAreas.filter((a) => a.padre).map((a) => [a.slug, a.padre!]));
-    const areasComerciales = todasLasAreas.filter((a) => !a.padre).map(({ slug, nombre }) => ({ slug, nombre }));
+    const areasComerciales = ordenarAreas(
+      todasLasAreas.filter((a) => !a.padre).map(({ slug, nombre }) => ({ slug, nombre })));
 
     const coberturaDias = (cobertura?.data as { dias: number } | null)?.dias
       ?? COBERTURA_DEFAULT_DIAS;

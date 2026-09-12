@@ -171,7 +171,7 @@ export function etiquetaTendencia(t: Tendencia, a: Alerta): string {
 const ETIQUETA_ORDEN: Record<ClaveOrden, string> = {
   cod: 'Código', desc: 'Descripción', prov: 'Proveedor', abc: 'ABC',
   exist: 'Exist. neta', patio: 'Patio', doh: 'DOH', trans: 'Tránsito',
-  pending: 'Pend. reserva', adic: 'Adic.', p6: 'Ord. 6m', p3: 'Ord. 3m',
+  pending: 'Pend. reserva', adic: 'Adicionales', p6: 'Ord. 6m', p3: 'Ord. 3m',
   mtd: 'Mes en curso', sug: 'Sugerido',
   origenExist: 'Exist. de la bodega que abastece', origenDoh: 'DOH de la bodega que abastece',
 };
@@ -256,7 +256,7 @@ export const COLUMNAS_SUGERIDO: readonly {
   // VACÍO = «¿?», sin dato. Escribirlo como 0 diría que sabemos que no hay
   // nada pendiente de tomar reserva, que es justo lo que no sabemos.
   { header: 'Pend. reserva', width: 13, type: 'number', valor: (f) => f.pending },
-  { header: 'Adic.', width: 9, type: 'number', valor: (f) => f.adic },
+  { header: 'Adicionales', width: 12, type: 'number', valor: (f) => f.adic },
   { header: 'Ord. 6m', width: 10, type: 'number', valor: (f) => f.p6 },
   { header: 'Ord. 3m', width: 10, type: 'number', valor: (f) => f.p3 },
   { header: 'Mes en curso', width: 13, type: 'number', valor: (f) => f.mtd },
@@ -284,9 +284,10 @@ export const COLUMNAS_SUGERIDO: readonly {
  * Las columnas del archivo para un juego dado de canales comerciales.
  *
  * Los canales son DATOS (`comercial_areas`), no una lista fija, así que las
- * columnas se arman en tiempo de ejecución. Van justo después de `Adic.` y en
- * el mismo orden que en pantalla: el archivo tiene que poder leerse al lado de
- * la vista sin traducir nada — es la regla que arregló el export el 26-ago.
+ * columnas se arman en tiempo de ejecución. Van justo ANTES de `Adicionales`
+ * (la suma cierra el bloque, Jorge 2026-09-11) y en el mismo orden que en
+ * pantalla: el archivo tiene que poder leerse al lado de la vista sin
+ * traducir nada — es la regla que arregló el export el 26-ago.
  *
  * Dos columnas por canal, y no una: lo que ENTRA al pedido y lo que queda A
  * REVISIÓN son dos conversaciones distintas, y en una hoja de cálculo se
@@ -299,7 +300,7 @@ export function columnasSugerido(
 ): typeof COLUMNAS_SUGERIDO {
   const base = columnasConOrigen(bodegaOrigenLabel);
   if (areas.length === 0) return base;
-  const i = base.findIndex((c) => c.header === 'Adic.');
+  const i = base.findIndex((c) => c.header === 'Adicionales');
   const porCanal = areas.flatMap((a) => [
     {
       header: a.nombre, width: 12, type: 'number' as const,
@@ -310,7 +311,7 @@ export function columnasSugerido(
       valor: (f: FilaExport) => f.adicPorArea?.[a.slug]?.aRevision ?? 0,
     },
   ]);
-  return [...base.slice(0, i + 1), ...porCanal, ...base.slice(i + 1)];
+  return [...base.slice(0, i), ...porCanal, ...base.slice(i)];
 }
 
 /**

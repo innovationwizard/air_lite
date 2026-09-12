@@ -48,3 +48,31 @@ export const BODEGA_ORIGEN: Readonly<Record<string, string>> = {
 export function bodegaOrigen(bodega: string): string | null {
   return BODEGA_ORIGEN[bodega] ?? null;
 }
+
+/**
+ * Canales comerciales que son una SEDE y no un tipo de cliente — Jorge,
+ * 2026-09-11: en la página de Wilmer las columnas por canal van en dos
+ * juegos, primero los tipos de cliente (Institucional, Mayoreo,
+ * Supermercados, Tiendas) y después las bodegas lejanas (Zacapa, Petén), y
+ * el total «Adicionales» cierra el bloque. Alfabético mezclaba los dos juegos.
+ *
+ * Slug de `comercial_areas` → bodega. Configuración en código por la misma
+ * razón que `BODEGA_ORIGEN`: son dos sedes y una bodega nueva ya exige
+ * despliegue.
+ */
+export const AREA_SEDE: Readonly<Record<string, string>> = {
+  zacapa: 'Zacapa',
+  peten: 'Petén',
+};
+
+/**
+ * Orden de las columnas por canal: tipos de cliente por nombre, luego las
+ * sedes en el orden canónico de bodega. No muta la entrada.
+ */
+export function ordenarAreas<T extends { slug: string; nombre: string }>(areas: readonly T[]): T[] {
+  const clientes = areas.filter((a) => !(a.slug in AREA_SEDE))
+    .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
+  const sedes = areas.filter((a) => a.slug in AREA_SEDE)
+    .sort((a, b) => ordenBodega(AREA_SEDE[a.slug]) - ordenBodega(AREA_SEDE[b.slug]));
+  return [...clientes, ...sedes];
+}

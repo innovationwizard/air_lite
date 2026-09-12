@@ -294,10 +294,11 @@ describe('W18 — columnas de la bodega que abastece', () => {
     expect(headers.slice(i, i + 4)).toEqual(['DOH', 'Exist. San José', 'Ord. 3m San José', 'DOH San José']);
   });
 
-  it('sobreviven a las columnas por canal, que se insertan después', () => {
+  it('sobreviven a las columnas por canal, que se insertan antes de Adicionales', () => {
     const headers = columnasSugerido([{ slug: 'inst', nombre: 'Institucional' }], 'Zacapa').map((c) => c.header);
-    expect(headers.indexOf('DOH Zacapa')).toBeLessThan(headers.indexOf('Adic.'));
-    expect(headers).toContain('Institucional');
+    expect(headers.indexOf('DOH Zacapa')).toBeLessThan(headers.indexOf('Institucional'));
+    expect(headers.indexOf('Institucional (rev.)')).toBeLessThan(headers.indexOf('Adicionales'));
+    expect(headers).not.toContain('Adic.');
   });
 
   it('lleva las cifras de la bodega de origen; sin fila allá va VACÍO, no 0', () => {

@@ -241,7 +241,7 @@ interface Tiendas {
 }
 interface ApiPayload {
   bodega: string; bodegas: string[]; rows: ApiRow[]; groups: ProveedorGrupo[];
-  /** Canales comerciales activos — rotulan y ordenan las columnas del Adic. */
+  /** Canales comerciales activos — rotulan y ordenan las columnas de Adicionales. */
   areasComerciales?: { slug: string; nombre: string }[];
   tiendas?: Tiendas; meta: ApiMeta;
 }
@@ -486,7 +486,7 @@ export function VivoClient() {
    * lo notaría hasta que un número no coincida entre modos.
    */
   /**
-   * Los canales que rotulan las columnas del Adic. Vienen del servidor, no de
+   * Los canales que rotulan las columnas de Adicionales. Vienen del servidor, no de
    * una lista acá: la migración 20260901000006 dejó dicho que un canal nuevo
    * no debe necesitar despliegue, y ya se agregaron dos a los tres días.
    */
@@ -557,9 +557,9 @@ export function VivoClient() {
           ? <span className="text-amber-600 font-semibold">¿?</span>
           : <span className={r.pending ? 'text-gray-800' : 'text-gray-400'}>{fmt(r.pending ?? 0)}</span>}
       </td>
-      <td className="px-3 py-2 border-b border-gray-100 text-right text-gray-500">{fmt(r.adic)}</td>
-      {/* QUIÉN pidió CUÁNTO — una columna por canal.
-          Un total sin autor no se puede discutir: ante «Adic. 800» ni el
+      {/* QUIÉN pidió CUÁNTO — una columna por canal, y el total «Adicionales»
+          al final, como toda suma (Jorge, 2026-09-11).
+          Un total sin autor no se puede discutir: ante «Adicionales 800» ni el
           comprador puede preguntar por qué, ni el canal defender su número en
           la reunión. Lo que va a revisión se VE, en gris y aparte, porque un
           número que nadie ve no se discute y uno que se suma solo tampoco. */}
@@ -579,6 +579,7 @@ export function VivoClient() {
           </td>
         );
       })}
+      <td className="px-3 py-2 border-b border-gray-100 text-right text-gray-500">{fmt(r.adic)}</td>
       <td className="px-3 py-2 border-b border-gray-100 text-right text-gray-700">{fmt(r.p6)}</td>
       <td className="px-3 py-2 border-b border-gray-100 text-right text-gray-700">{fmt(r.p3)}</td>
       <td className="px-3 py-2 border-b border-gray-100 text-right">
@@ -881,14 +882,16 @@ export function VivoClient() {
                         filtroKey="trans" rango={rangos.trans} onRango={onRango}><span className="inline-flex items-center gap-1">Tránsito <Pencil size={11} /></span></Th>
                     <Th tip={COL_TIP.pend} sortKey="pending" orden={orden} onSort={onSort}
                         filtroKey="pending" rango={rangos.pending} onRango={onRango}><span className="inline-flex items-center gap-1">Pend. reserva <Radio size={11} /></span></Th>
-                    <Th tip={COL_TIP.adic} sortKey="adic" orden={orden} onSort={onSort}
-                        filtroKey="adic" rango={rangos.adic} onRango={onRango}>Adic.</Th>
                     {/* Sin `sortKey` ni `filtroKey` a propósito: `ClaveOrden` es
                         una unión fija y los canales son datos que cambian sin
-                        despliegue. Ordenar y filtrar siguen viviendo en Adic. */}
+                        despliegue. Ordenar y filtrar siguen viviendo en
+                        Adicionales, que cierra el bloque: tipos de cliente,
+                        luego sedes (ver `ordenarAreas`), luego la suma. */}
                     {areas.map((a) => (
                       <Th key={a.slug} tip={COL_TIP.canal}>{a.nombre}</Th>
                     ))}
+                    <Th tip={COL_TIP.adic} sortKey="adic" orden={orden} onSort={onSort}
+                        filtroKey="adic" rango={rangos.adic} onRango={onRango}>Adicionales</Th>
                     <Th tip={COL_TIP.ord} sortKey="p6" orden={orden} onSort={onSort}
                         filtroKey="p6" rango={rangos.p6} onRango={onRango}>Ord. 6m</Th>
                     <Th tip={COL_TIP.ord} sortKey="p3" orden={orden} onSort={onSort}
