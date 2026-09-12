@@ -446,6 +446,36 @@ problem — and corrected the comment for the historical record.
   Parts B–D, with both of its original open decisions resolved and recorded.
 - This file.
 
+## Addendum 2026-09-12 — proposal + confirmation ("can the app do this?")
+
+Jorge's question after the by-hand mapping: *"You were able to find the
+values to map. Can the app do this, instead of asking Alexis to do it?"*
+Answer: not as a lookup (Odoo stores no REYMA identificador anywhere), but
+yes as an inference — and Jorge's three rulings shaped what was built:
+**never auto-map**, **Alexis is the only confirmer**, and **use the
+document's words: «identificador» and «SKU»**. Full record in the addendum at
+the top of [VENDOR_SKU_CROSSWALK_DESIGN.md](VENDOR_SKU_CROSSWALK_DESIGN.md).
+
+Built (all tests green: pytest 201/201, jest 555/555, tsc, lint, ruff):
+
+- `ml/reyma_identificador_propuesta.py` (+ 11 tests) — pure scoring: PO
+  window + quantity, REYMA wording in supplierinfo, pack size / size token /
+  family synonyms. Proposes only with a clear, separated winner.
+- `ml/api.py` — `POST /reyma/identificador/proponer`, `GET /reyma/sku/verificar`,
+  `POST /reyma/factura/reevaluar` (re-runs `evaluar()` on a staged invoice
+  after a confirmation, so *Cargar* writes the whole invoice). All read-only
+  against Odoo; smoke-tested live against production.
+- `ml/reyma_factura_carga.py` — hold reason now reads *"identificador sin SKU
+  asignado — pendiente de confirmar"*.
+- Frontend: shared `ConfirmarIdentificador.tsx` (the question, Sí/No, then
+  «¿Cuál es el SKU correcto?» with suggestions + Odoo-verified manual SKU);
+  wired into the upload screen (per held line) and into a rewritten
+  `/facturas/pendientes`; three proxy routes; vocabulary sweep (table header,
+  receipt line, sidebar subtitle, error strings).
+- Migration `20260912000001_reyma_identificador_propuesta.sql` — 9
+  `route_permissions` rows for the three new routes. **Must be applied by
+  hand in the Supabase SQL editor before deploy**, or the new routes 403.
+
 ## Open items / not done this session
 
 - **`CAJA20` clave ambiguity** (maps to 3 códigos) — a separate, pre-existing

@@ -12,9 +12,9 @@ export const dynamic = 'force-dynamic';
  * ver ROLLOUT_FOCUS / isWithinFocus en roles.ts, y PAGE_PERMISSIONS por
  * prefijo en middleware.ts: ninguna de las dos necesitó una entrada nueva).
  *
- * QUÉ ES: la cola de claves REYMA que no tienen código Suplicentro todavía
- * (`reyma_clave_pendiente`, migración 20260909000001). Antes del 2026-09-09
- * una clave sin mapa bloqueaba la factura ENTERA — F173634/CH2PRXN. Ahora la
+ * QUÉ ES: la cola de identificadores REYMA que no tienen SKU todavía
+ * (`reyma_factura_pendiente`, migración 20260909000001). Antes del 2026-09-09
+ * un identificador sin SKU bloqueaba la factura ENTERA — F173634/CH2PRXN. Ahora la
  * factura entra igual (la línea queda en cuarentena, `ml/reyma_factura_carga.py`)
  * y esta pantalla es donde Alexis la resuelve — sigue siendo él quien decide,
  * porque es quien conoce el producto, pero YA NO en el momento de descargar

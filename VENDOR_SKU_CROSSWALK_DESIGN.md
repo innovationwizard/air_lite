@@ -1,6 +1,19 @@
 # Vendor SKU → Suplicentro código: crosswalk design
 
-**Status:** proposal. Nothing here is built. Two decisions at the end are the client's, not mine.
+**Status:** BUILT (2026-09-09 quarantine; 2026-09-12 proposal + confirmation). Kept as the record of the reasoning; where this doc and the addendum below disagree, the addendum wins.
+
+> **Addendum 2026-09-12 — what actually shipped, and three decisions by Jorge that override the body of this doc.**
+>
+> 1. **The app proposes; it never auto-maps.** Not even with two agreeing signals and a unique candidate (§4 of this doc argued for a Fellegi-Sunter "match" band — rejected). Every mapping is written only after a human answers *«Por favor confirme que el identificador X corresponde al SKU Y»* with **Sí**, or types the SKU after **No → «¿Cuál es el SKU correcto?»**.
+> 2. **Alexis is the only confirmer.** No review queue for Jorge or gerencia — "I don't know any codes". The question appears first on the upload screen (one tap, whole invoice loads) and, if skipped, on `/compras-internacionales/facturas/pendientes`.
+> 3. **Vocabulary follows REYMA's document.** The CFDI column is *identificador* (CH2PRXN); ours is *SKU* (77201001). The word "clave" was my own naming from the 2026-08-05 schema (column B of Alexis's workbook) and is wrong twice over — on REYMA's invoice "clave" means the 8-digit *clave SAT*. DB columns (`reyma_products.clave`, `reyma_clave_map`) keep their names; nothing Alexis reads says "clave" or "código" any more.
+>
+> **What proposes the SKU** (`ml/reyma_identificador_propuesta.py`, read-only, pure, tested): (a) REYMA purchase-order lines in Odoo within the invoice window — the strongest signal, and the one that shrinks the search space to "products REYMA was ordered but we haven't mapped"; quantity match adds more; (b) REYMA's own wording in `supplierinfo.product_name`; (c) description structure — pack size (`1 PAQ/500` ↔ `1/500`), size token (`2P`, `9X9`, `16 OZ`), product family with a REYMA↔Odoo synonym table (CHAROLA≡BANDEJA, CONTENEDOR≡PORTACOMIDA, POPOTE≡PAJILLA…). A proposal is shown only when the best candidate clears a threshold **and** is separated from the runner-up; otherwise the page goes straight to «¿Cuál es el SKU correcto?» with the candidates as suggestions. Verified live against production Odoo on 2026-09-12: F173634/CH2PRXN → 77201001 (via PO-P-3025, 1,414 FARDO500, same quantity) and the August precedent CN9X9D4PXN → 77201025 (via supplierinfo wording) both propose correctly, with the sibling "9x9 LISO" correctly behind.
+>
+> **Why Odoo can't just be looked up:** `supplierinfo.product_code` — the field where a vendor SKU belongs — is literally `"0"` on every REYMA row that has it (37/116) and empty on the rest. Nothing in Odoo says "CH2PRXN".
+>
+> **Not built, still open:** sync-time proactive detection (Part 5); the 18-product backlog now surfaces naturally as each product's first invoice arrives, with the PO signal making the proposal near-certain.
+
 **Author:** Claude, 2026-09-02. Triggered by Alexis' bug report on `/inventarios/facturas` (2026-09-01) and his correction of 2026-09-02 ("ya existen en Odoo" — he was right).
 **Scope:** the mapping from a vendor's own SKU/description to our Odoo `default_code`, for REYMA first and every other vendor model after it.
 

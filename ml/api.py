@@ -24,6 +24,8 @@ from reyma_factura_carga import (
     DESTINOS_VALIDOS, DatoInvalido, Mapas, destino_in_band, evaluar,
     guia_de, lineas_de_factura, prefijo_de,
 )
+from reyma_identificador_propuesta import Candidato, a_dict, proponer
+from datetime import timedelta
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
 logger = logging.getLogger(__name__)
@@ -691,6 +693,273 @@ def reyma_productos_buscar():
         return jsonify({'error': f'No se pudo consultar Odoo: {e}'}), 502
 
     return jsonify({'q': q, 'candidatos': de_reyma, 'otros': otros})
+
+
+
+# ── Identificador REYMA → SKU: proponer, verificar, reevaluar ─────────────────
+# Vocabulario (Jorge, 2026-09-12): «identificador» es el código de REYMA tal
+# como lo llama su propia factura (CH2PRXN); «SKU» es el código Suplicentro en
+# Odoo (77201001). En la BD siguen llamándose `clave`/`codigo` — el nombre de
+# columna no se toca; lo que Alexis lee, sí.
+
+REYMA_OC_VENTANA_DIAS = 90   # OCs de REYMA confirmadas hasta 90 días antes de la factura
+REYMA_OC_MARGEN_DIAS = 7     # …y hasta 7 días después (la OC a veces se confirma tarde)
+
+
+def _fecha_iso(texto):
+    """'31/08/2026' (CFDI) o '2026-08-31' → date. None si no se puede."""
+    if not texto:
+        return None
+    t = str(texto).strip()
+    for fmt in ('%d/%m/%Y', '%Y-%m-%d'):
+        try:
+            return datetime.strptime(t[:10], fmt).date()
+        except ValueError:
+            continue
+    return None
+
+
+def _candidatos_reyma_desde_odoo(execute, fecha, mapas):
+    """
+    El universo de candidatos para un identificador nuevo. Dos fuentes, unidas:
+
+      * Líneas de OC de REYMA confirmadas en la ventana de la factura. Lleva la
+        señal 1 (orden, fecha, cantidad, unidad).
+      * TODO el catálogo REYMA en Odoo (`supplierinfo` del partner 23188, ~116
+        filas). Lleva la señal 2 (`product_name`, la palabra de REYMA) y da
+        cobertura cuando el producto se facturó sin OC en la ventana.
+
+    Sólo lectura. Devuelve {sku: Candidato}.
+    """
+    # SKU → identificador ya asignado (para castigar el doble mapeo)
+    identificador_de_sku = {}
+    for ident, skus in mapas.por_clave.items():
+        for sku in skus:
+            identificador_de_sku.setdefault(sku, ident)
+
+    dominio_oc = [['partner_id', '=', REYMA_PARTNER_ID], ['state', 'in', ['purchase', 'done']]]
+    if fecha:
+        desde = (fecha - timedelta(days=REYMA_OC_VENTANA_DIAS)).isoformat()
+        hasta = (fecha + timedelta(days=REYMA_OC_MARGEN_DIAS)).isoformat()
+        dominio_oc += [['date_order', '>=', desde], ['date_order', '<=', hasta + ' 23:59:59']]
+    lineas_oc = execute(
+        'purchase.order.line', 'search_read', dominio_oc,
+        fields=['product_id', 'order_id', 'product_qty', 'product_uom', 'date_order'],
+        limit=2000, order='date_order desc',
+    )
+
+    supplier_rows = execute(
+        'product.supplierinfo', 'search_read',
+        [['partner_id', '=', REYMA_PARTNER_ID]],
+        fields=['product_name', 'product_tmpl_id'], limit=1000,
+        context={'active_test': False},
+    )
+    nombre_reyma_por_tmpl = {}
+    for r in supplier_rows:
+        if r.get('product_tmpl_id') and r.get('product_name'):
+            nombre_reyma_por_tmpl.setdefault(r['product_tmpl_id'][0], r['product_name'])
+    tmpl_ids = sorted({r['product_tmpl_id'][0] for r in supplier_rows if r.get('product_tmpl_id')})
+
+    prod_ids = sorted({ln['product_id'][0] for ln in lineas_oc if ln.get('product_id')})
+    dominio_prod = ['|', ['id', 'in', prod_ids], ['product_tmpl_id', 'in', tmpl_ids]]
+    productos = execute(
+        'product.product', 'search_read', dominio_prod,
+        fields=['default_code', 'name', 'uom_id', 'volume', 'active', 'product_tmpl_id'],
+        limit=2000, context={'active_test': False},
+    )
+
+    por_sku = {}
+    por_pid = {}
+    for p in productos:
+        sku = p.get('default_code')
+        if not sku:
+            continue
+        tmpl = p['product_tmpl_id'][0] if p.get('product_tmpl_id') else None
+        c = Candidato(
+            sku=sku, nombre_odoo=p['name'],
+            nombre_reyma=nombre_reyma_por_tmpl.get(tmpl),
+            uom=p['uom_id'][1] if p.get('uom_id') else None,
+            cubicaje=float(p.get('volume') or 0),
+            activo=bool(p.get('active', True)),
+            odoo_product_id=p['id'],
+            ya_mapeado_a=identificador_de_sku.get(sku),
+        )
+        por_sku[sku] = c
+        por_pid[p['id']] = c
+
+    # La OC más reciente por producto manda (la lista viene ordenada desc).
+    for ln in lineas_oc:
+        pid = ln['product_id'][0] if ln.get('product_id') else None
+        c = por_pid.get(pid)
+        if c is None or c.oc:
+            continue
+        c.oc = ln['order_id'][1].split(' (')[0] if ln.get('order_id') else None
+        c.oc_fecha = str(ln.get('date_order') or '')[:10] or None
+        c.oc_cantidad = float(ln.get('product_qty') or 0) or None
+        c.oc_uom = ln['product_uom'][1] if ln.get('product_uom') else None
+
+    return por_sku
+
+
+@app.route('/reyma/identificador/proponer', methods=['POST'])
+def reyma_identificador_proponer():
+    """
+    Propone el SKU para un identificador REYMA que la app no conoce, para que
+    Alexis lo CONFIRME — nunca lo asigna (regla de Jorge 2026-09-12: ningún
+    mapeo sin confirmación humana; Alexis es la única fuente autorizada).
+
+    Entrada: {identificador, descripcion, fecha?, cantidad?, unidad?}
+    Salida:  {propuesta: {...} | null, otras: [...], ya_asignado: sku | null}
+
+    `propuesta` sale sólo con un candidato claro y despegado del siguiente
+    (ver `reyma_identificador_propuesta.proponer`). `otras` son las
+    sugerencias para «¿Cuál es el SKU correcto?». Si Odoo no responde, 502 —
+    la pantalla cae al camino manual, nunca inventa.
+
+    A propósito NO se llama desde `/reyma/factura/preview`: ese camino no
+    depende de Odoo y tiene que seguir así.
+    """
+    body = request.get_json(silent=True) or {}
+    identificador = str(body.get('identificador') or '').strip()
+    descripcion = str(body.get('descripcion') or '').strip()
+    if not identificador:
+        return jsonify({'error': 'identificador requerido'}), 400
+
+    mapas = _mapas_reyma()
+    ya = mapas.por_clave.get(identificador)
+    if ya and len(ya) == 1:
+        return jsonify({'identificador': identificador, 'ya_asignado': next(iter(ya)),
+                        'propuesta': None, 'otras': []})
+
+    fecha = _fecha_iso(body.get('fecha'))
+    cantidad = body.get('cantidad')
+    try:
+        cantidad = float(cantidad) if cantidad not in (None, '') else None
+    except (TypeError, ValueError):
+        cantidad = None
+
+    try:
+        execute = _odoo_conectar()
+        candidatos = _candidatos_reyma_desde_odoo(execute, fecha, mapas)
+    except Exception as e:  # noqa: BLE001 — Odoo caído/timeout no debe tumbar el worker
+        logger.warning('reyma/identificador/proponer: Odoo falló: %s', e)
+        return jsonify({'error': f'No se pudo consultar Odoo: {e}'}), 502
+
+    r = proponer(descripcion, cantidad, list(candidatos.values()))
+    return jsonify({
+        'identificador': identificador,
+        'ya_asignado': None,
+        'propuesta': a_dict(r['propuesta']) if r['propuesta'] else None,
+        'otras': [a_dict(c) for c in r['otras']],
+        'candidatos_evaluados': len(candidatos),
+    })
+
+
+@app.route('/reyma/sku/verificar', methods=['GET'])
+def reyma_sku_verificar():
+    """
+    ¿Existe este SKU en Odoo? — el paso después de que Alexis contesta «No» y
+    escribe el SKU correcto a mano. Se le muestra el nombre Odoo del producto
+    antes de guardar nada, y se le avisa si el SKU no es de REYMA o si ya está
+    asignado a otro identificador. Sólo lectura.
+
+    Query: `sku`. 404 si no existe.
+    """
+    sku = (request.args.get('sku') or '').strip()
+    if not sku:
+        return jsonify({'error': 'sku requerido'}), 400
+    try:
+        execute = _odoo_conectar()
+        prods = execute(
+            'product.product', 'search_read', [['default_code', '=', sku]],
+            fields=['default_code', 'name', 'uom_id', 'volume', 'active', 'product_tmpl_id'],
+            limit=2, context={'active_test': False},
+        )
+        if not prods:
+            return jsonify({'error': f'El SKU {sku} no existe en Odoo.', 'sku': sku}), 404
+        p = prods[0]
+        tmpl = p['product_tmpl_id'][0] if p.get('product_tmpl_id') else None
+        de_reyma = execute(
+            'product.supplierinfo', 'search_count',
+            [['partner_id', '=', REYMA_PARTNER_ID], ['product_tmpl_id', '=', tmpl]],
+        ) > 0 if tmpl else False
+        if not de_reyma:
+            de_reyma = execute(
+                'purchase.order.line', 'search_count',
+                [['partner_id', '=', REYMA_PARTNER_ID], ['product_id', '=', p['id']]],
+            ) > 0
+    except Exception as e:  # noqa: BLE001
+        logger.warning('reyma/sku/verificar: Odoo falló: %s', e)
+        return jsonify({'error': f'No se pudo consultar Odoo: {e}'}), 502
+
+    mapas = _mapas_reyma()
+    asignado_a = next((ident for ident, skus in mapas.por_clave.items() if sku in skus), None)
+    return jsonify({
+        'sku': p['default_code'],
+        'nombre_odoo': p['name'],
+        'uom': p['uom_id'][1] if p.get('uom_id') else None,
+        'cubicaje': float(p.get('volume') or 0),
+        'activo': bool(p.get('active', True)),
+        'odoo_product_id': p['id'],
+        'es_de_reyma': bool(de_reyma),
+        'ya_asignado_a': asignado_a,
+    })
+
+
+@app.route('/reyma/factura/reevaluar', methods=['POST'])
+def reyma_factura_reevaluar():
+    """
+    Vuelve a evaluar una factura YA leída (el `parse` que quedó en
+    `reyma_factura_staging`) contra los mapas de hoy — después de que Alexis
+    confirmó un identificador en la misma pantalla de carga, antes de darle
+    Cargar. Corre la MISMA `evaluar()` que el preview; sólo cambia que las
+    líneas vienen del staging y no del PDF.
+
+    Entrada: {archivo, sha256?, cabecera: {factura, folio_fiscal, fecha, ...},
+              lineas: [...], destino?}
+    Salida:  {guia, filas, retenidas, errores} — la forma del preview.
+    """
+    body = request.get_json(silent=True) or {}
+    cab_in = body.get('cabecera') or {}
+    lineas = body.get('lineas')
+    archivo = str(body.get('archivo') or '')
+    if not archivo or not isinstance(lineas, list) or not cab_in.get('factura'):
+        return jsonify({'error': 'se esperaba archivo, cabecera.factura y lineas'}), 400
+
+    try:
+        guia = guia_de(archivo)
+        prefijo = prefijo_de(guia)
+    except DatoInvalido as e:
+        return jsonify({'error': str(e)}), 422
+
+    declarado = (body.get('destino') or '').strip() or None
+    if declarado and declarado not in DESTINOS_VALIDOS:
+        return jsonify({'error': f'destino inválido: {declarado}'}), 400
+    in_band = destino_in_band(cab_in.get('observ_destino'))
+    provisional = declarado or in_band or DESTINOS_VALIDOS[0]
+
+    cab = {
+        'archivo': archivo, 'factura': cab_in.get('factura'), 'pv': cab_in.get('pv'),
+        'folio_fiscal': cab_in.get('folio_fiscal'), 'fecha': cab_in.get('fecha'),
+        'hora': cab_in.get('hora'), 't_cambio': cab_in.get('t_cambio'),
+        'oc': cab_in.get('oc_in_band'), 'op': cab_in.get('op'), 'conf': cab_in.get('conf'),
+        'observ_destino': cab_in.get('observ_destino'),
+        'sha256': body.get('sha256'), 'lineas': lineas,
+    }
+    try:
+        resultado = evaluar(
+            lineas_de_factura(cab), {prefijo: provisional}, {},
+            'preview (sin autor — el write lo hace la app)', _mapas_reyma(),
+        )
+    except DatoInvalido as e:
+        return jsonify({'error': str(e)}), 422
+
+    return jsonify({
+        'guia': guia,
+        'filas': resultado.filas,
+        'retenidas': resultado.retenidas,
+        'errores': resultado.errores,
+    })
 
 
 @app.route('/reabastecimiento/pendiente-reserva', methods=['GET'])

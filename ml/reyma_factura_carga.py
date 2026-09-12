@@ -207,8 +207,10 @@ def evaluar(lineas, destinos: dict, etas: dict, autor: str, mapas: Mapas) -> Res
             # 2026-09-09: ya no detiene la factura (ver docstring del módulo).
             # Se retiene con lo suficiente para reconstruir la línea el día que
             # Alexis resuelva la clave en /inventarios/facturas/pendientes.
+            # El texto lo lee Alexis: vocabulario del documento de REYMA
+            # («identificador»), nunca el de la BD («clave» — decisión 2026-09-12).
             r.retenidas.append(_retenida(
-                guia, ln, 'sin mapa en reyma_products.clave — pendiente de asignar',
+                guia, ln, 'identificador sin SKU asignado — pendiente de confirmar',
                 tipo='clave_sin_mapa'))
             continue
         if len(codigos) > 1:

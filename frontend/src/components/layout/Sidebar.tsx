@@ -245,7 +245,7 @@ const allNavGroups: NavGroup[] = [
         name: 'Facturas pendientes',
         href: '/compras-internacionales/facturas/pendientes',
         icon: PackageSearch,
-        subtitle: 'Claves nuevas de REYMA sin código todavía',
+        subtitle: 'Identificadores de REYMA sin SKU todavía',
       },
     ],
   },

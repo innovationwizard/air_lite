@@ -47,8 +47,8 @@ export async function POST(request: Request) {
 
   const clave = typeof body.clave === 'string' ? body.clave.trim() : '';
   const codigo = typeof body.codigo === 'string' ? body.codigo.trim() : '';
-  if (!clave) return badRequest('clave requerida');
-  if (!codigo) return badRequest('codigo requerido');
+  if (!clave) return badRequest('identificador requerido');
+  if (!codigo) return badRequest('SKU requerido');
 
   const descripcion = typeof body.descripcion === 'string' ? body.descripcion.slice(0, 300) : null;
   const nombreOdoo = typeof body.nombreOdoo === 'string' ? body.nombreOdoo.slice(0, 200) : null;
@@ -115,7 +115,7 @@ export async function POST(request: Request) {
     console.error('[clave-pendiente/resolver] ML_SERVICE_URL / ML_SERVICE_API_KEY sin configurar');
     return NextResponse.json({
       ok: true, clave, codigo, aplicadas: 0, siguenPendientes: pendientes.length,
-      aviso: 'La clave quedó resuelta, pero el servicio que aplica las líneas en cola no está '
+      aviso: 'El identificador quedó asignado, pero el servicio que aplica las líneas en cola no está '
            + 'configurado. Van a quedar pendientes hasta que se reintente.',
     });
   }
@@ -147,7 +147,7 @@ export async function POST(request: Request) {
     console.error('[clave-pendiente/resolver] reintentar falló:', e);
     return NextResponse.json({
       ok: true, clave, codigo, aplicadas: 0, siguenPendientes: pendientes.length,
-      aviso: `La clave quedó resuelta, pero no se pudieron aplicar las líneas en cola ahora `
+      aviso: `El identificador quedó asignado, pero no se pudieron aplicar las líneas en cola ahora `
            + `(${e instanceof Error ? e.message : 'error de red'}). Reintentá desde esta pantalla.`,
     });
   }
@@ -162,7 +162,7 @@ export async function POST(request: Request) {
       console.error('[clave-pendiente/resolver] reyma_facturas_pdf:', errUpsert);
       return NextResponse.json({
         ok: true, clave, codigo, aplicadas: 0, siguenPendientes: pendientes.length,
-        aviso: `La clave quedó resuelta, pero no se pudieron escribir las líneas: ${errUpsert.message}. `
+        aviso: `El identificador quedó asignado, pero no se pudieron escribir las líneas: ${errUpsert.message}. `
              + 'Reintentá desde esta pantalla.',
       });
     }

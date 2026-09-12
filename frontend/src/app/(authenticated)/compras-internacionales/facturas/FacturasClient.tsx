@@ -5,6 +5,7 @@ import {
   AlertTriangle, Check, ChevronDown, ChevronRight, FileUp, Loader2, Truck, X,
 } from 'lucide-react';
 import { DESTINOS, nombreDestino } from '@/lib/reyma/destinos';
+import { ConfirmarIdentificador, type Resuelto } from './ConfirmarIdentificador';
 import { diasHabilesDe, sumarDiasHabiles, type EtaConfig } from '../reyma-vivo/eta';
 
 /**
@@ -32,6 +33,7 @@ import { diasHabilesDe, sumarDiasHabiles, type EtaConfig } from '../reyma-vivo/e
 interface Retenida {
   guia: string; tipo?: string; identificador: string; descripcion: string;
   cantidad: number; unidad: string; importe: number | null; motivo: string;
+  fecha?: string | null;
 }
 interface LineaCruda {
   linea: number; cantidad: number; unidad: string; identificador: string;
@@ -196,6 +198,38 @@ export function FacturasClient({ etaConfig }: { etaConfig: EtaConfig }) {
     }
   }, [actualizar, recargarSerie]);
 
+  /**
+   * Alexis confirmó un identificador en la tarjeta (Sí, o SKU a mano). El
+   * mapeo ya se escribió; ahora el veredicto del staging se vuelve a evaluar
+   * con los mapas de hoy para que la línea pase de retenida a cargable — y
+   * Cargar escriba la factura ENTERA. Si esto falla, la línea sigue retenida
+   * y cae a Facturas pendientes al cargar: nada se pierde.
+   */
+  const reevaluar = useCallback(async (t: Tarjeta, r: Resuelto) => {
+    if (!t.ticket) return;
+    try {
+      const resp = await fetch('/api/compras-internacionales/reyma/factura/reevaluar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ticket: t.ticket, destino: t.destino }),
+      });
+      const j = await resp.json().catch(() => ({}));
+      if (!resp.ok) {
+        actualizar(t.id, { error: j.error ?? `HTTP ${resp.status}` });
+        return;
+      }
+      const parse = j.parse as Parse;
+      const bloqueada = !parse.cuadra || parse.errores.length > 0;
+      actualizar(t.id, {
+        parse,
+        estado: bloqueada ? 'bloqueada' : 'lista',
+        error: bloqueada ? (parse.errores[0] ?? undefined) : (r.aviso ?? undefined),
+      });
+    } catch (e) {
+      actualizar(t.id, { error: e instanceof Error ? e.message : 'error de red' });
+    }
+  }, [actualizar]);
+
   const pendientes = tarjetas.filter((t) => t.estado !== 'cargada');
   const reciboDelDia = tarjetas.filter((t) => t.estado === 'cargada');
 
@@ -257,6 +291,7 @@ export function FacturasClient({ etaConfig }: { etaConfig: EtaConfig }) {
           etaConfig={etaConfig}
           onCambio={(c) => actualizar(t.id, c)}
           onGuardar={() => void guardar(t)}
+          onIdentificadorResuelto={(r) => void reevaluar(t, r)}
           onDescartar={() => setTarjetas((prev) => prev.filter((x) => x.id !== t.id))}
         />
       ))}
@@ -278,8 +313,8 @@ export function FacturasClient({ etaConfig }: { etaConfig: EtaConfig }) {
                   {t.eta ? ` · llega ${fechaCorta(t.eta)}` : ' · sin ETA anotado'}
                   {t.recibo && t.recibo.pendientes > 0 && (
                     <span className="ml-1 font-medium text-amber-700">
-                      · {t.recibo.pendientes} clave{t.recibo.pendientes === 1 ? '' : 's'} nueva
-                      {t.recibo.pendientes === 1 ? '' : 's'} en cuarentena
+                      · {t.recibo.pendientes} identificador{t.recibo.pendientes === 1 ? '' : 'es'} sin SKU,
+                      en Facturas pendientes
                     </span>
                   )}
                 </span>
@@ -297,13 +332,14 @@ export function FacturasClient({ etaConfig }: { etaConfig: EtaConfig }) {
 /* ─────────────────────────────────────────────────────────────────────────── */
 
 function TarjetaFactura({
-  t, etaConfig, onCambio, onGuardar, onDescartar,
+  t, etaConfig, onCambio, onGuardar, onDescartar, onIdentificadorResuelto,
 }: {
   t: Tarjeta;
   etaConfig: EtaConfig;
   onCambio: (c: Partial<Tarjeta>) => void;
   onGuardar: () => void;
   onDescartar: () => void;
+  onIdentificadorResuelto: (r: Resuelto) => void;
 }) {
   const cab = t.parse?.cabecera ?? null;
   const fechaFactura = cfdiAIso(cab?.fecha);
@@ -403,7 +439,7 @@ function TarjetaFactura({
           <table className="w-full text-[12px]">
             <thead className="bg-slate-50 text-slate-600">
               <tr>
-                <th className="px-2 py-1 text-left font-semibold">Clave</th>
+                <th className="px-2 py-1 text-left font-semibold">Identificador</th>
                 <th className="px-2 py-1 text-right font-semibold">Cant.</th>
                 <th className="px-2 py-1 text-left font-semibold">Un.</th>
                 <th className="px-2 py-1 text-right font-semibold">Importe</th>
@@ -440,13 +476,31 @@ function TarjetaFactura({
               </li>
             ))}
           </ul>
+          {/* Identificador nuevo de REYMA: se pregunta ACÁ, con propuesta, un
+              toque. Si Alexis no contesta ahora, la línea cae a Facturas
+              pendientes al cargar y la pregunta lo espera ahí (decisión
+              2026-09-12: en las dos pantallas, esta primero). */}
+          {t.parse.retenidas.filter((r) => r.tipo === 'clave_sin_mapa').map((r) => (
+            <div key={r.identificador} className="mt-2">
+              <ConfirmarIdentificador
+                identificador={r.identificador}
+                descripcion={r.descripcion}
+                fecha={r.fecha ?? cab?.fecha ?? null}
+                cantidad={r.cantidad}
+                unidad={r.unidad}
+                onResuelto={onIdentificadorResuelto}
+                onError={(texto) => onCambio({ error: texto })}
+              />
+            </div>
+          ))}
           {t.parse.retenidas.some((r) => r.tipo === 'clave_sin_mapa') && (
             <p className="mt-1.5 text-amber-800">
-              Las claves nuevas de REYMA quedan en{' '}
+              Si no lo confirmás ahora, la factura se carga igual sin esa línea, y la pregunta te
+              espera en{' '}
               <a href="/compras-internacionales/facturas/pendientes" className="font-semibold underline">
                 Facturas pendientes
               </a>{' '}
-              — se cargan solas apenas las identifiques ahí, no hace falta volver a mandar el PDF.
+              — no hace falta volver a mandar el PDF.
             </p>
           )}
         </div>

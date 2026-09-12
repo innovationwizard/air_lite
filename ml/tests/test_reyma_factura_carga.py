@@ -268,7 +268,7 @@ class TestMapeoDeClaves:
         assert r.filas == [] and r.errores == []
         (ret,) = r.retenidas
         assert ret['tipo'] == 'clave_sin_mapa'
-        assert 'sin mapa en reyma_products.clave' in ret['motivo']
+        assert 'identificador sin SKU asignado' in ret['motivo']
         # Lo suficiente para reconstruir la línea el día que se resuelva.
         assert ret['identificador'] == 'DESCONOCIDAXN'
         assert ret['folio_fiscal'] and ret['factura'] and ret['fecha'] and ret['archivo']

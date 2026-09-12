@@ -204,7 +204,7 @@ export async function POST(request: Request) {
       console.error('[reyma/factura/cargar] reyma_factura_pendiente:', errPendiente);
       return NextResponse.json({
         error: `Las líneas conocidas se cargaron, pero no se pudo poner en cola `
-             + `la(s) clave(s) sin mapa: ${errPendiente.message}. Reintentá la carga.`,
+             + `el/los identificador(es) sin SKU: ${errPendiente.message}. Reintentá la carga.`,
       }, { status: 500 });
     }
   }
