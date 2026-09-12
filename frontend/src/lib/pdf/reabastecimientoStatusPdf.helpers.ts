@@ -138,7 +138,7 @@ export function reabastecimientoStatusFilename(snapshot: SnapshotPayload): strin
 // ─────────────────────────────────────────────────────────────────────────
 
 const ETIQUETAS_ORDEN: Record<string, string> = {
-  cod: 'código', desc: 'descripción', prov: 'proveedor', exist: 'existencia',
+  cod: 'código', desc: 'descripción', prov: 'proveedor', abc: 'ABC', exist: 'existencia',
   patio: 'patio', doh: 'DOH', trans: 'tránsito', pending: 'pendiente',
   adic: 'adicional', p6: 'prom. 6m', p3: 'prom. 3m', mtd: 'MTD', sug: 'sugerido',
   origenExist: 'existencia de la bodega que abastece', origenDoh: 'DOH de la bodega que abastece',
@@ -156,6 +156,7 @@ export function describeFiltros(filtros: Filtros, orden: Orden | null): string {
   if (filtros.soloCriticos) partes.push('solo críticos (DOH < 3)');
   if (filtros.soloEnAlza) partes.push('solo en alza');
   if (filtros.soloComprables) partes.push('solo comprables');
+  if (filtros.abc && filtros.abc.length > 0) partes.push(`clase ABC ${filtros.abc.join('/')}`);
   for (const [clave, rango] of Object.entries(filtros.rangos ?? {})) {
     if (!rango) continue;
     partes.push(`${ETIQUETAS_ORDEN[clave] ?? clave} ${rango.operador === 'lte' ? '≤' : '≥'} ${rango.valor}`);

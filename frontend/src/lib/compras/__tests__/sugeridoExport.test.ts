@@ -220,6 +220,14 @@ describe('describirOrden / describirFiltros — la respuesta a D4', () => {
   });
 });
 
+describe('ABC en la hoja Origen', () => {
+  it('el filtro por clase y el orden por ABC se describen', () => {
+    expect(describirFiltros({ abc: ['A', 'B'] })).toContain('Clase ABC: A, B');
+    expect(describirFiltros({ abc: [] })).toEqual([]);
+    expect(describirOrden({ clave: 'abc', dir: 'asc' })).toMatch(/^ABC/);
+  });
+});
+
 describe('hoja Origen — de dónde salió cada número', () => {
   const texto = (hoja: { rows: (string | number | null)[][] }) =>
     hoja.rows.map((r) => r.map((c) => String(c ?? '')).join(' | ')).join('\n');

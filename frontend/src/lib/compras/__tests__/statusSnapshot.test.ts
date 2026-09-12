@@ -59,6 +59,13 @@ describe('readSnapshotOrden', () => {
     expect(readSnapshotOrden({ clave: 'inventada', dir: 'asc' })).toMatch(/clave/);
   });
 
+  it('accepts the ABC chip filter and the abc sort key; rejects a class that is not A-D', () => {
+    expect(readSnapshotFiltros({ abc: ['A', 'C'] })).toEqual({ abc: ['A', 'C'], rangos: {} });
+    expect(readSnapshotFiltros({ abc: ['A', 'E'] })).toMatch(/abc/);
+    expect(readSnapshotFiltros({ abc: 'A' })).toMatch(/abc/);
+    expect(readSnapshotOrden({ clave: 'abc', dir: 'asc' })).toEqual({ clave: 'abc', dir: 'asc' });
+  });
+
   it('accepts the W18 origen keys, so a snapshot sorted by «DOH San José» round-trips', () => {
     expect(readSnapshotOrden({ clave: 'origenDoh', dir: 'desc' })).toEqual({ clave: 'origenDoh', dir: 'desc' });
     expect(readSnapshotFiltros({ rangos: { origenExist: { operador: 'gte', valor: 100 } } }))

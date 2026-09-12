@@ -9,6 +9,7 @@ import { MAX_MANUAL_QTY } from '@/lib/compras/qty';
 import { type Tendencia, type Alerta, SIN_REFERENCIA_ANIO_ANTERIOR } from '@/lib/compras/tendencia';
 import { tablaATsv } from '@/lib/compras/tabla';
 import {
+  CLASES_ABC, type ClaseAbc,
   type ClaveOrden, type ClaveOrdenNumerica, type FiltroRango, type OperadorRango,
   type Orden, siguienteOrden, vista,
 } from '@/lib/compras/tabla';
@@ -265,6 +266,12 @@ export function VivoClient() {
   const [onlyCrit, setOnlyCrit] = useState(false);
   const [onlyAlza, setOnlyAlza] = useState(false);
   const [onlyComprables, setOnlyComprables] = useState(false);
+  // «no puedo ordenar o filtrar ABC» (Wilmer) — fichas A/B/C/D, multi-selección,
+  // vacío = todas. Se combina con Y con el resto, como cualquier filtro.
+  const [abcSel, setAbcSel] = useState<ClaseAbc[]>([]);
+  const toggleAbc = useCallback((c: ClaseAbc) => {
+    setAbcSel((prev) => (prev.includes(c) ? prev.filter((x) => x !== c) : [...prev, c]));
+  }, []);
   // W16/W17 — null = el orden por defecto con el que la página siempre abrió.
   const [orden, setOrden] = useState<Orden | null>(null);
   // Filtro de rango (2026-09-03) — «que pueda hacer subconjuntos… solo los que estén en X número o menos».
@@ -436,10 +443,11 @@ export function VivoClient() {
       soloCriticos: onlyCrit,
       soloEnAlza: onlyAlza,
       soloComprables: onlyComprables,
+      abc: abcSel,
       rangos,
     },
     orden,
-  ), [payload, q, prov, onlySug, onlyCrit, onlyAlza, onlyComprables, rangos, orden]);
+  ), [payload, q, prov, onlySug, onlyCrit, onlyAlza, onlyComprables, abcSel, rangos, orden]);
 
   const onSort = useCallback((k: ClaveOrden) => {
     setOrden((actual) => siguienteOrden(actual, k));
@@ -755,6 +763,22 @@ export function VivoClient() {
               <input type="checkbox" checked={onlyComprables}
                      onChange={(e) => setOnlyComprables(e.target.checked)} /> Solo comprables
             </label>
+            {/* Fichas ABC: clic enciende/apaga una clase; ninguna encendida =
+                todas. Apagar las cuatro no vacía la tabla a propósito. */}
+            <div className="inline-flex items-center gap-1" role="group" aria-label="Filtrar por clase ABC"
+                 title={`${COL_TIP.abc} Clic para mostrar sólo esas clases; ninguna encendida = todas.`}>
+              <span className="text-xs text-gray-600 mr-0.5">ABC</span>
+              {CLASES_ABC.map((c) => {
+                const on = abcSel.includes(c);
+                return (
+                  <button key={c} type="button" aria-pressed={on} onClick={() => toggleAbc(c)}
+                          className={`w-7 h-7 rounded-full text-xs font-bold border transition ${
+                            on ? `${ABC_PILL[c]} border-current` : 'bg-white text-gray-400 border-gray-200 hover:text-gray-700'}`}>
+                    {c}
+                  </button>
+                );
+              })}
+            </div>
             <div className="ml-auto flex items-center gap-2">
               <CopiarTabla filas={list} bodega={bodega} />
               {/*
@@ -775,7 +799,7 @@ export function VivoClient() {
                   proveedorLabel,
                   filtros: {
                     texto: q, proveedor: prov, soloConSugerido: onlySug, soloCriticos: onlyCrit,
-                    soloEnAlza: onlyAlza, soloComprables: onlyComprables, rangos,
+                    soloEnAlza: onlyAlza, soloComprables: onlyComprables, abc: abcSel, rangos,
                   },
                   orden,
                   coberturaDias: payload?.meta.coberturaDias ?? COBERTURA_DEFAULT_DIAS,
@@ -791,7 +815,7 @@ export function VivoClient() {
                 bodega={bodega}
                 filtros={{
                   texto: q, proveedor: prov, soloConSugerido: onlySug, soloCriticos: onlyCrit,
-                  soloEnAlza: onlyAlza, soloComprables: onlyComprables, rangos,
+                  soloEnAlza: onlyAlza, soloComprables: onlyComprables, abc: abcSel, rangos,
                 }}
                 orden={orden}
                 visibleCount={list.length}
@@ -832,7 +856,8 @@ export function VivoClient() {
                 <thead className="sticky top-0 bg-white z-10">
                   <tr className="text-[11px] uppercase tracking-wide text-gray-500">
                     <Th left tip={COL_TIP.cod} sortKey="cod" orden={orden} onSort={onSort}>Código</Th>
-                    <Th tip={COL_TIP.abc}>ABC</Th>
+                    <Th tip={`${COL_TIP.abc} Clic para ordenar A→D; otro clic, D→A.`}
+                        sortKey="abc" orden={orden} onSort={onSort}>ABC</Th>
                     <Th left tip={COL_TIP.desc} sortKey="prov" orden={orden} onSort={onSort}>Descripción / Proveedor</Th>
                     <Th tip={COL_TIP.exist} sortKey="exist" orden={orden} onSort={onSort}
                         filtroKey="exist" rango={rangos.exist} onRango={onRango}>Exist. neta</Th>

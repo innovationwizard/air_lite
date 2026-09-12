@@ -169,7 +169,7 @@ export function etiquetaTendencia(t: Tendencia, a: Alerta): string {
 
 /** Nombres de columna para describir el orden activo en la hoja «Origen». */
 const ETIQUETA_ORDEN: Record<ClaveOrden, string> = {
-  cod: 'Código', desc: 'Descripción', prov: 'Proveedor',
+  cod: 'Código', desc: 'Descripción', prov: 'Proveedor', abc: 'ABC',
   exist: 'Exist. neta', patio: 'Patio', doh: 'DOH', trans: 'Tránsito',
   pending: 'Pend. reserva', adic: 'Adic.', p6: 'Ord. 6m', p3: 'Ord. 3m',
   mtd: 'Mes en curso', sug: 'Sugerido',
@@ -197,6 +197,7 @@ export function describirFiltros(f: Filtros): string[] {
   if (f.soloCriticos) out.push('Solo quiebre (DOH < 3)');
   if (f.soloEnAlza) out.push('Solo en alza (dos alzas seguidas)');
   if (f.soloComprables) out.push('Solo comprables (purchase_ok en Odoo)');
+  if (f.abc && f.abc.length > 0) out.push(`Clase ABC: ${f.abc.join(', ')}`);
   for (const [clave, r] of Object.entries(f.rangos ?? {})) {
     if (!r) continue;
     const op = r.operador === 'lte' ? '≤' : '≥';

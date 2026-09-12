@@ -7,7 +7,7 @@ import {
 function fila(over: Partial<FilaOrdenable> & { cod: string }): FilaOrdenable {
   return {
     desc: '', prov: '', provGroupId: null, exist: 0, patio: 0, doh: 0, trans: 0, pending: null,
-    adic: 0, p6: 0, p3: 0, mtd: null, sug: 0, origen: null,
+    adic: 0, p6: 0, p3: 0, mtd: null, sug: 0, origen: null, abc: 'A',
     flags: { tendenciaCreciente: false },
     purchaseOk: true,
     ...over,
@@ -210,6 +210,36 @@ describe('W18 — columnas de la bodega que abastece', () => {
   it('las claves nuevas son numéricas y arrancan descendentes', () => {
     expect(esTexto('origenExist')).toBe(false);
     expect(dirInicial('origenDoh')).toBe('desc');
+  });
+});
+
+describe('ABC — «no puedo ordenar o filtrar ABC» (2026-09-11)', () => {
+  const filas = [
+    fila({ cod: 'X', abc: 'C' }),
+    fila({ cod: 'Y', abc: 'A' }),
+    fila({ cod: 'Z', abc: 'D' }),
+    fila({ cod: 'W', abc: 'B' }),
+  ];
+
+  it('es una clave de texto: arranca A→D y el segundo clic invierte a D→A', () => {
+    expect(esTexto('abc')).toBe(true);
+    expect(dirInicial('abc')).toBe('asc');
+    expect(ordenar(filas, { clave: 'abc', dir: 'asc' }).map((f) => f.cod)).toEqual(['Y', 'W', 'X', 'Z']);
+    expect(ordenar(filas, { clave: 'abc', dir: 'desc' }).map((f) => f.cod)).toEqual(['Z', 'X', 'W', 'Y']);
+  });
+
+  it('las fichas dejan sólo las clases encendidas', () => {
+    expect(filtrar(filas, { abc: ['A', 'B'] }).map((f) => f.cod).sort()).toEqual(['W', 'Y']);
+  });
+
+  it('ninguna ficha encendida = todas, no ninguna', () => {
+    expect(filtrar(filas, { abc: [] })).toHaveLength(4);
+    expect(filtrar(filas, {})).toHaveLength(4);
+  });
+
+  it('se combina con Y con los demás filtros', () => {
+    const conSug = [fila({ cod: 'P', abc: 'A', sug: 5 }), fila({ cod: 'Q', abc: 'A', sug: 0 })];
+    expect(filtrar(conSug, { abc: ['A'], soloConSugerido: true }).map((f) => f.cod)).toEqual(['P']);
   });
 });
 

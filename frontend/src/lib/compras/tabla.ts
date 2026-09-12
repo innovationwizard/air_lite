@@ -35,8 +35,16 @@ export interface FilaOrdenable {
   sug: number;
   /** W18 — la bodega que abastece; null = sin origen o el producto no está allá. */
   origen: { exist: number; doh: number } | null;
+  /** ABC (Wilmer, 2026-09-03) — ordenable y filtrable desde 2026-09-11: «no puedo ordenar o filtrar ABC». */
+  abc: ClaseAbc;
   flags: { tendenciaCreciente: boolean };
   purchaseOk: boolean;
+}
+
+export const CLASES_ABC = ['A', 'B', 'C', 'D'] as const;
+export type ClaseAbc = typeof CLASES_ABC[number];
+export function esClaseAbc(v: unknown): v is ClaseAbc {
+  return typeof v === 'string' && (CLASES_ABC as readonly string[]).includes(v);
 }
 
 /**
@@ -44,7 +52,7 @@ export interface FilaOrdenable {
  * el encabezado cambia de texto sin que cambie el orden.
  */
 export type ClaveOrden =
-  | 'cod' | 'desc' | 'prov'
+  | 'cod' | 'desc' | 'prov' | 'abc'
   | 'exist' | 'patio' | 'doh' | 'trans' | 'pending' | 'adic'
   | 'p6' | 'p3' | 'mtd' | 'sug'
   // W18 — ordenar por «DOH San José» es preguntar «¿cuáles me cubre un
@@ -52,7 +60,7 @@ export type ClaveOrden =
   | 'origenExist' | 'origenDoh';
 
 /** Las columnas numéricas de `ClaveOrden` — las únicas que aceptan un filtro de rango. */
-export type ClaveOrdenNumerica = Exclude<ClaveOrden, 'cod' | 'desc' | 'prov'>;
+export type ClaveOrdenNumerica = Exclude<ClaveOrden, 'cod' | 'desc' | 'prov' | 'abc'>;
 
 export type Direccion = 'asc' | 'desc';
 
@@ -61,7 +69,9 @@ export interface Orden {
   dir: Direccion;
 }
 
-const TEXTO: ReadonlySet<ClaveOrden> = new Set<ClaveOrden>(['cod', 'desc', 'prov']);
+// `abc` es texto a propósito: A→D es el orden alfabético, y una columna de
+// cuatro letras no admite un filtro ≤/≥ — su filtro son las fichas A/B/C/D.
+const TEXTO: ReadonlySet<ClaveOrden> = new Set<ClaveOrden>(['cod', 'desc', 'prov', 'abc']);
 
 /** ¿La columna se ordena como texto? Las demás son numéricas. */
 export function esTexto(clave: ClaveOrden): boolean {
@@ -119,6 +129,7 @@ function valorTexto(f: FilaOrdenable, clave: ClaveOrden): string {
     case 'cod': return f.cod;
     case 'desc': return f.desc;
     case 'prov': return f.prov;
+    case 'abc': return f.abc;
     default: return '';
   }
 }
@@ -191,6 +202,12 @@ export interface Filtros {
   /** Odoo purchase_ok — deja fuera los productos marcados como no comprables. */
   soloComprables?: boolean;
   /**
+   * Clases ABC que se muestran (fichas A/B/C/D, 2026-09-11). Vacío o ausente
+   * = todas — apagar las cuatro no es «nada», es «sin filtro», porque una
+   * tabla vacía por un click de más no le sirve a nadie.
+   */
+  abc?: readonly ClaseAbc[];
+  /**
    * Filtro ≤ / ≥ por columna numérica — el «autofiltro por número» que pidió
    * Wilmer, uno por columna, combinados con Y con todo lo demás.
    */
@@ -217,6 +234,7 @@ export function filtrar<T extends FilaOrdenable>(filas: readonly T[], f: Filtros
     if (f.soloCriticos && r.doh >= 3) return false;
     if (f.soloEnAlza && !r.flags.tendenciaCreciente) return false;
     if (f.soloComprables && !r.purchaseOk) return false;
+    if (f.abc && f.abc.length > 0 && !f.abc.includes(r.abc)) return false;
     for (const [clave, rango] of rangos) {
       const v = valorNumerico(r, clave);
       // «Sin dato» no es cero: no puede cumplir ni ≤ ni ≥ nada, así que

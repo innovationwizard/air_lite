@@ -12,10 +12,13 @@
  * caer en un default silencioso. (La compartía con lib/compras/draft.ts, que
  * se eliminó el 2026-09-07 junto con las rutas /export.)
  */
-import type { ClaveOrden, ClaveOrdenNumerica, Filtros, FiltroRango, Orden, OperadorRango } from './tabla';
+import {
+  esClaseAbc,
+  type ClaveOrden, type ClaveOrdenNumerica, type Filtros, type FiltroRango, type Orden, type OperadorRango,
+} from './tabla';
 
 const CLAVES_ORDEN: readonly ClaveOrden[] = [
-  'cod', 'desc', 'prov', 'exist', 'patio', 'doh', 'trans', 'pending', 'adic', 'p6', 'p3', 'mtd', 'sug',
+  'cod', 'desc', 'prov', 'abc', 'exist', 'patio', 'doh', 'trans', 'pending', 'adic', 'p6', 'p3', 'mtd', 'sug',
   'origenExist', 'origenDoh',
 ];
 const CLAVES_NUMERICAS: readonly ClaveOrdenNumerica[] = [
@@ -85,6 +88,10 @@ export function readSnapshotFiltros(raw: unknown): Filtros | string {
       if (typeof f[bool] !== 'boolean') return `filtros.${bool} debe ser booleano`;
       out[bool] = f[bool];
     }
+  }
+  if (f.abc !== undefined) {
+    if (!Array.isArray(f.abc) || !f.abc.every(esClaseAbc)) return 'filtros.abc debe ser una lista de A, B, C o D';
+    out.abc = f.abc;
   }
   const rangos = readRangos(f.rangos);
   if (typeof rangos === 'string') return rangos;
