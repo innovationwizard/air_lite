@@ -61,7 +61,8 @@ logger = logging.getLogger(__name__)
 SAI_ANIOS = [2022, 2023, 2024]
 # SAI channel codes that make up each group in comercial_areas.grupo_sai.
 # A group not listed here is one SAI channel with the same code.
-GRUPO_SAI_CANALES = {'MY': ['MYCAP', 'MYINT', 'OFICI']}
+# 2026-09-11: Oficina is its own channel (group OFICI) — no longer inside MY.
+GRUPO_SAI_CANALES = {'MY': ['MYCAP', 'MYINT']}
 SPANISH_MONTHS = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
                   'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
 MES_POR_NOMBRE = {n: i + 1 for i, n in enumerate(SPANISH_MONTHS)}
