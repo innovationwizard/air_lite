@@ -301,6 +301,83 @@ describe('W18 — columnas de la bodega que abastece', () => {
     expect(headers).not.toContain('Adic.');
   });
 
+  /**
+   * CANALES plegados/desplegados (Wilmer, 2026-09-25). El botón de la pantalla
+   * le pasa a este mismo constructor la lista de canales VISIBLES: plegado, la
+   * lista viaja vacía. Lo que no puede pasar, en ningún modo, es que se mueva
+   * un número — plegar es presentación, y «Adicionales» es lo que entra al
+   * pedido.
+   */
+  describe('el desglose por canal se pliega sin mover ningún número', () => {
+    const AREAS = [
+      { slug: 'inst', nombre: 'Institucional' },
+      { slug: 'may', nombre: 'Mayoreo' },
+    ];
+    const f = fila({
+      adic: 800,
+      adicPorArea: {
+        inst: { directo: 500, aRevision: 70 },
+        may: { directo: 300, aRevision: 0 },
+      },
+    });
+
+    it('plegado no queda NINGUNA columna de canal', () => {
+      const headers = columnasSugerido([], null).map((c) => c.header);
+      for (const a of AREAS) {
+        expect(headers).not.toContain(a.nombre);
+        expect(headers).not.toContain(`${a.nombre} (rev.)`);
+      }
+    });
+
+    it('«Adicionales» está en los DOS modos — es el número que entra al pedido', () => {
+      expect(columnasSugerido([], null).map((c) => c.header)).toContain('Adicionales');
+      expect(columnasSugerido(AREAS, null).map((c) => c.header)).toContain('Adicionales');
+    });
+
+    it('Adicionales vale lo mismo plegado que desplegado', () => {
+      const plegado = construirHojaSugerido([f], [], null);
+      const abierto = construirHojaSugerido([f], AREAS, null);
+      const vPlegado = plegado.rows[0][plegado.columns.findIndex((c) => c.header === 'Adicionales')];
+      const vAbierto = abierto.rows[0][abierto.columns.findIndex((c) => c.header === 'Adicionales')];
+      expect(vPlegado).toBe(800);
+      expect(vAbierto).toBe(800);
+    });
+
+    it('el Sugerido y el m³ no dependen del modo', () => {
+      const plegado = construirHojaSugerido([f], [], null);
+      const abierto = construirHojaSugerido([f], AREAS, null);
+      for (const col of ['Sugerido', 'm³ sugerido']) {
+        const iP = plegado.columns.findIndex((c) => c.header === col);
+        const iA = abierto.columns.findIndex((c) => c.header === col);
+        expect(iP).toBeGreaterThanOrEqual(0);
+        expect(plegado.rows[0][iP]).toEqual(abierto.rows[0][iA]);
+      }
+    });
+
+    it('plegar quita columnas y NADA más: el resto sigue igual, en el mismo orden', () => {
+      const plegado = construirHojaSugerido([f], [], null).columns.map((c) => c.header);
+      const abierto = construirHojaSugerido([f], AREAS, null).columns.map((c) => c.header);
+      const porCanal = AREAS.flatMap((a) => [a.nombre, `${a.nombre} (rev.)`]);
+      expect(abierto.filter((h) => !porCanal.includes(h))).toEqual(plegado);
+    });
+
+    it('desplegado cada canal lleva SU cifra — el desglose no se mezcla', () => {
+      const hoja = construirHojaSugerido([f], AREAS, null);
+      const h = hoja.columns.map((c) => c.header);
+      expect(hoja.rows[0][h.indexOf('Institucional')]).toBe(500);
+      expect(hoja.rows[0][h.indexOf('Institucional (rev.)')]).toBe(70);
+      expect(hoja.rows[0][h.indexOf('Mayoreo')]).toBe(300);
+      expect(hoja.rows[0][h.indexOf('Mayoreo (rev.)')]).toBe(0);
+    });
+
+    it('cada fila tiene exactamente tantos valores como columnas, en los dos modos', () => {
+      for (const areas of [[], AREAS]) {
+        const hoja = construirHojaSugerido([f], areas, null);
+        expect(hoja.rows[0]).toHaveLength(hoja.columns.length);
+      }
+    });
+  });
+
   it('lleva las cifras de la bodega de origen; sin fila allá va VACÍO, no 0', () => {
     const hoja = construirHojaSugerido([conOrigen, sinOrigen], [], 'San José');
     const h = hoja.columns.map((c) => c.header);

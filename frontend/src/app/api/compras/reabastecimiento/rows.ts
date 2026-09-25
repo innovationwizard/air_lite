@@ -103,6 +103,12 @@ interface SupplierGroupRef { id: string; display_name: string }
 interface SupplierGroupMemberRef { supplier_id: number; group_id: string }
 /** qty === null = a CLEAR entry: the manual capture was removed (20260813000001). */
 interface OverrideRow { product_id: number; qty: number | null; created_at: string }
+/**
+ * Igual que `OverrideRow`, más la bodega en la que se capturó. Sólo
+ * `sugerido_bodega` la necesita: es la única captura manual que General tiene
+ * que SUMAR en vez de leer por bodega — ver `consolidarSugeridoBodega`.
+ */
+interface SugeridoBodegaRow extends OverrideRow { bodega: string }
 /** `bodega_map` — which Odoo warehouses make up a bodega; General is every in-scope one. */
 interface BodegaMapRow { odoo_warehouse_code: string; bodega: string; in_scope: boolean }
 /** A6.15 — una entrada futura de tránsito: cuánto y cuándo. */
@@ -300,6 +306,68 @@ export function consolidarComercial(
   return porProducto;
 }
 
+/**
+ * A4.17 — el pedido del encargado del CD, resuelto para LA bodega que se mira.
+ *
+ * EL DEFECTO QUE ARREGLA (Wilmer, 2026-09-25): *«modifico columna pide bodega
+ * para ver cubicaje y no modifica cubicaje»*. La lectura filtraba
+ * `.eq('bodega', bodega)`, pero el POST RECHAZA `General` a propósito —
+ * General es la suma de las otras, no un lugar donde alguien pida. Así que
+ * toda captura se guarda bajo una bodega física y en General la consulta no
+ * casaba NINGUNA: `sugBodega` = 0 → `adic` sin cambio → Sugerido sin cambio →
+ * m³ sin cambio. La fórmula del cubicaje nunca estuvo mal; el número que le
+ * entraba sí. Y General es la pestaña con la que la página abre.
+ *
+ * LA REGLA, y por qué es sumar y no otra cosa: General ya es el roll-up de las
+ * bodegas físicas en TODO lo demás de esta fila — existencias, tránsito,
+ * demanda. Un aditivo que no se sumara sería el único término del motor que
+ * General no agrega, y el Sugerido de General mentiría por debajo justo en los
+ * códigos que alguien pidió a mano. Dos bodegas que piden 30 y 20 del mismo
+ * código son 50 unidades que hay que comprar, y 50 unidades de cubicaje que
+ * hay que subir al furgón.
+ *
+ * Mirando una bodega física se ve SÓLO lo suyo: la pestaña de Zacapa no puede
+ * mostrar lo que pidió Petén. Es la misma pestaña de siempre — un clic — y con
+ * esto las dos lecturas por fin cuadran: General = la suma de lo que muestran
+ * las otras tres.
+ *
+ * `qty` null es un BORRADO y gana por recencia DENTRO de su bodega, nunca
+ * entre bodegas: borrar en Zacapa no puede borrar lo que pidió Petén. Por eso
+ * el último-gana se resuelve por (producto × bodega) y la suma viene después.
+ *
+ * Devuelve null —y no 0— cuando no hay ninguna captura viva, para que la
+ * columna siga distinguiendo «nadie pidió» de «pidieron cero». Las filas
+ * llegan ordenadas de más nueva a más vieja (ver el desempate de `fetchAll`).
+ *
+ * Función pura y exportada para poder probarla sin base de datos, igual que
+ * `consolidarComercial`.
+ */
+export function consolidarSugeridoBodega(
+  filas: SugeridoBodegaRow[],
+  bodega: string,
+): Map<number, number | null> {
+  // Último-gana por (producto × bodega): la primera fila que se ve de cada
+  // par es la más reciente.
+  const ultimaPorPar = new Map<string, { productId: number; qty: number | null }>();
+  for (const f of filas) {
+    if (bodega !== GENERAL_BODEGA && f.bodega !== bodega) continue;
+    const par = `${f.product_id}|${f.bodega}`;
+    if (ultimaPorPar.has(par)) continue;
+    ultimaPorPar.set(par, { productId: f.product_id, qty: f.qty });
+  }
+  const out = new Map<number, number | null>();
+  for (const { productId, qty } of ultimaPorPar.values()) {
+    if (qty === null) {
+      // Un borrado no aporta, pero tampoco puede tapar lo que aportó otra
+      // bodega: sólo deja la entrada en null si no había ya una cantidad.
+      if (!out.has(productId)) out.set(productId, null);
+      continue;
+    }
+    out.set(productId, (out.get(productId) ?? 0) + qty);
+  }
+  return out;
+}
+
 /** Everything the page and the export both need for one bodega. */
 export async function buildRows(
   service: SupabaseClient,
@@ -390,9 +458,15 @@ export async function buildRows(
           .eq('month', monthStart).eq('activo', true).not('aprobado_at', 'is', null),
         // A4.17 — el pedido adicional del encargado del CD, por bodega.
         // Append-only; `qty` NULL es un borrado, igual que en tránsito.
-        fetchAll<OverrideRow>(() =>
-          service.from('sugerido_bodega').select('product_id, qty, created_at')
-            .eq('bodega', bodega).order('created_at', { ascending: false }),
+        //
+        // SIN `.eq('bodega', …)`: la bodega se resuelve en
+        // `consolidarSugeridoBodega`, porque General tiene que SUMAR las
+        // capturas de las bodegas físicas y el filtro en la consulta no le
+        // devolvía ninguna. Mismo patrón que `comercial_forecast`, que por la
+        // misma razón también se filtra en código y no en la consulta.
+        fetchAll<SugeridoBodegaRow>(() =>
+          service.from('sugerido_bodega').select('product_id, bodega, qty, created_at')
+            .order('created_at', { ascending: false }),
           { columna: 'id', ascending: false }),
         // A6.15 — el desglose por fecha del tránsito de ESTA bodega. Tabla
         // derivada: la reemplaza entera cada sincronización.
@@ -457,9 +531,10 @@ export async function buildRows(
       return m;
     };
     const transitoByProduct = latest(transitoOv);
-    // A4.17 — el pedido adicional del encargado del CD. Misma mecánica
-    // append-only y gana-la-última que tránsito y pendiente.
-    const sugBodegaByProduct = latest(sugBodegaOv);
+    // A4.17 — el pedido adicional del encargado del CD. Append-only y
+    // gana-la-última como tránsito, pero el último-gana es por (producto ×
+    // bodega) y General SUMA las bodegas físicas: ver `consolidarSugeridoBodega`.
+    const sugBodegaByProduct = consolidarSugeridoBodega(sugBodegaOv, bodega);
     // A6.15 — agrupado por producto, ya ordenado por fecha desde la consulta.
     // Las entradas SIN fecha van al final: no se pueden usar para decidir
     // cuándo, y ponerlas primero fingiría una inminencia que no existe.

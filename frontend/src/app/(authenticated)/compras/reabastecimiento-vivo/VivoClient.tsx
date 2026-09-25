@@ -277,6 +277,20 @@ export function VivoClient({ soloLectura = false }: { soloLectura?: boolean } = 
   // «no puedo ordenar o filtrar ABC» (Wilmer) — fichas A/B/C/D, multi-selección,
   // vacío = todas. Se combina con Y con el resto, como cualquier filtro.
   const [abcSel, setAbcSel] = useState<ClaseAbc[]>([]);
+  /**
+   * CANALES — ver la suma o el desglose, con un clic (Wilmer, 2026-09-25).
+   *
+   * Los seis canales ocupan seis columnas fijas entre «Pend. reserva» y
+   * «Adicionales», y no se podían cerrar: para leer Sugerido y m³ había que
+   * pasar por todas, y son justo las columnas que NO se miran cuando el
+   * trabajo es decidir cuánto comprar. Es el mismo gesto que ya tienen las
+   * bodegas arriba — una pestaña para el roll-up, una por cada parte.
+   *
+   * `false` (el arranque) = sólo «Adicionales», que es la suma y SIEMPRE está:
+   * ningún modo esconde el número que entra al pedido, sólo su desglose.
+   * Plegar es presentación pura — no toca `list`, ni el motor, ni el Sugerido.
+   */
+  const [canalesAbiertos, setCanalesAbiertos] = useState(false);
   const toggleAbc = useCallback((c: ClaseAbc) => {
     setAbcSel((prev) => (prev.includes(c) ? prev.filter((x) => x !== c) : [...prev, c]));
   }, []);
@@ -500,6 +514,18 @@ export function VivoClient({ soloLectura = false }: { soloLectura?: boolean } = 
    */
   const areas = useMemo(() => payload?.areasComerciales ?? [], [payload]);
 
+  /**
+   * Los canales que se PINTAN ahora mismo — plegados, ninguno.
+   *
+   * Uno solo para la tabla y para el Excel, a propósito: el archivo tiene que
+   * poder leerse al lado de la pantalla sin traducir nada (la regla que
+   * arregló el export el 26-ago), y dos listas serían dos juegos de columnas
+   * la primera vez que alguien tocara una. `columnasSugerido` ya sabe qué
+   * hacer con una lista vacía: se queda con «Adicionales».
+   */
+  const areasVisibles = useMemo(
+    () => (canalesAbiertos ? areas : []), [canalesAbiertos, areas]);
+
   // W18 — cómo se llama la bodega que abastece a la que se está mirando
   // (Zacapa ← San José, Petén ← Zacapa). Null = no hay columnas de origen.
   const origenLabel = useMemo(() => {
@@ -572,7 +598,7 @@ export function VivoClient({ soloLectura = false }: { soloLectura?: boolean } = 
           comprador puede preguntar por qué, ni el canal defender su número en
           la reunión. Lo que va a revisión se VE, en gris y aparte, porque un
           número que nadie ve no se discute y uno que se suma solo tampoco. */}
-      {areas.map((a) => {
+      {areasVisibles.map((a) => {
         const ap = r.adicPorArea?.[a.slug];
         return (
           <td key={a.slug}
@@ -637,7 +663,7 @@ export function VivoClient({ soloLectura = false }: { soloLectura?: boolean } = 
       </td>
     </tr>
   );
-  }, [commitEdit, commitSugBodega, areas, origenLabel, soloLectura]);
+  }, [commitEdit, commitSugBodega, areasVisibles, origenLabel, soloLectura]);
 
   return (
     <div className="p-6 max-w-[1240px] mx-auto">
@@ -790,6 +816,38 @@ export function VivoClient({ soloLectura = false }: { soloLectura?: boolean } = 
                 );
               })}
             </div>
+            {/* CANALES — la suma o el desglose, un clic (Wilmer, 2026-09-25).
+                Mismo gesto que las pestañas de bodega de arriba. Sólo aparece
+                si hay canales que plegar: con cero, el botón no decidiría nada. */}
+            {areas.length > 0 ? (
+              <div className="inline-flex items-center gap-1" role="group"
+                   aria-label="Columnas de canales comerciales"
+                   title={'CANALES: «Suma» deja sólo la columna Adicionales; «Por canal» abre una '
+                     + `columna por cada uno (${areas.length}). `
+                     + 'Adicionales —el número que entra al pedido— se ve siempre en los dos modos: '
+                     + 'esto cambia el DESGLOSE, nunca el Sugerido ni el m³. '
+                     + 'El Excel sale con las mismas columnas que estés viendo.'}>
+                <span className="text-xs text-gray-600 mr-0.5">Canales</span>
+                <div className="inline-flex rounded-lg bg-gray-100 p-0.5">
+                  <button type="button" aria-pressed={!canalesAbiertos}
+                          onClick={() => setCanalesAbiertos(false)}
+                          className={`px-2.5 py-1 text-xs rounded-md transition ${
+                            !canalesAbiertos
+                              ? 'bg-teal-700 text-white font-semibold'
+                              : 'text-gray-600 hover:text-gray-900'}`}>
+                    Suma
+                  </button>
+                  <button type="button" aria-pressed={canalesAbiertos}
+                          onClick={() => setCanalesAbiertos(true)}
+                          className={`px-2.5 py-1 text-xs rounded-md transition ${
+                            canalesAbiertos
+                              ? 'bg-teal-700 text-white font-semibold'
+                              : 'text-gray-600 hover:text-gray-900'}`}>
+                    Por canal ({areas.length})
+                  </button>
+                </div>
+              </div>
+            ) : null}
             <div className="ml-auto flex items-center gap-2">
               <CopiarTabla filas={list} bodega={bodega} />
               {/*
@@ -801,7 +859,7 @@ export function VivoClient({ soloLectura = false }: { soloLectura?: boolean } = 
                 */}
               <ExportarExcel
                 filas={list}
-                areas={areas}
+                areas={areasVisibles}
                 contexto={{
                   bodega,
                   bodegaLabel: BODEGA_LABEL[bodega] ?? bodega,
@@ -900,7 +958,7 @@ export function VivoClient({ soloLectura = false }: { soloLectura?: boolean } = 
                         despliegue. Ordenar y filtrar siguen viviendo en
                         Adicionales, que cierra el bloque: tipos de cliente,
                         luego sedes (ver `ordenarAreas`), luego la suma. */}
-                    {areas.map((a) => (
+                    {areasVisibles.map((a) => (
                       <Th key={a.slug} tip={COL_TIP.canal}>{a.nombre}</Th>
                     ))}
                     <Th tip={COL_TIP.adic} sortKey="adic" orden={orden} onSort={onSort}
