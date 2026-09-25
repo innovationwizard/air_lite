@@ -1,6 +1,7 @@
 import {
   compararPorDefecto, dirInicial, esTexto, filtrar, ordenar, siguienteOrden, vista,
   tablaATsv, grupoFiltroValor,
+  claveCanal, esClaveCanal, slugDeClaveCanal, valorNumerico,
   type FilaOrdenable,
 } from '../tabla';
 
@@ -287,5 +288,117 @@ describe('tablaATsv — copiar lo visible', () => {
 
   it('sin filas copia solo el encabezado', () => {
     expect(tablaATsv([], cols)).toBe('Código\tSugerido');
+  });
+});
+
+/**
+ * Ordenar por canal comercial (Wilmer, 2026-09-25): «que cada columna de canal
+ * y la de canales colapsada se puedan ordenar con un clic».
+ *
+ * Los canales son DATOS (`comercial_areas`, se agregan sin despliegue), así que
+ * su clave de orden no puede ser un literal de `ClaveOrden` como las demás: se
+ * nombra `canal:<slug>`. Lo que se ordena es lo que ENTRA al pedido
+ * (`directo`); lo que va «a revisión» se ve en gris y no ordena, porque todavía
+ * no es una compra.
+ */
+describe('ordenar por canal comercial', () => {
+  const porArea = (inst: number, may: number, instRev = 0) => ({
+    inst: { directo: inst, aRevision: instRev },
+    may: { directo: may, aRevision: 0 },
+  });
+  const filas = [
+    fila({ cod: 'A', adic: 300, adicPorArea: porArea(100, 200) }),
+    fila({ cod: 'B', adic: 700, adicPorArea: porArea(500, 200) }),
+    fila({ cod: 'C', adic: 350, adicPorArea: porArea(50, 300) }),
+  ];
+
+  describe('la clave', () => {
+    it('lleva el slug y se reconoce', () => {
+      expect(claveCanal('inst')).toBe('canal:inst');
+      expect(esClaveCanal('canal:inst')).toBe(true);
+      expect(slugDeClaveCanal('canal:inst')).toBe('inst');
+    });
+
+    it('NO se confunde con las columnas fijas — ninguna lleva dos puntos', () => {
+      for (const k of ['adic', 'sug', 'p3', 'cod', 'origenDoh'] as const) {
+        expect(esClaveCanal(k)).toBe(false);
+        expect(slugDeClaveCanal(k)).toBeNull();
+      }
+    });
+
+    it('un slug con guiones sobrevive entero', () => {
+      expect(slugDeClaveCanal(claveCanal('zacapa-tienda'))).toBe('zacapa-tienda');
+    });
+  });
+
+  describe('el orden', () => {
+    it('un canal arranca DESCENDENTE, como toda columna numérica', () => {
+      expect(dirInicial(claveCanal('inst'))).toBe('desc');
+      expect(esTexto(claveCanal('inst'))).toBe(false);
+    });
+
+    it('ordena por lo que pidió ESE canal, no por el total', () => {
+      // Por Institucional: B 500 · A 100 · C 50 — distinto del orden por `adic`.
+      expect(ordenar(filas, { clave: claveCanal('inst'), dir: 'desc' }).map((r) => r.cod))
+        .toEqual(['B', 'A', 'C']);
+    });
+
+    it('cada canal da SU orden — dos canales, dos respuestas', () => {
+      // Por Mayoreo: C 300 · A 200 = B 200, y el empate lo rompe el código.
+      expect(ordenar(filas, { clave: claveCanal('may'), dir: 'desc' }).map((r) => r.cod))
+        .toEqual(['C', 'A', 'B']);
+    });
+
+    it('ascendente invierte', () => {
+      expect(ordenar(filas, { clave: claveCanal('inst'), dir: 'asc' }).map((r) => r.cod))
+        .toEqual(['C', 'A', 'B']);
+    });
+
+    it('reclicar el mismo canal invierte; cambiar de canal usa su inicial', () => {
+      const uno = siguienteOrden(null, claveCanal('inst'));
+      expect(uno).toEqual({ clave: 'canal:inst', dir: 'desc' });
+      expect(siguienteOrden(uno, claveCanal('inst')).dir).toBe('asc');
+      expect(siguienteOrden(uno, claveCanal('may'))).toEqual({ clave: 'canal:may', dir: 'desc' });
+    });
+
+    it('ordena por lo DIRECTO, nunca por lo que va a revisión', () => {
+      // A pide 100 directo + 900 a revisión; B pide 500 directo. Manda B.
+      const conRev = [
+        fila({ cod: 'A', adicPorArea: porArea(100, 0, 900) }),
+        fila({ cod: 'B', adicPorArea: porArea(500, 0) }),
+      ];
+      expect(ordenar(conRev, { clave: claveCanal('inst'), dir: 'desc' }).map((r) => r.cod))
+        .toEqual(['B', 'A']);
+    });
+  });
+
+  describe('sin desglose', () => {
+    it('un canal que no pidió nada vale 0 — es un dato, no «sin dato»', () => {
+      expect(valorNumerico(filas[0], claveCanal('nadie'))).toBe(0);
+      expect(valorNumerico(fila({ cod: 'X' }), claveCanal('inst'))).toBe(0);
+    });
+
+    it('las filas sin desglose se hunden en descendente, no se pierden', () => {
+      const mixto = [
+        fila({ cod: 'A' }),
+        fila({ cod: 'B', adicPorArea: porArea(500, 0) }),
+      ];
+      const out = ordenar(mixto, { clave: claveCanal('inst'), dir: 'desc' });
+      expect(out.map((r) => r.cod)).toEqual(['B', 'A']);
+      expect(out).toHaveLength(2);
+    });
+  });
+
+  describe('la columna colapsada «Adicionales» sigue ordenando por el total', () => {
+    it('ordena por `adic`, que es la suma de los canales', () => {
+      expect(ordenar(filas, { clave: 'adic', dir: 'desc' }).map((r) => r.cod))
+        .toEqual(['B', 'C', 'A']);
+    });
+
+    it('el total NO es el orden de ningún canal por separado', () => {
+      const porTotal = ordenar(filas, { clave: 'adic', dir: 'desc' }).map((r) => r.cod);
+      const porInst = ordenar(filas, { clave: claveCanal('inst'), dir: 'desc' }).map((r) => r.cod);
+      expect(porTotal).not.toEqual(porInst);
+    });
   });
 });

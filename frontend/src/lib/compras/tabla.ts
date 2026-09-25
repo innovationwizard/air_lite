@@ -37,6 +37,12 @@ export interface FilaOrdenable {
   origen: { exist: number; doh: number } | null;
   /** ABC (Wilmer, 2026-09-03) — ordenable y filtrable desde 2026-09-11: «no puedo ordenar o filtrar ABC». */
   abc: ClaseAbc;
+  /**
+   * Lo que pidió cada canal (slug → cantidades). Opcional porque `adic` ya
+   * trae la suma: una fila sin desglose se ordena igual, con 0 en cada canal.
+   * Ordenable desde 2026-09-25 — ver `claveCanal`.
+   */
+  adicPorArea?: Record<string, { directo: number; aRevision: number }>;
   flags: { tendenciaCreciente: boolean };
   purchaseOk: boolean;
 }
@@ -57,7 +63,35 @@ export type ClaveOrden =
   | 'p6' | 'p3' | 'mtd' | 'sug'
   // W18 — ordenar por «DOH San José» es preguntar «¿cuáles me cubre un
   // traslado?»; sin dato (sin origen) va al final, como todo null.
-  | 'origenExist' | 'origenDoh';
+  | 'origenExist' | 'origenDoh'
+  // Un canal comercial: `canal:<slug>` — ver `claveCanal`.
+  | ClaveCanal;
+
+/**
+ * La columna de UN canal comercial (Wilmer, 2026-09-25: «que cada columna de
+ * canal se pueda ordenar»).
+ *
+ * Los canales son DATOS (`comercial_areas`) y se agregan sin despliegue — ya
+ * se sumaron dos a los tres días—, así que no pueden ser miembros literales de
+ * `ClaveOrden` como el resto. Se nombran con el prefijo `canal:` y el slug,
+ * exactamente el mismo recurso que `grupoFiltroValor` usa para meter un id de
+ * grupo dentro del filtro de proveedor: un espacio de nombres dentro de un
+ * campo tipado, en un solo lugar, en vez de aflojar el tipo a `string`.
+ *
+ * El prefijo NO puede chocar con una clave fija: ninguna lleva dos puntos.
+ */
+export type ClaveCanal = `canal:${string}`;
+
+export const claveCanal = (slug: string): ClaveCanal => `canal:${slug}`;
+
+export function esClaveCanal(clave: ClaveOrden): clave is ClaveCanal {
+  return clave.startsWith('canal:');
+}
+
+/** El slug del canal que nombra la clave, o null si no es una clave de canal. */
+export function slugDeClaveCanal(clave: ClaveOrden): string | null {
+  return esClaveCanal(clave) ? clave.slice('canal:'.length) : null;
+}
 
 /** Las columnas numéricas de `ClaveOrden` — las únicas que aceptan un filtro de rango. */
 export type ClaveOrdenNumerica = Exclude<ClaveOrden, 'cod' | 'desc' | 'prov' | 'abc'>;
@@ -120,7 +154,17 @@ export function valorNumerico(f: FilaOrdenable, clave: ClaveOrden): number | nul
     case 'sug': return f.sug;
     case 'origenExist': return f.origen?.exist ?? null;
     case 'origenDoh': return f.origen?.doh ?? null;
-    default: return null;
+    default: {
+      // Un canal: lo que ENTRA al pedido (`directo`), que es lo que muestra la
+      // celda en grande y lo que suma `adic`. Lo que va «a revisión» se ve
+      // debajo en gris y NO se ordena: no entra al pedido, y ordenar por él
+      // pondría arriba lo que todavía no es una compra.
+      const slug = slugDeClaveCanal(clave);
+      if (slug === null) return null;
+      // 0 y no null: el canal no pidió nada de este código, que es un dato —
+      // distinto de «Odoo no respondió», que es lo que null significa acá.
+      return f.adicPorArea?.[slug]?.directo ?? 0;
+    }
   }
 }
 

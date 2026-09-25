@@ -9,7 +9,7 @@ import { MAX_MANUAL_QTY } from '@/lib/compras/qty';
 import { type Tendencia, type Alerta, SIN_REFERENCIA_ANIO_ANTERIOR } from '@/lib/compras/tendencia';
 import { tablaATsv } from '@/lib/compras/tabla';
 import {
-  CLASES_ABC, type ClaseAbc,
+  CLASES_ABC, type ClaseAbc, claveCanal, esClaveCanal,
   type ClaveOrden, type ClaveOrdenNumerica, type FiltroRango, type OperadorRango,
   type Orden, siguienteOrden, vista,
 } from '@/lib/compras/tabla';
@@ -122,7 +122,8 @@ const COL_TIP = {
   canal: 'Lo que pidió ESTE canal para el mes en captura. Arriba, la compra extraordinaria: '
     + 'certeza con destinatario, entra al pedido. Debajo en gris, «N rev.»: temporada o '
     + 'faltante/crítico, que son proyección del canal y NO suman al Sugerido — se discuten '
-    + 'en la reunión mensual.',
+    + 'en la reunión mensual. Clic para ordenar por lo que pidió este canal (de mayor a '
+    + 'menor; otro clic invierte); lo que va a revisión no ordena.',
   ord: 'ORDENADO — la base de Wilmer y la ÚNICA que alimenta el Sugerido. '
     + 'Promedio mensual de cantidad ordenada (sale.order.line, estados venta y hecho; '
     + 'excluye cotización, cotización enviada y cancelado), por bodega de la orden.',
@@ -476,6 +477,20 @@ export function VivoClient({ soloLectura = false }: { soloLectura?: boolean } = 
   }, []);
 
   /**
+   * Plegar/desplegar los canales. Plegar SUELTA el orden si estaba puesto en
+   * una columna de canal: si no, la tabla se quedaría ordenada por una columna
+   * que ya no se ve —sin flecha, sin encabezado, sin forma de deshacerlo— y
+   * «Institucional 500 primero» se leería como un orden aleatorio. Vuelve al
+   * orden por defecto, que es con el que la página abre.
+   *
+   * Desplegar no toca nada: las columnas reaparecen con su flecha donde estaba.
+   */
+  const onCanales = useCallback((abiertos: boolean) => {
+    setCanalesAbiertos(abiertos);
+    if (!abiertos) setOrden((actual) => (actual && esClaveCanal(actual.clave) ? null : actual));
+  }, []);
+
+  /**
    * El proveedor tal como se lee en el filtro — el mismo cálculo que
    * `ProveedorFiltro.etiquetaActual`, porque el archivo tiene que decir lo que
    * la pantalla dice. Un grupo se resuelve a su nombre; sin filtro va VACÍO a
@@ -823,14 +838,15 @@ export function VivoClient({ soloLectura = false }: { soloLectura?: boolean } = 
               <div className="inline-flex items-center gap-1" role="group"
                    aria-label="Columnas de canales comerciales"
                    title={'CANALES: «Suma» deja sólo la columna Adicionales; «Por canal» abre una '
-                     + `columna por cada uno (${areas.length}). `
-                     + 'Adicionales —el número que entra al pedido— se ve siempre en los dos modos: '
-                     + 'esto cambia el DESGLOSE, nunca el Sugerido ni el m³. '
-                     + 'El Excel sale con las mismas columnas que estés viendo.'}>
+                     + `columna por cada uno (${areas.length}), y cada una se ordena con un clic. `
+                     + 'Adicionales —el número que entra al pedido— se ve siempre en los dos modos '
+                     + 'y también se ordena: esto cambia el DESGLOSE, nunca el Sugerido ni el m³. '
+                     + 'El Excel sale con las mismas columnas que estés viendo. '
+                     + 'Si pliegas mientras ordenabas por un canal, la tabla vuelve al orden normal.'}>
                 <span className="text-xs text-gray-600 mr-0.5">Canales</span>
                 <div className="inline-flex rounded-lg bg-gray-100 p-0.5">
                   <button type="button" aria-pressed={!canalesAbiertos}
-                          onClick={() => setCanalesAbiertos(false)}
+                          onClick={() => onCanales(false)}
                           className={`px-2.5 py-1 text-xs rounded-md transition ${
                             !canalesAbiertos
                               ? 'bg-teal-700 text-white font-semibold'
@@ -838,7 +854,7 @@ export function VivoClient({ soloLectura = false }: { soloLectura?: boolean } = 
                     Suma
                   </button>
                   <button type="button" aria-pressed={canalesAbiertos}
-                          onClick={() => setCanalesAbiertos(true)}
+                          onClick={() => onCanales(true)}
                           className={`px-2.5 py-1 text-xs rounded-md transition ${
                             canalesAbiertos
                               ? 'bg-teal-700 text-white font-semibold'
@@ -953,13 +969,20 @@ export function VivoClient({ soloLectura = false }: { soloLectura?: boolean } = 
                         filtroKey="trans" rango={rangos.trans} onRango={onRango}><span className="inline-flex items-center gap-1">Tránsito <Pencil size={11} /></span></Th>
                     <Th tip={COL_TIP.pend} sortKey="pending" orden={orden} onSort={onSort}
                         filtroKey="pending" rango={rangos.pending} onRango={onRango}><span className="inline-flex items-center gap-1">Pend. reserva <Radio size={11} /></span></Th>
-                    {/* Sin `sortKey` ni `filtroKey` a propósito: `ClaveOrden` es
-                        una unión fija y los canales son datos que cambian sin
-                        despliegue. Ordenar y filtrar siguen viviendo en
-                        Adicionales, que cierra el bloque: tipos de cliente,
-                        luego sedes (ver `ordenarAreas`), luego la suma. */}
+                    {/* Ordenables desde 2026-09-25 (Wilmer). `ClaveOrden` sigue
+                        siendo una unión, pero ahora admite `canal:<slug>` —
+                        los canales son datos que cambian sin despliegue, así
+                        que la clave se construye con `claveCanal`. Ordena por
+                        lo que ENTRA al pedido; lo que va a revisión se ve
+                        debajo en gris y no ordena. Sin `filtroKey`: el filtro
+                        ≤/≥ por canal no se pidió, y `rangos` está tipado por
+                        columna fija. El bloque conserva su orden: tipos de
+                        cliente, luego sedes (ver `ordenarAreas`), luego la suma. */}
                     {areasVisibles.map((a) => (
-                      <Th key={a.slug} tip={COL_TIP.canal}>{a.nombre}</Th>
+                      <Th key={a.slug} tip={COL_TIP.canal}
+                          sortKey={claveCanal(a.slug)} orden={orden} onSort={onSort}>
+                        {a.nombre}
+                      </Th>
                     ))}
                     <Th tip={COL_TIP.adic} sortKey="adic" orden={orden} onSort={onSort}
                         filtroKey="adic" rango={rangos.adic} onRango={onRango}>Adicionales</Th>
