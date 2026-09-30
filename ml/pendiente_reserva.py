@@ -30,6 +30,10 @@ es lo único que se puede probar sin Odoo. La sonda `ml/probe_pending_reserve.py
 reproduce la pantalla renglón por renglón; esto es la versión agregada que
 consume la página (un `read_group` por carga, nunca una llamada por producto).
 
+`en_uom_de_stock` convierte cada grupo a la UoM de stock antes de sumar.
+Sin eso, Demanda en unidades sueltas se resta de existencias en CAJA/FARDO
+y la exist. neta sale negativa con el inventario de Odoo en positivo.
+
 ⚠️ Este número NO se sincroniza ni se guarda: Odoo reserva la demanda
 confirmada casi al instante, así que el sliver sin reservar cambia minuto a
 minuto (2026-09-03: 40 vs 275 movimientos para el mismo SKU×bodega con 20
@@ -69,6 +73,37 @@ def picking_types_por_bodega(tipos, bodegas):
     return por_bodega
 
 
+def en_uom_de_stock(grupos, factors, stock_uom_by_product):
+    """Pasa Demanda y Cantidad de cada grupo a la UoM de stock del producto.
+
+    Misma álgebra que `fold_uom_groups` en el sync de ventas: qty en UoM de
+    stock = qty / factor_de_la_línea × factor_de_stock. Odoo guarda el factor
+    de la unidad de referencia en 1 y el de una CAJA20 en 0.05, así que 1,096
+    unidades sueltas de un producto en CAJA20 son 54.8 cajas.
+
+    No muta los grupos de entrada. Un grupo cuya UoM no se puede resolver se
+    suma tal cual y se cuenta en el segundo valor de vuelta: perder demanda
+    en silencio es peor que un exceso que se puede ver.
+    """
+    salida, sin_convertir = [], 0
+    for g in grupos:
+        g = dict(g)
+        producto = g.get('product_id')
+        if producto:
+            linea = g.get('product_uom')
+            stock_id = stock_uom_by_product.get(producto[0])
+            factor_linea = factors.get(linea[0]) if linea else None
+            factor_stock = factors.get(stock_id) if stock_id else None
+            if factor_linea and factor_stock:
+                escala = factor_stock / factor_linea
+                g['product_uom_qty'] = float(g.get('product_uom_qty') or 0.0) * escala
+                g['quantity'] = float(g.get('quantity') or 0.0) * escala
+            elif linea or stock_id:
+                sin_convertir += 1
+        salida.append(g)
+    return salida, sin_convertir
+
+
 def agrupar(grupos, bodega_por_ubicacion, sku_por_producto=None):
     """Colapsa el `read_group` por (product_id, location_id) a
     {código de bodega: {llave de producto: {demanda, cantidad, pendiente}}}.
@@ -90,6 +125,12 @@ def agrupar(grupos, bodega_por_ubicacion, sku_por_producto=None):
     Un producto SIN filas queda fuera del dict: para la página eso es
     pendiente = 0 CONOCIDO (Odoo respondió y no hay movimientos abiertos),
     distinto de «Odoo no respondió», que es el 502 del endpoint.
+
+    La UoM se normaliza ANTES de llegar acá (`en_uom_de_stock`). Demanda y
+    Cantidad viven en la UoM del movimiento; las existencias a las que se
+    restan viven en la UoM de stock. Sin esa conversión, 1,096 unidades
+    sueltas de 77201326 se restaron como 1,096 CAJA20 y la exist. neta dio
+    −1,059 con el inventario de Odoo en positivo (Wilmer, 2026-09-29).
     """
     salida = {codigo: {} for codigo in set(bodega_por_ubicacion.values())}
     for g in grupos:

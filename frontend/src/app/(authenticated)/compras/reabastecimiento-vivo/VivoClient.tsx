@@ -114,6 +114,9 @@ const COL_TIP = {
     'Pendiente de tomar reserva — EN VIVO desde Odoo en cada carga, con tu mismo filtro '
     + '«Wilmer - Reservas.»: entregas y traslados internos abiertos que SALEN de las existencias '
     + 'de la bodega, Demanda − Cantidad reservada (todos los estados no finales, incluido borrador). '
+    + 'Va en la unidad de stock del producto, la misma de Existencias: un movimiento en unidades '
+    + 'sueltas se convierte a cajas o fardos antes de restar, si no la exist. neta sale negativa '
+    + 'con el inventario de Odoo en positivo. '
     + 'Resta de la exist. neta. ¿? significa que Odoo no respondió en esta carga, no cero; '
     + '0 significa que Odoo respondió y no hay nada abierto.',
   adic: 'TOTAL que entra al pedido: forecast comercial del mes en captura (sólo compra '

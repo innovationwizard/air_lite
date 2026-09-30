@@ -18,7 +18,7 @@ from backtest_engine import run_backtest_cycle
 from purchase_scheduler import run_purchase_schedule_cycle
 from forecast_revenue import forecast_product as forecast_product_revenue
 from forecast_purchases_derived import forecast_purchases_derived
-from pendiente_reserva import SEQUENCE_CODES, agrupar, picking_types_por_bodega
+from pendiente_reserva import SEQUENCE_CODES, agrupar, en_uom_de_stock, picking_types_por_bodega
 from reyma_factura_extract import PdfIlegible, extraer_de_bytes
 from reyma_factura_carga import (
     DESTINOS_VALIDOS, DatoInvalido, Mapas, destino_in_band, evaluar,
@@ -976,12 +976,14 @@ def reabastecimiento_pendiente_reserva():
     (`1CET,4ZAC,3PET`). Obligatorio: la página sabe qué bodegas están en
     alcance (`bodega_map`) y este servicio no.
 
-    Cuatro lecturas a Odoo por request con UNA autenticación, ninguna por
+    Cinco lecturas a Odoo por request con UNA autenticación, ninguna por
     producto: `stock.warehouse` (códigos → ids), `stock.picking.type` (OUT/INT
     de esas bodegas), UN `read_group` de `stock.move` agrupado por (producto,
-    origen) sobre `state not in (cancel, done)` ∧ origen = existencias —
-    535 productos en 1.6 s el 2026-09-11 — y `product.product` para
-    traducir ids a SKU.
+    origen, UoM del movimiento) sobre `state not in (cancel, done)` ∧ origen =
+    existencias — 535 productos en 1.6 s el 2026-09-11 —, `product.product`
+    para traducir ids a SKU y leer la UoM de stock, y `uom.uom` para los
+    factores. Demanda y Cantidad se convierten a esa UoM de stock antes de
+    restarse: si no, unidades sueltas se restan como cajas (Wilmer, 2026-09-29).
 
     Respuesta (por SKU, la llave estable — el id de Odoo cambia por build):
       { asOf, bodegas: {'1CET': {sku: {demanda, cantidad, pendiente}}, ...},
@@ -1018,29 +1020,43 @@ def reabastecimiento_pendiente_reserva():
         tipos_por_bodega = picking_types_por_bodega(tipos, codigo_por_wh)
         tipos = [t for ts in tipos_por_bodega.values() for t in ts]
 
-        grupos, sku_por_producto = [], {}
+        grupos, sku_por_producto, stock_uom, factors = [], {}, {}, {}
         if tipos and bodega_por_ubicacion:
+            # `product_uom` en el groupby: Demanda y Cantidad están en la UoM
+            # del movimiento, no en la de stock. Sumarlas crudas mezcla
+            # unidades sueltas con cajas (77201326, Wilmer 2026-09-29).
             grupos = odoo(
                 'stock.move', 'read_group',
                 [['state', 'not in', ['cancel', 'done']],
                  ['picking_type_id', 'in', tipos],
                  ['location_id', 'in', list(bodega_por_ubicacion)]],
                 ['product_uom_qty:sum', 'quantity:sum'],
-                ['product_id', 'location_id'],
+                ['product_id', 'location_id', 'product_uom'],
                 lazy=False,
             )
             # Se responde por SKU y no por id de producto: el id de Odoo cambia
             # con cada build (2026-08-06) y el SKU es la única llave estable —
             # la misma con la que el sync empareja `products`.
             ids = sorted({g['product_id'][0] for g in grupos if g.get('product_id')})
+            uom_ids = {g['product_uom'][0] for g in grupos if g.get('product_uom')}
             for p in odoo('product.product', 'search_read', [['id', 'in', ids]],
-                          fields=['default_code'], context={'active_test': False}):
+                          fields=['default_code', 'uom_id'], context={'active_test': False}):
                 if p.get('default_code'):
                     sku_por_producto[p['id']] = p['default_code']
+                if p.get('uom_id'):
+                    stock_uom[p['id']] = p['uom_id'][0]
+                    uom_ids.add(p['uom_id'][0])
+            if uom_ids:
+                factors = {u['id']: u['factor'] for u in
+                           odoo('uom.uom', 'search_read', [['id', 'in', sorted(uom_ids)]],
+                                fields=['factor'])}
     except Exception as e:  # noqa: BLE001 — Odoo caído/timeout no debe tumbar el worker
         logger.warning('reabastecimiento/pendiente-reserva: Odoo falló: %s', e)
         return jsonify({'error': f'No se pudo consultar Odoo: {e}'}), 502
 
+    grupos, sin_convertir = en_uom_de_stock(grupos, factors, stock_uom)
+    if sin_convertir:
+        logger.warning('reabastecimiento/pendiente-reserva: %d grupos sin UoM convertible', sin_convertir)
     por_bodega = agrupar(grupos, bodega_por_ubicacion, sku_por_producto)
     # Una bodega pedida sin tipos OUT/INT no tiene entrada en `agrupar`;
     # que salga vacía y con su lista de tipos vacía, visible.
@@ -1050,6 +1066,9 @@ def reabastecimiento_pendiente_reserva():
         'asOf': datetime.now(timezone.utc).isoformat(),
         'bodegas': por_bodega,
         'pickingTypes': tipos_por_bodega,
+        # Grupos cuya UoM no se pudo resolver y se sumaron tal cual. 0 es lo
+        # normal; más de cero es el mismo síntoma del 2026-09-29 sin corregir.
+        'uomSinConvertir': sin_convertir,
     })
 
 

@@ -12,6 +12,8 @@
  * the reads (`GET /reabastecimiento/pendiente-reserva`; definition and the
  * measured before/after in `ml/pendiente_reserva.py`) and this module turns
  * the answer into the one number `buildRows` subtracts from net availability.
+ * The service folds each move into the product's stock UoM first — Demanda
+ * is stored in the move's unit, existencias in the stock unit.
  *
  * Why it is fetched and not synced: Odoo reserves confirmed demand almost
  * immediately, so the unreserved sliver churns minute to minute (2026-09-03:
