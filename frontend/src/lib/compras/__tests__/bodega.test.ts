@@ -1,4 +1,4 @@
-import { ordenarBodegas, ordenarAreas, BODEGA_LABEL } from '../bodega';
+import { ordenarBodegas, ordenarAreas, BODEGA_LABEL, bodegaTienePatio, patioDeBodega } from '../bodega';
 
 describe('ordenarBodegas', () => {
   it('reorders to the canonical General → San José → Zacapa → Petén sequence', () => {
@@ -32,6 +32,26 @@ describe('BODEGA_LABEL', () => {
     expect(BODEGA_LABEL.General).toBeUndefined();
     expect(BODEGA_LABEL.Zacapa).toBeUndefined();
     expect(BODEGA_LABEL['Petén']).toBeUndefined();
+  });
+});
+
+describe('patioDeBodega', () => {
+  it('keeps the Central yard on San José and General', () => {
+    expect(bodegaTienePatio('San Jose VN')).toBe(true);
+    expect(bodegaTienePatio('General')).toBe(true);
+    expect(patioDeBodega('San Jose VN', 1240)).toBe(1240);
+    expect(patioDeBodega('General', 1240)).toBe(1240);
+  });
+
+  it('zeroes Zacapa and Petén so San José’s yard is not shown as theirs', () => {
+    expect(bodegaTienePatio('Zacapa')).toBe(false);
+    expect(bodegaTienePatio('Petén')).toBe(false);
+    expect(patioDeBodega('Zacapa', 1240)).toBe(0);
+    expect(patioDeBodega('Petén', 1240)).toBe(0);
+  });
+
+  it('zeroes an unknown bodega rather than copying the yard onto it', () => {
+    expect(patioDeBodega('Zona 11', 1240)).toBe(0);
   });
 });
 

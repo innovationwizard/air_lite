@@ -15,7 +15,9 @@ Design decisions (docs/compras/REABASTECIMIENTO_LIVE_PROGRESS.md B2):
     the 07-28 "también patio, todo" answer (Jorge 2026-08-11: latest
     transcript wins — I6). The page tooltips state this composition so any
     disagreement surfaces as a bug report, not a silent mismatch.
-  - Patio = the `<WH>/Entrada` locations (confirmed 2026-07-28).
+  - Patio = 1CET/Entrada only, and only on San José and General. Zacapa and
+    Petén store 0 (Wilmer 2026-09-29: the Central yard was still showing on
+    those tabs). Other */Entrada locations are receiving steps, not the yard.
   - Tránsito = confirmed purchase.order.line with pending qty and STRICTLY
     FUTURE date_planned — RULE CONFIRMED BY WILMER 2026-07-30: "Tránsito no
     cuenta fechas pasadas" (he updates delivery dates when suppliers
@@ -567,14 +569,25 @@ def sync_catalog(execute, issues, dry_run):
 # Patio = 1CET/Entrada ONLY (Jorge, 2026-07-30: "Make patio display
 # 1CET/Entrada without adding anything else"). The physical yard of furgones
 # exists at Bodega Central; other */Entrada locations are receiving steps,
-# not Wilmer's patio. Shown identically on every bodega row (global, like
-# transit).
+# not Wilmer's patio.
+#
+# Shown on San José and General only. Until 2026-09-30 the same quant was
+# copied onto every bodega, so Zacapa and Petén displayed San José's yard
+# (Wilmer, 2026-09-29, SKU 77205001: Patio 1,240 was PO-P-3077 sitting in
+# 1CET/Entrada, a different furgón from Zacapa's own tránsito). Those two
+# store patio 0. The screen applies the same rule to rows already synced.
 PATIO_LOCATION = '1CET/Entrada'
+PATIO_BODEGAS = frozenset({'San Jose VN', GENERAL_BODEGA})
+
+
+def patio_ids_for(bodega, patio_ids):
+    """Yard location ids for this bodega. Empty outside San José and General."""
+    return list(patio_ids) if bodega in PATIO_BODEGAS else []
 
 
 def sync_stock(execute, by_name, bodega_codes, issues):
     """Per bodega: {odoo_pid: {'exist','reserved','patio'}} from stock.quant.
-    Patio = 1CET/Entrada only, applied to all bodegas. 'General' existencias =
+    Patio = 1CET/Entrada on San José and General only. 'General' existencias =
     ALL physical */Existencias locations (incl. tiendas)."""
     patio_ids = []
     if PATIO_LOCATION in by_name:
@@ -588,15 +601,17 @@ def sync_stock(execute, by_name, bodega_codes, issues):
     targets = dict(bodega_codes)  # purchasing bodegas from bodega_map
     for bodega, codes in targets.items():
         exist_ids = location_ids_for(by_name, codes, ['Existencias'], issues)
-        result[bodega] = _stock_for_locations(execute, exist_ids, patio_ids)
+        result[bodega] = _stock_for_locations(
+            execute, exist_ids, patio_ids_for(bodega, patio_ids))
 
     # General display aggregate: every */Existencias incl. tiendas, minus
     # GENERAL_EXCLUDED_WH; Entrada out (Wilmer 2026-08-06 — see module doc).
     exist_ids = general_exist_location_ids(by_name)
-    result['General'] = _stock_for_locations(execute, exist_ids, patio_ids)
+    result['General'] = _stock_for_locations(
+        execute, exist_ids, patio_ids_for(GENERAL_BODEGA, patio_ids))
     logger.info('stock synced for bodegas: %s (+General over %d Existencias locations, '
-                'excl. %s; patio=%s only)', list(targets), len(exist_ids),
-                GENERAL_EXCLUDED_WH, PATIO_LOCATION)
+                'excl. %s; patio=%s on %s)', list(targets), len(exist_ids),
+                GENERAL_EXCLUDED_WH, PATIO_LOCATION, sorted(PATIO_BODEGAS))
     return result
 
 

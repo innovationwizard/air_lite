@@ -50,6 +50,25 @@ export function bodegaOrigen(bodega: string): string | null {
 }
 
 /**
+ * Bodegas cuya columna Patio es el patio de Bodega Central (1CET/Entrada).
+ *
+ * Zacapa y Petén no tienen patio. Hasta el 2026-09-30 el sync copiaba
+ * 1CET/Entrada en todas las bodegas, y en esas pestañas el furgón de San José
+ * se leía como existencia del CD (Wilmer, 2026-09-29, 77205001). El patio no
+ * entra al Sugerido; el número que se muestra sí tiene que ser el de esa bodega.
+ */
+const BODEGAS_CON_PATIO = new Set<string>(['General', 'San Jose VN']);
+
+export function bodegaTienePatio(bodega: string): boolean {
+  return BODEGAS_CON_PATIO.has(bodega);
+}
+
+/** Patio que se muestra y se exporta. Fuera de San José y General es 0. */
+export function patioDeBodega(bodega: string, patio: number): number {
+  return bodegaTienePatio(bodega) ? patio : 0;
+}
+
+/**
  * Canales comerciales que son una SEDE y no un tipo de cliente — Jorge,
  * 2026-09-11: en la página de Wilmer las columnas por canal van en dos
  * juegos, primero los tipos de cliente (Institucional, Mayoreo,

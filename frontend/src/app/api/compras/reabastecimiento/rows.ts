@@ -24,7 +24,7 @@ import {
 } from '@/lib/compras/tendencia';
 import { fetchAll } from '@/lib/supabase/paginado';
 import { fetchPendienteReserva, pendientePorSku } from '@/lib/compras/pendienteReserva';
-import { bodegaOrigen, ordenarAreas } from '@/lib/compras/bodega';
+import { bodegaOrigen, ordenarAreas, patioDeBodega } from '@/lib/compras/bodega';
 import { GENERAL_BODEGA, round1 } from './lib';
 
 /**
@@ -584,7 +584,7 @@ export async function buildRows(
           exist: round1(existOrigen),
           existencias: round1(o.existencias),
           reserved: round1(o.reserved),
-          patio: round1(o.patio),
+          patio: round1(patioDeBodega(origen ?? '', o.patio)),
           pending: pendingOrigen,
           p3: round1(o.p3),
           // El motor, no la fórmula re-tecleada: sólo lee exist y p3.
@@ -679,7 +679,7 @@ export async function buildRows(
         exist: round1(existNet),
         existencias: round1(r.existencias),
         reserved: round1(r.reserved),
-        patio: round1(r.patio),
+        patio: round1(patioDeBodega(bodega, r.patio)),
         pending,
         trans: round1(trans),
         transOverridden: transOverride !== null,

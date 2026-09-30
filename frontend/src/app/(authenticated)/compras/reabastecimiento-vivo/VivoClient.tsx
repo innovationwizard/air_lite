@@ -15,7 +15,7 @@ import {
 } from '@/lib/compras/tabla';
 import { computeKpis, computeAlza, computeTopProveedores } from '@/lib/compras/statusMetrics';
 import { fmtM3, m3Sugerido } from '@/lib/compras/cubicaje';
-import { BODEGA_LABEL, ordenarBodegas } from '@/lib/compras/bodega';
+import { BODEGA_LABEL, bodegaTienePatio, ordenarBodegas } from '@/lib/compras/bodega';
 import { COBERTURA_MAX_DIAS, COBERTURA_MIN_DIAS, esCoberturaValida } from '@/lib/compras/cobertura';
 import { ExportarExcel } from './ExportarExcel';
 import { SnapshotButton } from './SnapshotButton';
@@ -99,9 +99,11 @@ const COL_TIP = {
   exist:
     'Existencias − reservado − pendiente de tomar reserva (en vivo desde Odoo). '
     + 'NO incluye patio ni tránsito.',
-  patio:
-    'Solo 1CET/Entrada: furgones en el patio de Bodega Central. '
-    + 'Se muestra aparte y NO entra al cálculo (igual que en el Excel).',
+  patio: (bodega: string) => bodegaTienePatio(bodega)
+    ? 'Solo 1CET/Entrada: furgones en el patio de Bodega Central. '
+      + 'Se muestra aparte y NO entra al cálculo (igual que en el Excel).'
+    : `${BODEGA_LABEL[bodega] ?? bodega} no tiene patio. Los furgones están en San José `
+      + '(1CET/Entrada) y se ven en esa pestaña. Acá el patio es 0 y no entra al cálculo.',
   doh:
     'Días de inventario: exist. neta ÷ (promedio 3 meses ÷ 26). '
     + 'Venta = ordenado (excluye cotización, cotización enviada y cancelado). '
@@ -952,7 +954,7 @@ export function VivoClient({ soloLectura = false }: { soloLectura?: boolean } = 
                     <Th left tip={COL_TIP.desc} sortKey="prov" orden={orden} onSort={onSort}>Descripción / Proveedor</Th>
                     <Th tip={COL_TIP.exist} sortKey="exist" orden={orden} onSort={onSort}
                         filtroKey="exist" rango={rangos.exist} onRango={onRango}>Exist. neta</Th>
-                    <Th tip={COL_TIP.patio} sortKey="patio" orden={orden} onSort={onSort}
+                    <Th tip={COL_TIP.patio(bodega)} sortKey="patio" orden={orden} onSort={onSort}
                         filtroKey="patio" rango={rangos.patio} onRango={onRango}>Patio</Th>
                     <Th tip={COL_TIP.doh} sortKey="doh" orden={orden} onSort={onSort}
                         filtroKey="doh" rango={rangos.doh} onRango={onRango}>DOH</Th>

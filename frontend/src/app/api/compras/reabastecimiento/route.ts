@@ -19,9 +19,9 @@ export const dynamic = 'force-dynamic';
  *
  * Availability semantics (parity with the workbook, manifest §3):
  *   engine.exist = existencias(on-hand) − reserved − pending(live from Odoo)
- *   patio is returned as its own column (visible, NOT in the engine math —
- *   the workbook's Existencias column excludes patio; folding it in is a
- *   Wilmer-facing decision, not a silent change).
+ *   patio is 1CET/Entrada on San José and General, and 0 on Zacapa and Petén
+ *   (Wilmer 2026-09-29: the Central yard was showing on those tabs). Visible,
+ *   NOT in the engine math — the workbook's Existencias column excludes patio.
  *   pending === null  → Odoo did not answer THIS request → flags.pendingUnknown
  *   and meta.pendienteReserva.error says why. (Until 2026-09-11 this was a
  *   manual capture, `pending_reserve_overrides`; see rows.ts / the
