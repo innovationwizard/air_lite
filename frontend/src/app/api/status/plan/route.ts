@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/server';
 import { CAN_EDIT_STATUS_PLAN } from '@/lib/auth/roles';
-import { createServiceRoleClient } from '@/lib/supabase/server';
+import { createServerSupabaseClient, createServiceRoleClient } from '@/lib/supabase/server';
 
 export const dynamic = 'force-dynamic';
 
@@ -89,11 +89,12 @@ export async function PATCH(request: Request) {
     return badRequest('nada que actualizar: enviar prioridad, fechaObjetivo o nota');
   }
 
+  const reads = await createServerSupabaseClient();
   const db = createServiceRoleClient();
 
   // El ítem tiene que existir. La FK lo garantizaría, pero un 400 explícito es
   // más útil que un error de integridad — un id mal tecleado es lo más probable.
-  const { data: existe } = await db
+  const { data: existe } = await reads
     .from('status_items').select('id').eq('id', itemId).maybeSingle();
   if (!existe) return badRequest(`el ítem ${itemId} no existe`);
 
@@ -146,6 +147,7 @@ export async function PUT(request: Request) {
     return badRequest('cuerpo JSON inválido');
   }
 
+  const reads = await createServerSupabaseClient();
   const db = createServiceRoleClient();
   const ahora = new Date().toISOString();
 
@@ -179,7 +181,7 @@ export async function PUT(request: Request) {
   // Todos los ids tienen que existir. La llave foránea también lo impediría,
   // pero un 400 que nombra el id sobrante es más útil que un error de
   // integridad — y evita aplicar la mitad del reordenamiento.
-  const { data: existentes, error: errLectura } = await db
+  const { data: existentes, error: errLectura } = await reads
     .from('status_items').select('id').in('id', orden);
   if (errLectura) {
     return NextResponse.json(

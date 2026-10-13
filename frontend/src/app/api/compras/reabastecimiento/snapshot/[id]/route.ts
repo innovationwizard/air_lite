@@ -9,21 +9,21 @@
  * 404, on a mismatch: the id isn't guessable, so there's no existence-leak
  * concern, and a 404 here would be indistinguishable from a typo'd id.
  *
- * RBAC: middleware `check_route_access` + in-handler requireAuth(CAN_VIEW_COMPRAS).
+ * RBAC: middleware `check_route_access` + in-handler requireAuth(CAN_VIEW_REABASTECIMIENTO).
  */
 import { NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/server';
-import { CAN_VIEW_COMPRAS } from '@/lib/auth/roles';
-import { createServiceRoleClient } from '@/lib/supabase/server';
+import { CAN_VIEW_REABASTECIMIENTO } from '@/lib/auth/roles';
+import { createServerSupabaseClient } from '@/lib/supabase/server';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const auth = await requireAuth(CAN_VIEW_COMPRAS);
+  const auth = await requireAuth(CAN_VIEW_REABASTECIMIENTO);
   if (auth instanceof Response) return auth;
 
   const { id } = await params;
-  const service = createServiceRoleClient();
+  const service = await createServerSupabaseClient();
 
   try {
     const { data, error } = await service

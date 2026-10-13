@@ -1,5 +1,5 @@
 /**
- * KPI / trend / top-supplier summaries for the reabastecimiento-vivo view.
+ * KPI / trend / top-supplier summaries for the reabastecimiento view.
  *
  * Extracted out of VivoClient.tsx (2026-09-04) so the "proof of status"
  * snapshot route (frontend/src/app/api/compras/reabastecimiento/snapshot)

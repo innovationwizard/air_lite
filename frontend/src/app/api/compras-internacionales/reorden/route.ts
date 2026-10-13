@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/server';
 import { CAN_VIEW_COMPRAS_INTERNACIONALES } from '@/lib/auth/roles';
-import { createServiceRoleClient } from '@/lib/supabase/server';
+import { createServerSupabaseClient } from '@/lib/supabase/server';
 import type { FilaReorden, ParamsReorden } from '@/lib/compras-internacionales/reorden';
 
 export const dynamic = 'force-dynamic';
@@ -51,7 +51,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'Falta el parámetro `modelo`' }, { status: 400 });
   }
 
-  const db = createServiceRoleClient();
+  const db = await createServerSupabaseClient();
 
   const { data: cfgRaw, error: errCfg } = await db
     .from('modelo_proveedor')

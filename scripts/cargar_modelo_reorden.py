@@ -11,7 +11,7 @@ QUÉ CARGA, y de dónde sale cada cosa:
 
   `reorden_inventario`  ← hoja «MODELO INVENTARIO», sólo los INSUMOS. Cobertura,
                           estado y pedido NO se guardan: los recalcula el motor
-                          (`lib/inventarios/reorden.ts`). Guardar un resultado
+                          (`frontend/src/lib/compras-internacionales/reorden.ts`). Guardar un resultado
                           junto a sus insumos es garantizar que algún día
                           discrepen.
   `reorden_transito`     ← las columnas FECHADAS de tránsito confirmado,

@@ -1,29 +1,27 @@
 import { redirect } from 'next/navigation';
 import { getAuthUser } from '@/lib/auth/server';
-import { isAuthorized, CAN_VIEW_COMPRAS, getDefaultPage } from '@/lib/auth/roles';
-import type { Dataset } from './engine';
-import { ReabastecimientoClient } from './ReabastecimientoClient';
-import rawData from './data.json';
+import { isAuthorized, CAN_EDIT_REABASTECIMIENTO, CAN_VIEW_COMPRAS, getDefaultPage } from '@/lib/auth/roles';
+import { VivoClient } from './VivoClient';
 
 export const dynamic = 'force-dynamic';
 
 /**
- * Reabastecimiento — Wilmer's replenishment view (COMPRAS silo).
+ * Reabastecimiento EN VIVO — the live-Odoo replenishment view (COMPRAS silo).
  *
- * Server-enforced RBAC: only CAN_VIEW_COMPRAS roles. Page-level role gating
- * lives here because the middleware only enforces authentication for pages
- * (per-route authz is applied to /api/* via check_route_access).
+ * Data path: Odoo → ml sync → reabastecimiento_inputs →
+ * GET /api/compras/reabastecimiento (shared engine applied server-side, override
+ * streams merged) → this page. Write-backs: inline Tránsito and Pendiente
+ * fields POST to /transito and /pendiente (append-only, authored).
  *
- * DATA SOURCE (interim): a provenance-stamped snapshot derived from Wilmer's
- * MAYO2026.xlsx (SHA-256 8b51fe7d…), NOT live Odoo yet. This is the same
- * snapshot posture the rest of the app currently runs on; it will be replaced
- * by the live Odoo→Supabase sync (tracker batch B1) without changing this page
- * or the engine module.
+ * Server-enforced RBAC (CAN_VIEW_COMPRAS) — the middleware only authenticates
+ * pages; per-route authz for the API calls is enforced separately via
+ * check_route_access (route_permissions).
  */
-export default async function ReabastecimientoPage() {
+export default async function ReabastecimientoVivoPage() {
   const user = await getAuthUser();
   if (!user) redirect('/login');
   if (!isAuthorized(user.role, CAN_VIEW_COMPRAS)) redirect(getDefaultPage(user.role));
 
-  return <ReabastecimientoClient data={rawData as unknown as Dataset} />;
+  // Quien ve pero no escribe (ceo) recibe la tabla sin casillas ni snapshot.
+  return <VivoClient soloLectura={!isAuthorized(user.role, CAN_EDIT_REABASTECIMIENTO)} />;
 }

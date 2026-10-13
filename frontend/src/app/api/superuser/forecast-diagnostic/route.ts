@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createServiceRoleClient } from '@/lib/supabase/server';
+import type { SupabaseClient } from '@supabase/supabase-js';
+import { createServerSupabaseClient } from '@/lib/supabase/server';
 
 export const dynamic = 'force-dynamic';
 
@@ -17,9 +18,9 @@ export const dynamic = 'force-dynamic';
  *   ?class=REYMA|CARVAJAL    (default: all 23 SKUs)
  *
  * Auth: gated by middleware via route_permissions (/api/superuser/* → superuser
- * only). This handler trusts that gate; it uses service-role to read the
- * underlying tables (revenue_daily, forecast_results, products,
- * products_acid_test_active) which are otherwise RLS-restricted.
+ * only). Reads go through the session client, so the signed-in profile's
+ * row-level security applies to revenue_daily, forecast_results, products,
+ * and products_acid_test_active.
  */
 
 interface ScopeRow {
@@ -76,7 +77,7 @@ const MAX_PAGES = 50;
  * cleaner than one over-generic one.
  */
 async function readRevenueDaily(
-  supabase: ReturnType<typeof createServiceRoleClient>,
+  supabase: SupabaseClient,
   productIds: number[],
 ): Promise<RevenueDailyRow[]> {
   const rows: RevenueDailyRow[] = [];
@@ -98,7 +99,7 @@ async function readRevenueDaily(
 }
 
 async function readForecastResults(
-  supabase: ReturnType<typeof createServiceRoleClient>,
+  supabase: SupabaseClient,
   productIds: number[],
 ): Promise<ForecastResultRow[]> {
   const rows: ForecastResultRow[] = [];
@@ -133,7 +134,7 @@ function num(v: number | string | null | undefined): number {
 
 export async function GET(req: NextRequest) {
   try {
-    const supabase = createServiceRoleClient();
+    const supabase = await createServerSupabaseClient();
     const classParam = req.nextUrl.searchParams.get('class');
     const supplierClass =
       classParam === 'REYMA' || classParam === 'CARVAJAL' ? classParam : null;

@@ -32,7 +32,7 @@ function storagePath(sha256: string): string {
 export async function POST(request: Request) {
   const ctx = await withUploadAuth();
   if (ctx instanceof Response) return ctx;
-  const { user, service } = ctx;
+  const { user, service, reads } = ctx;
 
   if (!ML_URL || !ML_KEY) {
     // Fallar en voz alta: sin el servicio no hay lectura posible, y un mensaje
@@ -113,7 +113,7 @@ export async function POST(request: Request) {
   // No es un error: es información. Alexis manda ráfagas y bien puede reenviar
   // una. Se responde antes de escribir nada nuevo.
   if (folioFiscal) {
-    const { data: yaCargada } = await service
+    const { data: yaCargada } = await reads
       .from('reyma_facturas_pdf')
       .select('guia, factura, destino, eta')
       .eq('folio_fiscal', folioFiscal)

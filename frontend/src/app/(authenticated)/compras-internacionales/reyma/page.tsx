@@ -11,7 +11,7 @@ export const dynamic = 'force-dynamic';
  * Modelo Reyma — phase-1 replica of Alexis' ADMINISTRACION INV REYMA workbook
  * (Compras Internacionales silo). Server-enforced RBAC: only CAN_VIEW_COMPRAS_INTERNACIONALES roles.
  *
- * DATA SOURCE (interim, same posture as /compras/reabastecimiento): a
+ * DATA SOURCE: a
  * provenance-stamped extraction of Alexis' real July-2026 workbook (SHA-256 in
  * data.json.provenance), NOT live Odoo yet. Phase 2 swaps the data source for
  * the live Odoo sync without touching this page or the engine module. Parity:

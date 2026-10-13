@@ -215,7 +215,7 @@ function DesabastecimientoInner() {
             Hot List — Desabastecimiento
           </h1>
           <p className="text-gray-500 mt-1">
-            Productos en riesgo de quedarse sin inventario, ordenados por impacto financiero
+            Productos en riesgo de quedarse sin inventario, ordenados por impacto financiero. Los días son existencias ÷ demand_daily de los últimos 90 días.
           </p>
         </div>
         <button

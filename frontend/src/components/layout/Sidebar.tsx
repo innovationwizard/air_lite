@@ -12,7 +12,6 @@ import {
   Warehouse,
   Snowflake,
   ShoppingCart,
-  Settings,
   Users,
   Activity,
   Truck,
@@ -46,6 +45,7 @@ import {
   CAN_VIEW_STATUS,
   ROLE_LABELS,
   focusRoutes,
+  isWithinFocus,
   Role,
 } from '@/lib/auth/roles';
 
@@ -164,24 +164,18 @@ const allNavGroups: NavGroup[] = [
       {
         name: 'Reabastecimiento',
         href: '/compras/reabastecimiento',
-        icon: Warehouse,
-        subtitle: 'Sugerido por bodega y proveedor',
-      },
-      {
-        name: 'Reabastecimiento en Vivo',
-        href: '/compras/reabastecimiento-vivo',
         icon: Activity,
         subtitle: 'Datos Odoo en vivo + captura en línea',
       },
       {
         name: 'Historial de snapshots',
-        href: '/compras/reabastecimiento-vivo/historial',
+        href: '/compras/reabastecimiento/historial',
         icon: History,
         subtitle: 'Pruebas de estado emitidas',
       },
       {
         name: 'Grupos de proveedores',
-        href: '/compras/reabastecimiento-vivo/proveedores',
+        href: '/compras/reabastecimiento/proveedores',
         icon: UserCog,
         subtitle: 'Agrupar proveedores para filtrar y comprar',
         requiredRoles: CAN_MANAGE_SUPPLIER_GROUPS,
@@ -204,48 +198,51 @@ const allNavGroups: NavGroup[] = [
   {
     section: 'Compras Internacionales',
     requiredRoles: CAN_VIEW_COMPRAS_INTERNACIONALES,
+    // Convención (2026-09-14): título = qué es («Modelo <proveedor>», sin
+    // estados como «en vivo» — todo el silo lee Odoo); subtítulo = qué calcula
+    // la página, con la misma frase para las que comparten motor.
     items: [
       {
-        name: 'Modelo Reyma',
+        name: 'Modelo Reyma (libro)',
         href: '/compras-internacionales/reyma',
         icon: Boxes,
-        subtitle: 'Réplica del libro — Julio 2026',
+        subtitle: 'Réplica congelada del libro de julio 2026',
       },
       {
-        name: 'Modelo Reyma en Vivo',
+        name: 'Modelo Reyma',
         href: '/compras-internacionales/reyma-vivo',
-        icon: Activity,
-        subtitle: 'Datos Odoo en vivo + proyección editable',
+        icon: Boxes,
+        subtitle: 'Pedido semanal por furgón',
       },
       {
         name: 'Modelo Carvajal',
         href: '/compras-internacionales/carvajal-vivo',
         icon: Boxes,
-        subtitle: 'Mismas reglas, otros números',
+        subtitle: 'Pedido semanal por furgón',
       },
       {
         name: 'Modelo Darnel',
         href: '/compras-internacionales/darnel-vivo',
         icon: Boxes,
-        subtitle: 'Punto de reorden + alcance máximo',
+        subtitle: 'Punto de reorden y alcance máximo',
       },
       {
         name: 'Modelo Asia',
         href: '/compras-internacionales/asia-vivo',
         icon: Boxes,
-        subtitle: 'Mismo motor que Darnel',
+        subtitle: 'Punto de reorden y alcance máximo',
       },
       {
-        name: 'Cargar Facturas',
+        name: 'Cargar facturas',
         href: '/compras-internacionales/facturas',
         icon: FileUp,
-        subtitle: 'Facturas de REYMA + ETA del furgón',
+        subtitle: 'Facturas de REYMA y ETA del furgón',
       },
       {
         name: 'Facturas pendientes',
         href: '/compras-internacionales/facturas/pendientes',
         icon: PackageSearch,
-        subtitle: 'Identificadores de REYMA sin SKU todavía',
+        subtitle: 'Identificadores de REYMA sin SKU',
       },
     ],
   },
@@ -412,12 +409,6 @@ const allNavGroups: NavGroup[] = [
         icon: Users,
         subtitle: null,
       },
-      {
-        name: 'Configuración',
-        href: '/admin/configuracion',
-        icon: Settings,
-        subtitle: null,
-      },
     ],
   },
   {
@@ -462,7 +453,7 @@ export function Sidebar({ open, onClose }: SidebarProps) {
       items: group.items.filter((item) => item.requiredRoles ? isAuthorized(userRole, item.requiredRoles) : true),
     }))
     .map((group) => (focus
-      ? { ...group, items: group.items.filter((item) => focus.includes(item.href)) }
+      ? { ...group, items: group.items.filter((item) => isWithinFocus(item.href, focus)) }
       : group))
     .filter((group) => group.items.length > 0);
 

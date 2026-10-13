@@ -1,5 +1,5 @@
 /**
- * Pure data-shaping for the reabastecimiento-vivo "proof of status" PDF —
+ * Pure data-shaping for the reabastecimiento "proof of status" PDF —
  * types, timestamp/filename formatting, and the filter-summary line.
  *
  * Deliberately separate from reabastecimientoStatusPdf.tsx (which imports

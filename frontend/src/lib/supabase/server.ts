@@ -2,6 +2,11 @@ import { createServerClient } from '@supabase/ssr';
 import { createClient } from '@supabase/supabase-js';
 import { cookies } from 'next/headers';
 
+/**
+ * Session client (publishable key + the caller's cookies).
+ * API reads use this so row-level security applies.
+ * Writes stay on createServiceRoleClient until insert and update policies exist.
+ */
 export async function createServerSupabaseClient() {
   const cookieStore = await cookies();
 
@@ -29,8 +34,9 @@ export async function createServerSupabaseClient() {
 }
 
 /**
- * Admin client with service role key — bypasses RLS.
- * Only use in API routes and server actions, never in client components.
+ * Service-role client. Bypasses row-level security.
+ * Use it for writes, for private storage uploads, and for Auth Admin
+ * (`auth.admin.listUsers`, `createUser`, `deleteUser`). Do not use it to read.
  */
 export function createServiceRoleClient() {
   return createClient(

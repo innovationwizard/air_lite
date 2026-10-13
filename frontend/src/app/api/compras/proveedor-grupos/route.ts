@@ -3,11 +3,11 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/server';
 import { CAN_MANAGE_SUPPLIER_GROUPS } from '@/lib/auth/roles';
-import { createServiceRoleClient } from '@/lib/supabase/server';
+import { createServerSupabaseClient, createServiceRoleClient } from '@/lib/supabase/server';
 
 /**
  * GET/POST /api/compras/proveedor-grupos — grupos de proveedores para el
- * filtro de reabastecimiento-vivo. Ver PROVEEDORES_GROUPING_BUILD_PLAN.md §2.
+ * filtro de reabastecimiento. Ver PROVEEDORES_GROUPING_BUILD_PLAN.md §2.
  *
  * RBAC: defense-in-depth — middleware `check_route_access` (route_permissions,
  * migración 20260904000001) + in-handler requireAuth(CAN_MANAGE_SUPPLIER_GROUPS).
@@ -23,7 +23,7 @@ export async function GET() {
   const auth = await requireAuth(CAN_MANAGE_SUPPLIER_GROUPS);
   if (auth instanceof Response) return auth;
 
-  const supabase = createServiceRoleClient();
+  const supabase = await createServerSupabaseClient();
 
   const [{ data: groups, error: groupsError }, { data: members, error: membersError },
          { data: allSuppliers, error: suppliersError }] = await Promise.all([
@@ -85,9 +85,10 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  const reads = await createServerSupabaseClient();
   const supabase = createServiceRoleClient();
 
-  const { data: found, error: lookupError } = await supabase
+  const { data: found, error: lookupError } = await reads
     .from('suppliers').select('id').in('id', supplierIds);
   if (lookupError) return NextResponse.json({ error: lookupError.message }, { status: 500 });
   const foundIds = new Set((found ?? []).map((s: { id: number }) => s.id));

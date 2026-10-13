@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/server';
 import { CAN_VIEW_COMPRAS_INTERNACIONALES } from '@/lib/auth/roles';
-import { createServiceRoleClient } from '@/lib/supabase/server';
+import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { fetchAll } from '@/lib/supabase/paginado';
 import type { ModeloRow, VentasRow } from '@/app/(authenticated)/compras-internacionales/reyma/engine';
 import { computePdfTransito, type PdfTransito } from '@/app/(authenticated)/compras-internacionales/reyma-vivo/saldos';
@@ -128,7 +128,7 @@ export async function GET(request: Request) {
   // como antes para quien no pide otra cosa.
   const modelo = (new URL(request.url).searchParams.get('modelo') ?? 'reyma').trim() || 'reyma';
 
-  const service = createServiceRoleClient();
+  const service = await createServerSupabaseClient();
   try {
     const { data: runs, error: runErr } = await service
       .from('sync_runs')

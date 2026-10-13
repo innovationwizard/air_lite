@@ -40,11 +40,9 @@ WITH no_sku AS (SELECT id FROM products WHERE sku IS NULL),
          SELECT 1 FROM backtest_results         t WHERE t.product_id = s.id UNION ALL
          SELECT 1 FROM open_order_lines         t WHERE t.product_id = s.id UNION ALL
          SELECT 1 FROM dispatch_plan_weeks      t WHERE t.product_id = s.id UNION ALL
-         SELECT 1 FROM extraordinary_order_lines t WHERE t.product_id = s.id UNION ALL
          SELECT 1 FROM weekly_audits            t WHERE t.product_id = s.id UNION ALL
          SELECT 1 FROM comercial_forecast       t WHERE t.product_id = s.id UNION ALL
          SELECT 1 FROM transito_overrides       t WHERE t.product_id = s.id UNION ALL
-         SELECT 1 FROM pending_reserve_overrides t WHERE t.product_id = s.id UNION ALL
          SELECT 1 FROM sync_issues              t WHERE t.product_id = s.id UNION ALL
          SELECT 1 FROM products_acid_test_active t WHERE t.products_id = s.id))
 SELECT
@@ -96,11 +94,9 @@ WHERE p.sku IS NULL
   AND NOT EXISTS (SELECT 1 FROM backtest_results          t WHERE t.product_id = p.id)
   AND NOT EXISTS (SELECT 1 FROM open_order_lines          t WHERE t.product_id = p.id)
   AND NOT EXISTS (SELECT 1 FROM dispatch_plan_weeks       t WHERE t.product_id = p.id)
-  AND NOT EXISTS (SELECT 1 FROM extraordinary_order_lines t WHERE t.product_id = p.id)
   AND NOT EXISTS (SELECT 1 FROM weekly_audits             t WHERE t.product_id = p.id)
   AND NOT EXISTS (SELECT 1 FROM comercial_forecast        t WHERE t.product_id = p.id)
   AND NOT EXISTS (SELECT 1 FROM transito_overrides        t WHERE t.product_id = p.id)
-  AND NOT EXISTS (SELECT 1 FROM pending_reserve_overrides t WHERE t.product_id = p.id)
   AND NOT EXISTS (SELECT 1 FROM sync_issues               t WHERE t.product_id = p.id)
   AND NOT EXISTS (SELECT 1 FROM products_acid_test_active t WHERE t.products_id = p.id);
 

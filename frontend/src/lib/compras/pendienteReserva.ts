@@ -19,9 +19,8 @@
  * immediately, so the unreserved sliver churns minute to minute (2026-09-03:
  * the same SKU×bodega returned 40 vs 275 open moves 20 minutes apart; the
  * 2026-09-11 build watched 77205001 go 2340 → 1312 within the hour). A
- * synced column or a hand-typed value is stale by construction — that is
- * exactly what the manual `pending_reserve_overrides` input was, and why it
- * was retired.
+ * synced column or a hand-typed value is stale by construction. The manual
+ * table that used to hold it has been dropped.
  *
  * Failure is honest, not zero: if the service or Odoo does not answer, every
  * row's `pending` is null → the page shows ¿? and says why. A SKU Odoo did

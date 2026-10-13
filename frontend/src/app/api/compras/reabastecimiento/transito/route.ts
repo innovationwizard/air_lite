@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/server';
-import { CAN_EDIT_COMPRAS } from '@/lib/auth/roles';
-import { createServiceRoleClient } from '@/lib/supabase/server';
+import { CAN_EDIT_REABASTECIMIENTO } from '@/lib/auth/roles';
+import { createServerSupabaseClient, createServiceRoleClient } from '@/lib/supabase/server';
 import { validateManualQtyOrClear } from '@/lib/compras/qty';
 import { badRequest, isPositiveInt, knownBodegas } from '../lib';
 
@@ -19,7 +19,7 @@ export const dynamic = 'force-dynamic';
  * per product×bodega.
  */
 export async function POST(request: Request) {
-  const auth = await requireAuth(CAN_EDIT_COMPRAS);
+  const auth = await requireAuth(CAN_EDIT_REABASTECIMIENTO);
   if (auth instanceof Response) return auth;
 
   let body: Record<string, unknown>;
@@ -38,9 +38,10 @@ export async function POST(request: Request) {
     return badRequest("effectiveWeek debe ser 'YYYY-MM-DD'");
   }
 
+  const reads = await createServerSupabaseClient();
   const service = createServiceRoleClient();
   try {
-    const bodegas = await knownBodegas(service);
+    const bodegas = await knownBodegas(reads);
     if (typeof bodega !== 'string' || !bodegas.includes(bodega)) {
       return badRequest(`bodega desconocida (válidas: ${bodegas.join(', ')})`);
     }

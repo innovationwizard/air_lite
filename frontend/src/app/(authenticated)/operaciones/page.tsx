@@ -203,7 +203,7 @@ export default function OperacionesHomePage() {
           <p className="text-3xl font-bold text-gray-900 mt-1">
             {loading ? '—' : coberturaPromedio !== null ? `${coberturaPromedio.toFixed(0)}d` : '—'}
           </p>
-          <p className="text-xs text-gray-400 mt-0.5">Días de stock</p>
+          <p className="text-xs text-gray-400 mt-0.5">Existencias ÷ demand_daily (90 días)</p>
         </div>
         <div className="bg-white border border-gray-200 rounded-xl p-4">
           <p className="text-xs text-gray-500 font-medium">Total inventario</p>
@@ -299,7 +299,7 @@ export default function OperacionesHomePage() {
                     <p className="text-sm text-gray-900 truncate mt-0.5">{r.product_name}</p>
                   </div>
                   <div className="text-right flex-shrink-0">
-                    <p className="text-sm font-semibold text-red-700">
+                    <p className="text-sm font-semibold text-red-700" title="Existencias ÷ demand_daily de los últimos 90 días">
                       {r.days_of_supply >= 9999 ? '999+' : r.days_of_supply.toFixed(0)}d
                     </p>
                     <p className="text-xs text-gray-400">LT {r.lead_time_days}d</p>

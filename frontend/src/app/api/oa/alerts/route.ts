@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createServiceRoleClient } from '@/lib/supabase/server';
+import { createServerSupabaseClient } from '@/lib/supabase/server';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(_request: NextRequest) {
   try {
-    const supabase = createServiceRoleClient();
+    const supabase = await createServerSupabaseClient();
 
     const { data, error } = await supabase.rpc('rpc_oa_alerts_summary');
 

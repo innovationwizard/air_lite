@@ -203,12 +203,16 @@ export function VivoClient({ modelo = 'reyma', soloLectura = false }: { modelo?:
     ? new Date(payload.sync.finishedAt).toLocaleString('es-GT')
     : '—';
   const nEdits = Object.keys(proyEdits).length;
+  // El mismo cliente sirve a Reyma y Carvajal (A4.26): el título sale del
+  // modelo que devolvió el API, no de un literal. Sin «en vivo» — todo el
+  // silo lee Odoo; el sello «Odoo producción» de al lado ya lo dice.
+  const nombreModelo = `Modelo ${payload?.modelo?.nombre ?? modelo.charAt(0).toUpperCase() + modelo.slice(1)}`;
 
   return (
     <div className="p-6 max-w-[1400px] mx-auto">
       <div className="mb-4">
         <div className="flex flex-wrap items-center gap-3">
-          <h1 className="text-xl font-bold text-slate-800">Modelo Reyma — EN VIVO</h1>
+          <h1 className="text-xl font-bold text-slate-800">{nombreModelo}</h1>
           <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-700">
             <Activity className="h-3 w-3" /> Odoo producción
           </span>

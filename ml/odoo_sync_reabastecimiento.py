@@ -33,15 +33,11 @@ Design decisions (docs/compras/REABASTECIMIENTO_LIVE_PROGRESS.md B2):
     resolved 2026-07-29). Its field layout is UNPROBED (instance was down when
     this was written) -> discovered at runtime; if not interpretable, h=0 for
     all rows and a warning sync_issue is emitted. Never guessed.
-  - pending_reserve is NEVER written by this sync (decision 2026-07-30: no
-    system stores it; Wilmer keys it manually via pending_reserve_overrides).
-    ⚠️ UPDATE 2026-09-03: it IS live-derivable — stock.move outgoing to a
-    customer location, state='confirmed', per product x warehouse — but that
-    is exactly why this sync must still never write it: querying the same
-    SKU x warehouse ~20 minutes apart on production returned a completely
-    different set of active moves (40 vs 275). A periodic sync would already
-    be stale on write. This has to be fetched live from Odoo per request, not
-    synced and not hand-typed. See ml/probe_pending_reserve.py.
+  - pending_reserve is NEVER written by this sync. It is fetched live from
+    Odoo per request. A periodic sync or a hand-typed table is stale on
+    write: the same SKU x warehouse returned a different set of active moves
+    20 minutes apart (40 vs 275). The manual table was dropped. See
+    ml/probe_pending_reserve.py.
   - products/suppliers/product_suppliers: INSERT-MISSING-ONLY. Existing rows
     are never mutated (the running app reads them); differences are reported
     as sync_issues instead.

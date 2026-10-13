@@ -3,7 +3,7 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/server';
 import { CAN_MANAGE_SUPPLIER_GROUPS } from '@/lib/auth/roles';
-import { createServiceRoleClient } from '@/lib/supabase/server';
+import { createServerSupabaseClient, createServiceRoleClient } from '@/lib/supabase/server';
 
 /**
  * PATCH/DELETE /api/compras/proveedor-grupos/[id] — editar o borrar un grupo.
@@ -25,9 +25,10 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
   const { id } = await params;
   const body = await request.json();
+  const reads = await createServerSupabaseClient();
   const supabase = createServiceRoleClient();
 
-  const { data: existing, error: findError } = await supabase
+  const { data: existing, error: findError } = await reads
     .from('supplier_groups').select('id').eq('id', id).maybeSingle();
   if (findError) return NextResponse.json({ error: findError.message }, { status: 500 });
   if (!existing) return NextResponse.json({ error: 'Grupo no encontrado' }, { status: 404 });
@@ -53,7 +54,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       return NextResponse.json({ error: 'supplierIds debe ser un arreglo de enteros' }, { status: 400 });
     }
     if (supplierIds.length > 0) {
-      const { data: found, error: lookupError } = await supabase
+      const { data: found, error: lookupError } = await reads
         .from('suppliers').select('id').in('id', supplierIds);
       if (lookupError) return NextResponse.json({ error: lookupError.message }, { status: 500 });
       const foundIds = new Set((found ?? []).map((s: { id: number }) => s.id));
@@ -84,7 +85,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     }
   }
 
-  const { data: updated, error: reloadError } = await supabase
+  const { data: updated, error: reloadError } = await reads
     .from('supplier_groups').select('id, display_name').eq('id', id).single();
   if (reloadError || !updated) {
     return NextResponse.json({ error: reloadError?.message ?? 'Error recargando el grupo' }, { status: 500 });

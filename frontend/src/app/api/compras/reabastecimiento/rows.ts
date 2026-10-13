@@ -16,7 +16,7 @@ import {
   sugerido,
   forecast,
   doh,
-} from '@/app/(authenticated)/compras/reabastecimiento/engine';
+} from '@/lib/compras/reabastecimientoEngine';
 import { esBase, mesPorDefecto, sumaDirecto, type Motivo } from '@/lib/comercial/forecast';
 import {
   evaluarTendencia, evaluarDivergencia, evaluarAlerta, tieneReferenciaAnioAnterior,
@@ -442,9 +442,8 @@ export async function buildRows(
             .eq('bodega', bodega).order('created_at', { ascending: false }),
           { columna: 'id', ascending: false }),
         // Pendiente de tomar reserva — live from Odoo, in parallel with the
-        // Supabase reads. Replaces the manual `pending_reserve_overrides`
-        // input (2026-07-30 → 2026-09-11): Wilmer's own Odoo filter, per
-        // request, never stored. Never throws — a failure is a value.
+        // Supabase reads. The manual table was dropped. Wilmer's own Odoo
+        // filter, per request, never stored. Never throws — a failure is a value.
         fetchPendienteReserva([...new Set([...codigosBodega, ...codigosOrigen])]),
         fetchAll<ComercialRow>(() =>
           service.from('comercial_forecast')
@@ -604,12 +603,9 @@ export async function buildRows(
        *      atribuye por la sucursal de la orden de compra (c67ba1f,
        *      2026-09-08), así que cada vista ve sólo el suyo.
        *
-       * Hubo una capa intermedia —«Destino final» declarado a mano, W15-A—
-       * que movía el tránsito replicado a una sola bodega. Se retiró el
-       * 2026-09-10 a pedido de Wilmer: con el tránsito ya atribuido por
-       * sucursal, verlo bodega por bodega con el filtro de arriba la
-       * reemplaza. La tabla `transito_destino` queda como historial; nadie
-       * la lee.
+       * Una capa intermedia —un destino único tecleado a mano— se retiró y
+       * su tabla se eliminó. El tránsito sincronizado ya viene por sucursal
+       * de la orden de compra.
        *
        * undefined (sin entrada) y null (borrado) caen igual a la capa de
        * abajo; sólo un número real hace override.

@@ -204,7 +204,7 @@ export default function CapitalCongeladoPage() {
             Hold List — Capital Congelado
           </h1>
           <p className="text-gray-500 mt-1">
-            Clasificación ABC/XYZ — inventario que no genera valor, ordenado por capital inmovilizado
+            Clasificación ABC/XYZ — inventario que no genera valor, ordenado por capital inmovilizado. El excedente por bodega usa existencias ÷ demand_daily de los últimos 90 días.
           </p>
         </div>
         <button

@@ -223,7 +223,7 @@ export default function DiasInventarioPage() {
             Días de Inventario
           </h1>
           <p className="text-gray-500 mt-1">
-            Stock por producto y bodega vs. política de inventario, según demanda de los últimos 30 días.
+            Stock ÷ (ventas de los últimos 30 días / 30), comparado con el lead time. No es el DOH del reabastecimiento ni la cobertura de 90 días.
           </p>
           {snapshotLabel && (
             <p className="text-xs text-gray-400 mt-1">Snapshot al {snapshotLabel}.</p>

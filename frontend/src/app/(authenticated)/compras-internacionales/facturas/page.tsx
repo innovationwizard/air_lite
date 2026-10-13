@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation';
 import { getAuthUser } from '@/lib/auth/server';
 import { isAuthorized, CAN_VIEW_COMPRAS_INTERNACIONALES, getDefaultPage } from '@/lib/auth/roles';
-import { createServiceRoleClient } from '@/lib/supabase/server';
+import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { DIAS_HABILES_DEFAULT } from '../reyma-vivo/eta';
 import { FacturasClient } from './FacturasClient';
 
@@ -27,7 +27,7 @@ export default async function FacturasPage() {
 
   // Días hábiles por bodega para la «ETA App». Append-only, la última fila por
   // destino manda — mismo resolutor que usa el GET del modelo vivo.
-  const service = createServiceRoleClient();
+  const service = await createServerSupabaseClient();
   const { data } = await service
     .from('reyma_eta_config')
     .select('destino, dias_habiles, created_at')

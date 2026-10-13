@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/server';
 import { CAN_VIEW_STATUS } from '@/lib/auth/roles';
-import { createServiceRoleClient } from '@/lib/supabase/server';
+import { createServerSupabaseClient } from '@/lib/supabase/server';
 
 export const dynamic = 'force-dynamic';
 
@@ -30,7 +30,7 @@ export async function GET() {
   const auth = await requireAuth(CAN_VIEW_STATUS);
   if (auth instanceof Response) return auth;
 
-  const db = createServiceRoleClient();
+  const db = await createServerSupabaseClient();
 
   const { data: items, error } = await db
     .from('status_items')

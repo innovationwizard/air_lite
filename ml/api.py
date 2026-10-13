@@ -15,7 +15,6 @@ from flask import Flask, request, jsonify
 from supabase import create_client
 
 from backtest_engine import run_backtest_cycle
-from purchase_scheduler import run_purchase_schedule_cycle
 from forecast_revenue import forecast_product as forecast_product_revenue
 from forecast_purchases_derived import forecast_purchases_derived
 from pendiente_reserva import SEQUENCE_CODES, agrupar, en_uom_de_stock, picking_types_por_bodega
@@ -165,69 +164,6 @@ def run_all_backtests():
                 'training_months': training_months,
                 'error': str(e),
             })
-
-    return jsonify({
-        'total_cycles': len(results) + len(errors),
-        'completed': len(results),
-        'failed': len(errors),
-        'results': results,
-        'errors': errors,
-    })
-
-
-@app.route('/backtest/purchase-schedule-all', methods=['POST'])
-def run_all_purchase_schedules():
-    """
-    Pre-compute all weekly purchase schedule cycles for Carvajal + Reyma.
-
-    Training starts at 3 months (Oct-Dec 2024), then adds 1 week at a time.
-    Each cycle forecasts one week of purchase recommendations.
-    Runs synchronously — Railway has no timeout limit.
-    """
-    data = request.get_json() or {}
-    max_inventory_days = int(data.get('max_inventory_days', 14))
-
-    supabase = get_supabase()
-    results = []
-    errors = []
-
-    # Check how many cycles already completed to resume from where we left off
-    existing = supabase.table('purchase_schedule_runs').select(
-        'id', count='exact'
-    ).eq('status', 'completed').execute()
-    start_offset = existing.count if existing.count else 0
-
-    training_months = 3
-    week_offset = start_offset
-    max_weeks = 70  # Safety limit
-
-    logger.info('Resuming from week_offset=%d (%d already completed)', week_offset, start_offset)
-
-    while week_offset < max_weeks:
-        logger.info('=== Purchase schedule: week_offset=%d ===', week_offset)
-        try:
-            result = run_purchase_schedule_cycle(
-                supabase, training_months, week_offset, max_inventory_days,
-            )
-            if result is None:
-                logger.info('No more data available at week_offset=%d, stopping', week_offset)
-                break
-
-            results.append(result)
-            logger.info(
-                'Week %d completed: run_id=%d, %d products, %.0f units, %dms',
-                week_offset, result['run_id'],
-                result['products_scheduled'], result['total_units'],
-                result['duration_ms'],
-            )
-        except Exception as e:
-            logger.error('Week %d failed: %s', week_offset, e)
-            errors.append({
-                'week_offset': week_offset,
-                'error': str(e),
-            })
-
-        week_offset += 1
 
     return jsonify({
         'total_cycles': len(results) + len(errors),

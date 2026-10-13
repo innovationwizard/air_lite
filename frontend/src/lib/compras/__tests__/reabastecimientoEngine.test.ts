@@ -1,16 +1,12 @@
 /**
  * Per-bodega coverage horizon for the Sugerido.
  *
- * Wilmer, 2026-08-21: *"el sugerido para estos CDs no es de 30 dias, sino de 15
- * dias por favor"* (Zacapa y Petén).
- *
- * The first test is the important one: with the field absent nothing moves, so
- * the xlsx parity page keeps its 99.85% match. Everything else here is the new
- * behaviour, pinned.
+ * With coberturaDias absent, forecast stays the 30-day default. A shorter
+ * horizon scales the forecast term only.
  */
 import {
   COBERTURA_DEFAULT_DIAS, forecast, sugerido, doh, type ProductRow,
-} from '../engine';
+} from '../reabastecimientoEngine';
 
 const base = (over: Partial<ProductRow> = {}): ProductRow => ({
   cod: '77205003', desc: 'BANDEJA No.1 TERMOFOM 5X50', prov: 'CARVAJAL',
@@ -19,8 +15,8 @@ const base = (over: Partial<ProductRow> = {}): ProductRow => ({
   ...over,
 });
 
-describe('backwards compatibility — the parity page must not move', () => {
-  it('is identical when coberturaDias is absent', () => {
+describe('default horizon', () => {
+  it('is the unscaled monthly mean when coberturaDias is absent', () => {
     const r = base();
     expect(forecast(r)).toBe((2000 + 2400) / 2);
     expect(forecast(r)).toBe(2200);
@@ -31,18 +27,18 @@ describe('backwards compatibility — the parity page must not move', () => {
       .toBe(forecast(base()));
   });
 
-  it('leaves the General branch (×1.1 + seasonal) untouched by default', () => {
+  it('leaves the General branch (×1.1 + seasonal) unscaled by default', () => {
     const g = base({ win: 10, h: 2600 });
     expect(forecast(g)).toBeCloseTo(((2000 + 2400 + 2600) / 3) * 1.1, 9);
   });
 });
 
 describe('coverage scaling', () => {
-  it('halves the forecast at 15 days — Wilmer\'s ask', () => {
+  it('halves the forecast at 15 days', () => {
     expect(forecast(base({ coberturaDias: 15 }))).toBe(1100);
   });
 
-  it('scales linearly, because the base IS one month of demand', () => {
+  it('scales linearly, because the base is one month of demand', () => {
     expect(forecast(base({ coberturaDias: 45 }))).toBe(3300);
     expect(forecast(base({ coberturaDias: 7 }))).toBeCloseTo(2200 * (7 / 30), 9);
   });
@@ -53,36 +49,28 @@ describe('coverage scaling', () => {
   });
 });
 
-describe('where the horizon must NOT be applied', () => {
+describe('where the horizon must not be applied', () => {
   it('does not scale the result — stock credit stays whole', () => {
-    // The wrong implementation is k·(forecast − V). With exist 500 and T = 600:
-    //   right: max(0, 1100 − max(0, 500 + 0 − 600)) = 1100
-    //   wrong: 0.5 · (2200 − 0) = 1100 ... so use a case where they diverge.
     const r = base({ coberturaDias: 15, exist: 1500, trans: 0 });
-    const T = (r.p3 / 20) * r.win;          // 2400/20*5 = 600
-    const V = Math.max(r.exist + r.trans - T, 0); // 900
-    expect(sugerido(r, r.trans)).toBe(Math.max(0, 1100 - V)); // 200
-    // The scale-the-result version would give 0.5 * (2200 - 900) = 650.
+    const T = (r.p3 / 20) * r.win;
+    const V = Math.max(r.exist + r.trans - T, 0);
+    expect(sugerido(r, r.trans)).toBe(Math.max(0, 1100 - V));
     expect(sugerido(r, r.trans)).not.toBe(650);
   });
 
   it('does not change the projection window T', () => {
-    // Same exist/trans, only the horizon differs: the delta must be exactly the
-    // forecast delta, proving T was untouched.
     const r30 = base({ exist: 1500 });
     const r15 = base({ exist: 1500, coberturaDias: 15 });
     expect(sugerido(r30, 0) - sugerido(r15, 0)).toBeCloseTo(forecast(r30) - forecast(r15), 9);
   });
 
-  it('does not change DOH — it is a diagnostic, not a purchase quantity', () => {
+  it('does not change DOH', () => {
     expect(doh(base({ coberturaDias: 15 }))).toBe(doh(base()));
   });
 });
 
-describe('the real Zacapa case', () => {
-  it('asks for about half of what a 30-day horizon would', () => {
-    // 77205003 at Zacapa, production 2026-08-21: p6 1,590.33 / p3 1,590.33-ish,
-    // exist 566, reserved 186 → net 380, no tránsito.
+describe('a 15-day horizon asks for less than 30 days', () => {
+  it('the difference is half the monthly mean', () => {
     const zac = (dias?: number) => sugerido(
       base({ p6: 1590.33, p3: 1590.33, exist: 380, win: 5, coberturaDias: dias }), 0,
     );

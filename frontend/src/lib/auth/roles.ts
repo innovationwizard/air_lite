@@ -1,7 +1,7 @@
 /**
  * RBAC role definitions and authorization helpers.
  *
- * 11 roles: superuser, admin, gerencia, compras, ventas, compras_internacionales, financiero, testuser, operaciones, ceo, sales_manager
+ * 12 roles: superuser, admin, gerencia, compras, ventas, compras_internacionales, financiero, testuser, operaciones, project_manager, ceo, sales_manager
  * Superuser bypasses all checks.
  */
 
@@ -17,8 +17,10 @@ export const ROLES = {
   OPERACIONES: 'operaciones',
   /**
    * The client's project manager. Owns the PLAN on /status — priority order,
-   * target dates, notes — and nothing else. Deliberately NOT given the compras
-   * or compras_internacionales silos: he had been entering with a `compras`
+   * target dates, notes. Also in CAN_VIEW_OPERATIONAL, and not in
+   * ROLLOUT_FOCUS, so /backtest and /preocupaciones stay reachable. Not
+   * confined to /status. Deliberately NOT given the compras or
+   * compras_internacionales silos: he had been entering with a `compras`
    * credential, so authorising the plan by that role would have handed the
    * same authority to the buyer the plan measures. See
    * 20260901000002_add_project_manager_role.sql
@@ -50,7 +52,7 @@ export const CAN_RUN_BACKTEST: Role[] = ['superuser', 'admin', 'gerencia', 'ceo'
 export const CAN_MANAGE_USERS: Role[] = ['superuser', 'admin'];
 
 /**
- * Roles that can create/edit supplier groups (reabastecimiento-vivo filter).
+ * Roles that can create/edit supplier groups (reabastecimiento filter).
  * Wilmer-only by design (2026-09-03) — narrower than CAN_VIEW_COMPRAS on
  * purpose, see PROVEEDORES_GROUPING_UX_DESIGN.md §4.
  */
@@ -163,6 +165,19 @@ export const CAN_EDIT_COMPRAS: Role[] = [
   'superuser', 'admin', 'gerencia', 'compras',
 ];
 
+/**
+ * Who may READ the live replenishment API. Narrower than CAN_VIEW_COMPRAS:
+ * admin and gerencia still open the other Compras pages, and the permission
+ * table does not grant them these routes. ceo and sales_manager are included
+ * because their grants are GET-only.
+ */
+export const CAN_VIEW_REABASTECIMIENTO: Role[] = [
+  'superuser', 'compras', 'ceo', 'sales_manager',
+];
+
+/** Who may WRITE the live replenishment API. Superuser still bypasses isAuthorized. */
+export const CAN_EDIT_REABASTECIMIENTO: Role[] = ['superuser', 'compras'];
+
 /** Quién ESCRIBE en Compras Internacionales (precio, proyección, plan, pedido, NC, ETA, facturas). Misma regla que CAN_EDIT_COMPRAS. */
 export const CAN_EDIT_COMPRAS_INTERNACIONALES: Role[] = [
   'superuser', 'admin', 'gerencia', 'compras_internacionales',
@@ -188,8 +203,9 @@ export const CAN_VIEW_POC_ONLY: Role[] = ['testuser'];
  * (the union of the Compras section and the Prueba de Concepto section), so
  * closing the hole neither widens nor narrows anyone's reach. `operaciones` is
  * absent because no sidebar group ever showed it this page, despite a stale
- * comment that said otherwise; `project_manager` is absent because it is scoped
- * to /status alone. `ventas` was dropped 2026-09-11 — the channel heads get
+ * comment that said otherwise; `project_manager` is absent because this page
+ * was never shown to that role. The role is not confined to /status.
+ * `ventas` was dropped 2026-09-11 — the channel heads get
  * the Forecast Comercial and nothing else (see CAN_VIEW_OPERATIONAL).
  */
 export const CAN_VIEW_POC: Role[] = [
@@ -215,15 +231,15 @@ export const CAN_VIEW_POC: Role[] = [
 /** Las páginas que ven `ceo` y `sales_manager` — una sola lista para los dos (ver su entrada abajo). */
 const FOCO_DIRECCION: string[] = [
   '/comercial/forecast',
-  '/compras/reabastecimiento-vivo', '/compras/reabastecimiento-vivo/historial',
+  '/compras/reabastecimiento', '/compras/reabastecimiento/historial',
   '/compras-internacionales/reyma-vivo', '/compras-internacionales/carvajal-vivo',
   '/compras-internacionales/darnel-vivo', '/compras-internacionales/asia-vivo',
 ];
 
 export const ROLLOUT_FOCUS: Partial<Record<Role, string[]>> = {
   compras: [
-    '/compras/reabastecimiento-vivo', '/compras/reabastecimiento-vivo/historial',
-    '/compras/reabastecimiento-vivo/proveedores', '/comercial/forecast',
+    '/compras/reabastecimiento', '/compras/reabastecimiento/historial',
+    '/compras/reabastecimiento/proveedores', '/comercial/forecast',
   ],
   // A6.20 — los CUATRO modelos de Alexis, cada uno con su juego de reglas.
   // `reyma-vivo` sigue primero: es la landing y el modelo validado.
@@ -327,12 +343,11 @@ export const PAGE_PERMISSIONS: Record<string, Role[]> = {
   '/oa': CAN_VIEW_OA,
   '/compras': CAN_VIEW_COMPRAS,
   '/compras/reabastecimiento': CAN_VIEW_COMPRAS,
-  '/compras/reabastecimiento-vivo': CAN_VIEW_COMPRAS,
   // Narrower than the parent page (CAN_VIEW_COMPRAS) — most-specific-prefix-wins
   // in the middleware, so this correctly excludes ventas/compras_internacionales/
-  // financiero/etc., who could view reabastecimiento-vivo but were never meant
+  // financiero/etc., who could view reabastecimiento but were never meant
   // to manage supplier groups.
-  '/compras/reabastecimiento-vivo/proveedores': CAN_MANAGE_SUPPLIER_GROUPS,
+  '/compras/reabastecimiento/proveedores': CAN_MANAGE_SUPPLIER_GROUPS,
   '/compras-internacionales/reyma': CAN_VIEW_COMPRAS_INTERNACIONALES,
   '/compras-internacionales/reyma-vivo': CAN_VIEW_COMPRAS_INTERNACIONALES,
   '/compras-internacionales/carvajal-vivo': CAN_VIEW_COMPRAS_INTERNACIONALES,

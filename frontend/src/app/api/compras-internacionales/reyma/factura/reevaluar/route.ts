@@ -22,7 +22,7 @@ const ML_KEY = process.env.ML_SERVICE_API_KEY;
 export async function POST(request: Request) {
   const ctx = await withWriteAuth(request);
   if (ctx instanceof Response) return ctx;
-  const { body, service } = ctx;
+  const { body, service, reads } = ctx;
 
   const ticket = typeof body.ticket === 'string' ? body.ticket.trim() : '';
   if (!ticket) return badRequest('ticket requerido');
@@ -32,7 +32,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'El servicio de lectura de facturas no está configurado. Avisale a Jorge.' }, { status: 503 });
   }
 
-  const { data: staging, error: errStaging } = await service
+  const { data: staging, error: errStaging } = await reads
     .from('reyma_factura_staging')
     .select('id, estado, archivo, sha256, parse')
     .eq('id', ticket)

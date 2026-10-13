@@ -43,7 +43,7 @@ interface PendienteRow {
 export async function POST(request: Request) {
   const ctx = await withWriteAuth(request);
   if (ctx instanceof Response) return ctx;
-  const { user, body, service } = ctx;
+  const { user, body, service, reads } = ctx;
 
   const clave = typeof body.clave === 'string' ? body.clave.trim() : '';
   const codigo = typeof body.codigo === 'string' ? body.codigo.trim() : '';
@@ -57,7 +57,7 @@ export async function POST(request: Request) {
   const fuente = typeof body.fuente === 'string' ? body.fuente : 'manual';
 
   // ── Líneas que estaban esperando esta clave, ANTES de escribir nada ────────
-  const { data: pendientes, error: errPendientes } = await service
+  const { data: pendientes, error: errPendientes } = await reads
     .from('reyma_factura_pendiente')
     .select('*')
     .eq('clave', clave)

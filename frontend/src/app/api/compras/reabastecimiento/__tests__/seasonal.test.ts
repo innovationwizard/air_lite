@@ -25,7 +25,7 @@ import {
   forecast,
   sugerido,
   type ProductRow,
-} from '@/app/(authenticated)/compras/reabastecimiento/engine';
+} from '@/lib/compras/reabastecimientoEngine';
 
 // Velocity measured in production 2026-08-20, bodega General.
 const P6 = 5189.05;

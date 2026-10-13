@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/server';
-import { CAN_VIEW_COMPRAS } from '@/lib/auth/roles';
-import { createServiceRoleClient } from '@/lib/supabase/server';
+import { CAN_VIEW_REABASTECIMIENTO } from '@/lib/auth/roles';
+import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { GENERAL_BODEGA, buildTiendas, knownBodegas } from './lib';
 import { buildRows } from './rows';
 
@@ -14,8 +14,8 @@ export const dynamic = 'force-dynamic';
  * (`reabastecimiento_inputs`), merges the three manual override streams
  * (comercial_forecast, transito_overrides, sugerido_bodega — latest entry per
  * product×bodega applies), fetches pendiente de tomar reserva LIVE from Odoo,
- * and computes Sugerido/DOH with the SAME
- * engine module the xlsx parity page uses (imported, never reimplemented).
+ * and computes Sugerido/DOH with the shared replenishment engine
+ * (imported, never reimplemented).
  *
  * Availability semantics (parity with the workbook, manifest §3):
  *   engine.exist = existencias(on-hand) − reserved − pending(live from Odoo)
@@ -23,19 +23,17 @@ export const dynamic = 'force-dynamic';
  *   (Wilmer 2026-09-29: the Central yard was showing on those tabs). Visible,
  *   NOT in the engine math — the workbook's Existencias column excludes patio.
  *   pending === null  → Odoo did not answer THIS request → flags.pendingUnknown
- *   and meta.pendienteReserva.error says why. (Until 2026-09-11 this was a
- *   manual capture, `pending_reserve_overrides`; see rows.ts / the
- *   `lib/compras/pendienteReserva.ts` header for why it became a live fetch.)
+ *   and meta.pendienteReserva.error says why. The manual table was dropped.
  *
  * RBAC: defense-in-depth — middleware `check_route_access` (route_permissions,
- * migration 20260724000003) + in-handler requireAuth(CAN_VIEW_COMPRAS).
+ * migration 20260724000003) + in-handler requireAuth(CAN_VIEW_REABASTECIMIENTO).
  */
 
 export async function GET(request: Request) {
-  const auth = await requireAuth(CAN_VIEW_COMPRAS);
+  const auth = await requireAuth(CAN_VIEW_REABASTECIMIENTO);
   if (auth instanceof Response) return auth;
 
-  const service = createServiceRoleClient();
+  const service = await createServerSupabaseClient();
   const url = new URL(request.url);
   const bodega = url.searchParams.get('bodega') ?? GENERAL_BODEGA;
 

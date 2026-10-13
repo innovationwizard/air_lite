@@ -1,4 +1,4 @@
-import { createServerSupabaseClient, createServiceRoleClient } from '@/lib/supabase/server';
+import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { Role, isAuthorized } from './roles';
 
 export interface AuthUser {
@@ -21,8 +21,8 @@ export async function getAuthUser(): Promise<AuthUser | null> {
 
   if (!user) return null;
 
-  const serviceClient = createServiceRoleClient();
-  const { data: profile } = await serviceClient
+  // Own-row policy on user_profiles. The session can read its own profile.
+  const { data: profile } = await supabase
     .from('user_profiles')
     .select('role, display_name, area')
     .eq('id', user.id)

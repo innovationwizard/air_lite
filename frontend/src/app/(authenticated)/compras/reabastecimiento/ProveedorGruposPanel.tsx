@@ -5,7 +5,7 @@ import { AlertTriangle, Plus, Search, Trash2, X } from 'lucide-react';
 
 /**
  * Panel de gestión de grupos de proveedores — master-detail, dentro de
- * reabastecimiento-vivo (Wilmer-only). Ver PROVEEDORES_GROUPING_BUILD_PLAN.md
+ * reabastecimiento (Wilmer-only). Ver PROVEEDORES_GROUPING_BUILD_PLAN.md
  * §4.
  *
  * No usa el `Dialog` de components/ui ni `@radix-ui/react-dialog`: ninguno de

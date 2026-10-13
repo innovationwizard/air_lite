@@ -420,12 +420,13 @@ export default function ComprasForecastPage() {
                   )}
                 </div>
                 <div className="flex items-center gap-3 text-xs text-right">
-                  <span className="text-red-700 font-semibold">{item.days_of_supply.toFixed(0)}d inventario</span>
+                  <span className="text-red-700 font-semibold" title="Existencias ÷ demand_daily de los últimos 90 días">{item.days_of_supply.toFixed(0)}d inventario</span>
                   <span className="text-gray-400">lead time: {item.lead_time_days}d</span>
                 </div>
               </div>
             ))}
           </div>
+          <p className="mt-2 text-xs text-red-500">Días de inventario = existencias ÷ demand_daily de los últimos 90 días.</p>
           <p className="mt-2 text-xs text-red-600">
             Stock actual es inferior al lead time del proveedor — una OC emitida hoy llegará después de agotarse el inventario.
           </p>

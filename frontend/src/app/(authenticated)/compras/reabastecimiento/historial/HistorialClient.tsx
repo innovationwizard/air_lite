@@ -64,7 +64,7 @@ export function HistorialClient({ isSuperuser }: { isSuperuser: boolean }) {
     <div className="p-6 max-w-[1000px] mx-auto">
       <div className="mb-4">
         <Link
-          href="/compras/reabastecimiento-vivo"
+          href="/compras/reabastecimiento"
           className="inline-flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700"
         >
           <ArrowLeft size={13} /> Volver a Reabastecimiento en Vivo

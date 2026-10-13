@@ -1,6 +1,6 @@
 /**
  * PDF rendering for the "proof of status" snapshot of
- * /compras/reabastecimiento-vivo. Plan: docs/compras/PROOF_OF_STATUS_IMPLEMENTATION_PLAN_2026-09-03.md §5.
+ * /compras/reabastecimiento. Plan: docs/compras/PROOF_OF_STATUS_IMPLEMENTATION_PLAN_2026-09-03.md §5.
  *
  * Client-side vector PDF (@react-pdf/renderer, D-4) — no headless browser, no
  * `window.print()` (D-1). Renders ONLY from the frozen snapshot payload

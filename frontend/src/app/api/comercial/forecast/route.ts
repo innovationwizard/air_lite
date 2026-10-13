@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/server';
 import { CAN_VIEW_FORECAST_COMERCIAL, CAN_CAPTURE_FORECAST, isAuthorized } from '@/lib/auth/roles';
-import { createServiceRoleClient } from '@/lib/supabase/server';
+import type { SupabaseClient } from '@supabase/supabase-js';
+import { createServerSupabaseClient, createServiceRoleClient } from '@/lib/supabase/server';
 import {
   MAX_CODIGOS_POR_MES, MOTIVOS_VALIDOS, esBase, mesDentroDelHorizonte, mesesAbiertos, primerDiaMes,
   type Motivo,
@@ -15,7 +16,7 @@ import { CAN_DESBLOQUEAR_FORECAST } from '@/lib/auth/roles';
 export const dynamic = 'force-dynamic';
 
 /** A parent area (institucional since 2026-09-11) captures nothing: its sellers do. */
-async function tieneHijos(db: ReturnType<typeof createServiceRoleClient>, area: string): Promise<boolean> {
+async function tieneHijos(db: SupabaseClient, area: string): Promise<boolean> {
   const { data } = await db.from('comercial_areas').select('slug').eq('padre', area).eq('activa', true).limit(1);
   return !!data && data.length > 0;
 }
@@ -40,7 +41,7 @@ export async function GET() {
   const auth = await requireAuth(CAN_VIEW_FORECAST_COMERCIAL);
   if (auth instanceof Response) return auth;
 
-  const db = createServiceRoleClient();
+  const db = await createServerSupabaseClient();
   const soloMias = auth.role === 'ventas';
   if (soloMias && !auth.area) {
     return NextResponse.json({ error: 'Tu usuario no tiene un canal comercial asignado.' }, { status: 403 });
@@ -115,7 +116,7 @@ export async function GET() {
  * which is all the consolidated table shows.
  */
 async function contextoConsolidado(
-  db: ReturnType<typeof createServiceRoleClient>, productIds: number[], hoy: Date,
+  db: SupabaseClient, productIds: number[], hoy: Date,
   soloAreas: string[] | null = null,
 ) {
   // The closed previous month is viewable too: that is where "what did the
@@ -221,12 +222,13 @@ export async function PUT(request: Request) {
     return badRequest(`El mes debe ser uno de los abiertos: ${mesesAbiertos(hoyEnGuatemala()).join(', ')}`);
   }
 
+  const reads = await createServerSupabaseClient();
   const db = createServiceRoleClient();
-  if (await tieneHijos(db, area)) {
+  if (await tieneHijos(reads, area)) {
     return NextResponse.json({ error: 'Este canal se pronostica por vendedor; cada vendedor carga el suyo.' }, { status: 403 });
   }
   // «Bloquear cambios»: a locked area+month refuses every write, batch or single.
-  const lock = await bloqueoActivo(db, area, month);
+  const lock = await bloqueoActivo(reads, area, month);
   if (lock) return NextResponse.json({ error: mensajeBloqueado(lock, month) }, { status: 423 });
 
   const esLote = Array.isArray(body.filas);
@@ -249,7 +251,7 @@ export async function PUT(request: Request) {
     entradas.push(v.fila);
   }
 
-  const { data: existentes } = await db
+  const { data: existentes } = await reads
     .from('products').select('id').in('id', entradas.map((f) => f.productId));
   const conocidos = new Set((existentes ?? []).map((p) => p.id as number));
   const desconocido = entradas.find((f) => !conocidos.has(f.productId));
@@ -258,7 +260,7 @@ export async function PUT(request: Request) {
   // Tope de códigos por área y mes — sólo sobre los manuales y sólo si el
   // código es nuevo: corregir uno ya cargado nunca queda bloqueado por el
   // tope, y una recomendación aprobada (`base`) no cuenta contra él.
-  const { data: cargados } = await db.from('comercial_forecast')
+  const { data: cargados } = await reads.from('comercial_forecast')
     .select('product_id, motivo').eq('area', area).eq('month', month);
   const yaCargados = new Map((cargados ?? []).map((c) => [c.product_id as number, c.motivo as Motivo]));
   const manualesHoy = (cargados ?? []).filter((c) => !esBase(c.motivo as Motivo)).length;
@@ -312,11 +314,12 @@ export async function DELETE(request: Request) {
   if (!Number.isInteger(productId) || productId <= 0) return badRequest('productId inválido');
   if (!month) return badRequest('month es obligatorio');
 
+  const reads = await createServerSupabaseClient();
   const db = createServiceRoleClient();
-  if (await tieneHijos(db, permiso.area)) {
+  if (await tieneHijos(reads, permiso.area)) {
     return NextResponse.json({ error: 'Este canal se pronostica por vendedor; cada vendedor carga el suyo.' }, { status: 403 });
   }
-  const lock = await bloqueoActivo(db, permiso.area, month);
+  const lock = await bloqueoActivo(reads, permiso.area, month);
   if (lock) return NextResponse.json({ error: mensajeBloqueado(lock, month) }, { status: 423 });
   const { error } = await db.from('comercial_forecast').delete()
     .eq('area', permiso.area).eq('month', month).eq('product_id', productId);

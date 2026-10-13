@@ -26,10 +26,10 @@ import { CAN_MANAGE_SUPPLIER_GROUPS, isAuthorized } from '@/lib/auth/roles';
 import {
   COBERTURA_DEFAULT_DIAS,
   type ProductRow, type Sev, sugerido, doh as dohOf, sev, fmt,
-} from '../reabastecimiento/engine';
+} from '@/lib/compras/reabastecimientoEngine';
 
 /**
- * Live client for /compras/reabastecimiento-vivo.
+ * Live client for /compras/reabastecimiento.
  *
  * Rows come computed from the API (engine applied server-side). Inline edits
  * (Tránsito) recompute locally with the SAME imported engine for instant
@@ -105,7 +105,8 @@ const COL_TIP = {
     : `${BODEGA_LABEL[bodega] ?? bodega} no tiene patio. Los furgones están en San José `
       + '(1CET/Entrada) y se ven en esa pestaña. Acá el patio es 0 y no entra al cálculo.',
   doh:
-    'Días de inventario: exist. neta ÷ (promedio 3 meses ÷ 26). '
+    'Días de inventario: exist. neta ÷ (promedio 3 meses ÷ 26 días hábiles). '
+    + 'No es la cobertura de 90 días ni los días de Operaciones (ventas de 30 días / 30). '
     + 'Venta = ordenado (excluye cotización, cotización enviada y cancelado). '
     + 'Semáforo aprobado 2026-08-06: crítico < 3 · bajo < 7 · normal 7–30 · exceso > 30.',
   trans:
@@ -168,8 +169,8 @@ const COL_TIP = {
     + 'San José hay 50, pero la venta mensual de San José son 200, yo no voy a trasladar esos 50". '
     + '— = el producto no existe en esa bodega (no es cero).',
   origenDoh: (origen: string, bodega: string) =>
-    `DOH DE ${origen.toUpperCase()}: cuántos días le dura a la bodega que abastece a ${bodega} `
-    + 'lo que tiene, contra su propia venta. Mismo semáforo: en rojo o ámbar no puede prestar; '
+    `DOH DE ${origen.toUpperCase()}: existencias ÷ (promedio 3 meses ÷ 26) de la bodega que abastece a ${bodega}. `
+    + 'Misma cuenta que la columna DOH, no la cobertura de 90 días. Mismo semáforo: en rojo o ámbar no puede prestar; '
     + 'en azul (exceso, > 30 días) es candidata a traslado. Ordená por esta columna para ver '
     + 'primero lo que un traslado cubriría.',
   m3:

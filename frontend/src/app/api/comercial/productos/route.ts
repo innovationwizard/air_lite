@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/server';
 import { CAN_VIEW_FORECAST_COMERCIAL } from '@/lib/auth/roles';
-import { createServiceRoleClient } from '@/lib/supabase/server';
+import { createServerSupabaseClient } from '@/lib/supabase/server';
 
 export const dynamic = 'force-dynamic';
 
@@ -33,7 +33,7 @@ export async function GET(request: Request) {
   const seguro = q.replace(/[%_,()]/g, ' ').trim();
   if (!seguro) return NextResponse.json({ productos: [] });
 
-  const db = createServiceRoleClient();
+  const db = await createServerSupabaseClient();
   const { data, error } = await db
     .from('products')
     .select('id, sku, name, stock_uom')

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createServiceRoleClient } from '@/lib/supabase/server';
+import { createServerSupabaseClient } from '@/lib/supabase/server';
 
 export const dynamic = 'force-dynamic';
 
@@ -20,7 +20,7 @@ const MAX_PAGES = 10;
  */
 export async function GET(req: NextRequest) {
   try {
-    const supabase = createServiceRoleClient();
+    const supabase = await createServerSupabaseClient();
     const action = req.nextUrl.searchParams.get('action') ?? 'report';
     const scope = req.nextUrl.searchParams.get('scope') ?? 'top';
 

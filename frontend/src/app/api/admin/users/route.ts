@@ -3,10 +3,10 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/server';
 import { CAN_MANAGE_USERS, Role } from '@/lib/auth/roles';
-import { createServiceRoleClient } from '@/lib/supabase/server';
+import { createServerSupabaseClient, createServiceRoleClient } from '@/lib/supabase/server';
 
 const VALID_ROLES: Role[] = [
-  'admin', 'gerencia', 'compras', 'ventas', 'compras_internacionales', 'financiero', 'testuser', 'ceo', 'sales_manager',
+  'admin', 'gerencia', 'compras', 'ventas', 'compras_internacionales', 'financiero', 'testuser', 'operaciones', 'project_manager', 'ceo', 'sales_manager',
 ];
 
 /** GET /api/admin/users — list all users with profiles, plus the área catalog */
@@ -14,10 +14,12 @@ export async function GET() {
   const authResult = await requireAuth(CAN_MANAGE_USERS);
   if (authResult instanceof Response) return authResult;
 
+  const reads = await createServerSupabaseClient();
+  // auth.admin.listUsers exists only on the service role.
   const supabase = createServiceRoleClient();
 
-  // Get all user profiles
-  const { data: profiles, error: profileError } = await supabase
+  // Get all user profiles. Admin and superuser may read every row.
+  const { data: profiles, error: profileError } = await reads
     .from('user_profiles')
     .select('id, display_name, role, area, created_at')
     .order('created_at', { ascending: false });
@@ -35,7 +37,7 @@ export async function GET() {
 
   // Áreas comerciales, para que el formulario de creación pueda asignarle una
   // a un usuario `ventas` — sin esto no hay forma de que capture nada.
-  const { data: areas } = await supabase
+  const { data: areas } = await reads
     .from('comercial_areas')
     .select('slug, nombre')
     .eq('activa', true)
@@ -97,6 +99,7 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  const reads = await createServerSupabaseClient();
   const supabase = createServiceRoleClient();
 
   // `area` es el canal comercial (rol `ventas`): sin esta validación, un jefe
@@ -107,7 +110,7 @@ export async function POST(request: NextRequest) {
     if (typeof area !== 'string') {
       return NextResponse.json({ error: 'area inválida' }, { status: 400 });
     }
-    const { data: areaRow } = await supabase
+    const { data: areaRow } = await reads
       .from('comercial_areas').select('slug').eq('slug', area).eq('activa', true).maybeSingle();
     if (!areaRow) {
       return NextResponse.json({ error: `Área desconocida: ${area}` }, { status: 400 });
@@ -166,10 +169,12 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ error: 'No puede eliminar su propia cuenta' }, { status: 403 });
   }
 
+  const reads = await createServerSupabaseClient();
   const supabase = createServiceRoleClient();
 
-  // Check target user's role — cannot delete superuser
-  const { data: targetProfile } = await supabase
+  // Check target user's role — cannot delete superuser.
+  // Admin and superuser may read every profile row.
+  const { data: targetProfile } = await reads
     .from('user_profiles')
     .select('role')
     .eq('id', userId)

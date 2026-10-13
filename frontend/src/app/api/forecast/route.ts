@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createServiceRoleClient } from '@/lib/supabase/server';
+import { createServerSupabaseClient } from '@/lib/supabase/server';
 
 export const dynamic = 'force-dynamic';
 
@@ -12,7 +12,7 @@ export const dynamic = 'force-dynamic';
  */
 export async function GET(req: NextRequest) {
   try {
-    const supabase = createServiceRoleClient();
+    const supabase = await createServerSupabaseClient();
     const scope = req.nextUrl.searchParams.get('scope') ?? 'top';
     const forecastMonth = req.nextUrl.searchParams.get('forecast_month');
     const trainingEnd = req.nextUrl.searchParams.get('training_end');

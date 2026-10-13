@@ -61,7 +61,7 @@ const MES_RE = /^\d{4}-\d{2}$/;
 export async function POST(request: Request) {
   const ctx = await withWriteAuth(request);
   if (ctx instanceof Response) return ctx;
-  const { user, body, service } = ctx;
+  const { user, body, service, reads } = ctx;
   const accion = typeof body.accion === 'string' ? body.accion : '';
 
   // ── Decisión humana sobre un caso de la cola.
@@ -107,7 +107,7 @@ export async function POST(request: Request) {
   // filtro se tomaría un sync_id sin filas en `reyma_facturas` y la
   // conciliación no encontraría nada — un no-op silencioso, justo lo que no
   // queremos. Mismo filtro que usa el GET del modelo vivo.
-  const { data: runRows, error: runErr } = await service
+  const { data: runRows, error: runErr } = await reads
     .from('sync_runs').select('id')
     .eq('kind', 'reyma')
     .eq('status', 'success').order('started_at', { ascending: false }).limit(1);
@@ -116,12 +116,12 @@ export async function POST(request: Request) {
   if (!runId) return badRequest('no hay ninguna sincronización exitosa contra la cual conciliar');
 
   const [odooRes, pdfRes, matchRes] = await Promise.all([
-    service.from('reyma_facturas')
+    reads.from('reyma_facturas')
       .select('factura, fecha, referencia, tipo, codigo, cantidad, precio_unit')
       .eq('sync_id', runId),
-    service.from('reyma_facturas_pdf')
+    reads.from('reyma_facturas_pdf')
       .select('folio_fiscal, factura, guia, destino, fecha, eta, codigo, clave, cantidad, precio_unit'),
-    service.from('reyma_factura_match')
+    reads.from('reyma_factura_match')
       .select('folio_fiscal, factura, odoo_factura, tier, regla, estado, autor, created_at')
       .eq('mes', `${mes}-01`).order('created_at', { ascending: false }),
   ]);

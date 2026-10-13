@@ -12,6 +12,8 @@ import {
   PAGE_PERMISSIONS,
   ROLLOUT_FOCUS,
   CAN_VIEW_COMPRAS,
+  CAN_VIEW_REABASTECIMIENTO,
+  CAN_EDIT_REABASTECIMIENTO,
   CAN_VIEW_POC,
   CAN_EDIT_STATUS_PLAN,
   CAN_VIEW_GERENCIA,
@@ -138,7 +140,7 @@ describe('getDefaultPage', () => {
   });
 
   it('rollout focus (TEMPORARY, 2026-08-11): compras/compras_internacionales land on the FIRST focus route', () => {
-    expect(getDefaultPage('compras')).toBe('/compras/reabastecimiento-vivo');
+    expect(getDefaultPage('compras')).toBe('/compras/reabastecimiento');
     expect(getDefaultPage('compras_internacionales')).toBe('/compras-internacionales/reyma-vivo');
   });
 
@@ -229,7 +231,7 @@ describe('ROLLOUT_FOCUS — confinamiento de varias rutas', () => {
       '/compras-internacionales/reyma',        // el prefijo de reyma-vivo: NO debe pasar
       '/backtest',
       '/statusquo',                // hermano por prefijo de /status: NO pasa
-      '/compras/reabastecimiento-vivo',
+      '/compras/reabastecimiento',
       '/gerencia/forecast',
       '/admin',
       '/superuser',
@@ -248,8 +250,8 @@ describe('ROLLOUT_FOCUS — confinamiento de varias rutas', () => {
 
   it('compras sigue confinado a su página de trabajo, sin el estado', () => {
     expect(focusRoutes('compras')).toEqual([
-      '/compras/reabastecimiento-vivo', '/compras/reabastecimiento-vivo/historial',
-      '/compras/reabastecimiento-vivo/proveedores', '/comercial/forecast',
+      '/compras/reabastecimiento', '/compras/reabastecimiento/historial',
+      '/compras/reabastecimiento/proveedores', '/comercial/forecast',
     ]);
   });
 
@@ -287,7 +289,7 @@ describe('ROLLOUT_FOCUS — confinamiento de varias rutas', () => {
     const rutas = focusRoutes(rol)!;
     expect(getDefaultPage(rol)).toBe('/comercial/forecast');
     for (const dentro of [
-      '/compras/reabastecimiento-vivo', '/compras/reabastecimiento-vivo/historial',
+      '/compras/reabastecimiento', '/compras/reabastecimiento/historial',
       '/compras-internacionales/reyma-vivo', '/compras-internacionales/carvajal-vivo',
       '/compras-internacionales/darnel-vivo', '/compras-internacionales/asia-vivo',
     ]) {
@@ -310,7 +312,7 @@ describe('ROLLOUT_FOCUS — confinamiento de varias rutas', () => {
     // `proveedores` rides under the vivo prefix, so the confinement alone
     // does not stop it — the page's own gate (Wilmer-only) does, and the
     // sidebar never lists it for the ceo.
-    expect(rutas).not.toContain('/compras/reabastecimiento-vivo/proveedores');
+    expect(rutas).not.toContain('/compras/reabastecimiento/proveedores');
     expect(isAuthorized(rol, CAN_MANAGE_SUPPLIER_GROUPS)).toBe(false);
   });
 
@@ -342,7 +344,8 @@ describe('ROLLOUT_FOCUS — confinamiento de varias rutas', () => {
    */
   it('sales_manager es ceo en toda lista de roles, salvo el desbloqueo del forecast', () => {
     const listas: Record<string, Role[]> = {
-      CAN_VIEW_COMPRAS, CAN_VIEW_POC, CAN_EDIT_STATUS_PLAN, CAN_VIEW_GERENCIA,
+      CAN_VIEW_COMPRAS, CAN_VIEW_REABASTECIMIENTO, CAN_EDIT_REABASTECIMIENTO,
+      CAN_VIEW_POC, CAN_EDIT_STATUS_PLAN, CAN_VIEW_GERENCIA,
       CAN_VIEW_COMPRAS_INTERNACIONALES, CAN_MANAGE_USERS, CAN_MODIFY_SETTINGS,
       CAN_MANAGE_SUPPLIER_GROUPS, CAN_VIEW_STATUS, CAN_EDIT_COMPRAS,
       CAN_EDIT_COMPRAS_INTERNACIONALES, CAN_RUN_BACKTEST, CAN_VIEW_OPERATIONAL,
@@ -506,7 +509,7 @@ describe('PAGE_PERMISSIONS — coincidencia por prefijo más específico', () =>
 
   it('ventas alcanza el forecast comercial y nada del silo de compras', () => {
     expect(isAuthorized('ventas', reglaPara('/comercial/forecast')[1])).toBe(true);
-    expect(isAuthorized('ventas', reglaPara('/compras/reabastecimiento-vivo')[1])).toBe(false);
+    expect(isAuthorized('ventas', reglaPara('/compras/reabastecimiento')[1])).toBe(false);
   });
 
   it('una página sin regla sigue abierta a cualquier sesión — comportamiento previo', () => {

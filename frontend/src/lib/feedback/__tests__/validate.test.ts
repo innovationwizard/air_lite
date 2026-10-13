@@ -19,7 +19,7 @@ const datoBase = {
   donde: 'fila 3, columna Sugerido',
   appDice: '120',
   appDeberiaDecir: '90',
-  url: 'https://airefill.app/compras/reabastecimiento-vivo',
+  url: 'https://airefill.app/compras/reabastecimiento',
   meta,
   screenshot: null,
 };

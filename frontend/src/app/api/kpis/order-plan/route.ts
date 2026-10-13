@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { createServiceRoleClient } from '@/lib/supabase/server';
+import { createServerSupabaseClient } from '@/lib/supabase/server';
 
 export const dynamic = 'force-dynamic';
 
@@ -33,7 +33,7 @@ interface SupplierOrderSummary {
 
 export async function GET() {
   try {
-    const supabase = createServiceRoleClient();
+    const supabase = await createServerSupabaseClient();
 
     // 1. 23 demo SKUs: default_code + supplier_class
     const { data: demoProds, error: dpErr } = await supabase

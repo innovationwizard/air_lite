@@ -19,8 +19,8 @@ export async function GET() {
   const auth = await withReadAuth();
   if (auth instanceof Response) return auth;
 
-  const { createServiceRoleClient } = await import('@/lib/supabase/server');
-  const service = createServiceRoleClient();
+  const { createServerSupabaseClient } = await import('@/lib/supabase/server');
+  const service = await createServerSupabaseClient();
 
   const { data, error } = await service
     .from('reyma_factura_pendiente')

@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/server';
 import { CAN_VIEW_FORECAST_COMERCIAL } from '@/lib/auth/roles';
-import { createServiceRoleClient } from '@/lib/supabase/server';
+import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { fetchAll } from '@/lib/supabase/paginado';
 import { esModificado, mesDentroDelHorizonte, mesPorDefecto, mesesAbiertos, hoyEnGuatemala } from '@/lib/comercial/forecast';
 import { TOP_N, bodegaQueSirve } from '@/lib/comercial/recomendacion';
@@ -59,7 +59,7 @@ export async function GET(request: Request) {
     area = areaPedida;
   }
 
-  const db = createServiceRoleClient();
+  const db = await createServerSupabaseClient();
   const [ctx, demanda, capturas, cobertura, forecastCompras] = await Promise.all([
     cargarContexto(db),
     cargarDemanda(db, area),

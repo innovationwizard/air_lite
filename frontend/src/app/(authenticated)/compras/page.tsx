@@ -177,7 +177,7 @@ export default function ComprasHomePage() {
             <div className="relative group inline-block">
               <Info className="w-3 h-3 text-gray-400 cursor-help" />
               <div className="absolute z-10 hidden group-hover:block bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 bg-gray-900 text-white text-xs rounded-lg p-3 shadow-lg pointer-events-none">
-                Promedio de días de stock disponible en todos los SKUs activos, considerando la demanda diaria promedio de los últimos 90 días.
+                Promedio de existencias ÷ demanda diaria de demand_daily en los últimos 90 días. No es el DOH del reabastecimiento ni los días de Operaciones.
               </div>
             </div>
           </div>
@@ -185,7 +185,7 @@ export default function ComprasHomePage() {
             {loading ? '—' : coberturaPromedio !== null ? `${coberturaPromedio.toFixed(0)}d` : '—'}
           </p>
           <p className="text-xs text-gray-400 mt-0.5">Días de stock</p>
-          <p className="text-[10px] text-gray-300 mt-1">demanda prom. últ. 90d</p>
+          <p className="text-[10px] text-gray-300 mt-1">existencias ÷ demand_daily (90 días)</p>
         </div>
       </div>
 
@@ -303,7 +303,7 @@ export default function ComprasHomePage() {
                 </div>
                 <div className="text-right flex-shrink-0">
                   <p className="text-sm font-semibold text-amber-700">{fmtGTQ(gtqEnRiesgo(r))}</p>
-                  <p className="text-xs text-gray-400">{r.days_of_supply >= 9999 ? '999+' : r.days_of_supply.toFixed(0)}d / LT {r.lead_time_days}d</p>
+                  <p className="text-xs text-gray-400" title="Existencias ÷ demand_daily de los últimos 90 días">{r.days_of_supply >= 9999 ? '999+' : r.days_of_supply.toFixed(0)}d / LT {r.lead_time_days}d</p>
                 </div>
               </div>
             ))}

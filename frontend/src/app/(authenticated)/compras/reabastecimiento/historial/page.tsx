@@ -7,7 +7,7 @@ export const dynamic = 'force-dynamic';
 
 /**
  * Historial de snapshots — past "Capturar" proofs of status for
- * reabastecimiento-vivo. Split out of the live page as its own destination
+ * reabastecimiento. Split out of the live page as its own destination
  * (2026-09-04): browsing history is navigation, not a toolbar action, so it
  * lives here and in the sidebar, not behind a dropdown next to Copiar/Exportar.
  *

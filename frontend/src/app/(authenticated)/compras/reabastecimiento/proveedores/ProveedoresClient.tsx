@@ -10,5 +10,5 @@ import { ProveedorGruposPanel } from '../ProveedorGruposPanel';
  */
 export function ProveedoresClient() {
   const router = useRouter();
-  return <ProveedorGruposPanel onClose={() => router.push('/compras/reabastecimiento-vivo')} />;
+  return <ProveedorGruposPanel onClose={() => router.push('/compras/reabastecimiento')} />;
 }

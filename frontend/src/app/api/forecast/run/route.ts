@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createServiceRoleClient } from '@/lib/supabase/server';
+import { createServerSupabaseClient, createServiceRoleClient } from '@/lib/supabase/server';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300;
@@ -56,11 +56,12 @@ export async function POST(req: NextRequest) {
     const skuFilter     = body.sku ?? null;
     const dryRun        = Boolean(body.dry_run);
 
+    const reads = await createServerSupabaseClient();
     const supabase = createServiceRoleClient();
 
     // ── Resolve SKU list ─────────────────────────────────────────────────
 
-    let skuQuery = supabase
+    let skuQuery = reads
       .from('products_acid_test_active')
       .select('default_code, representative_name, supplier_class, movement_rank_within_class, is_top_10_in_class');
     if (scope === 'top') skuQuery = skuQuery.eq('is_top_10_in_class', true);
@@ -73,7 +74,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'No SKUs in scope' }, { status: 400 });
     }
 
-    const { data: supaProducts, error: pErr } = await supabase
+    const { data: supaProducts, error: pErr } = await reads
       .from('products')
       .select('id, sku')
       .in('sku', defaultCodes);

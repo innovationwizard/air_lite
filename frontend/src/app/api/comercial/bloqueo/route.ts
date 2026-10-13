@@ -3,7 +3,7 @@ import { requireAuth } from '@/lib/auth/server';
 import {
   CAN_CAPTURE_FORECAST, CAN_DESBLOQUEAR_FORECAST, CAN_VIEW_FORECAST_COMERCIAL,
 } from '@/lib/auth/roles';
-import { createServiceRoleClient } from '@/lib/supabase/server';
+import { createServerSupabaseClient, createServiceRoleClient } from '@/lib/supabase/server';
 import { fetchAll } from '@/lib/supabase/paginado';
 import { mesDentroDelHorizonte, mesesAbiertos, hoyEnGuatemala } from '@/lib/comercial/forecast';
 import { areaPermitida } from '@/lib/comercial/permisos';
@@ -46,8 +46,8 @@ export async function GET(request: Request) {
   if (auth.role === 'ventas' && areaPedida && areaPedida !== auth.area) {
     return NextResponse.json({ error: 'Sólo podés ver el bloqueo de tu propio canal.' }, { status: 403 });
   }
-  const db = createServiceRoleClient();
-  return NextResponse.json({ bloqueo: await bloqueoActivo(db, area, month) });
+  const reads = await createServerSupabaseClient();
+  return NextResponse.json({ bloqueo: await bloqueoActivo(reads, area, month) });
 }
 
 export async function POST(request: Request) {
@@ -67,16 +67,17 @@ export async function POST(request: Request) {
       { error: `El mes debe ser uno de los abiertos: ${mesesAbiertos(hoy).join(', ')}` }, { status: 400 });
   }
 
+  const reads = await createServerSupabaseClient();
   const db = createServiceRoleClient();
-  const { data: hijos } = await db.from('comercial_areas').select('slug').eq('padre', area).eq('activa', true).limit(1);
+  const { data: hijos } = await reads.from('comercial_areas').select('slug').eq('padre', area).eq('activa', true).limit(1);
   if (hijos && hijos.length) {
     return NextResponse.json({ error: 'Este canal se pronostica por vendedor; cada vendedor bloquea el suyo.' }, { status: 403 });
   }
-  const yaActivo = await bloqueoActivo(db, area, month);
+  const yaActivo = await bloqueoActivo(reads, area, month);
   if (yaActivo) return NextResponse.json({ error: 'Ese mes ya está bloqueado.', bloqueo: yaActivo }, { status: 409 });
 
   // What gets frozen: every saved row of the area for the month…
-  const capturas = await fetchAll<CapturaRow>(() => db.from('comercial_forecast')
+  const capturas = await fetchAll<CapturaRow>(() => reads.from('comercial_forecast')
     .select('id, product_id, month, quantity, motivo, area').eq('area', area).eq('month', month), 'id');
   if (capturas.length === 0) {
     return NextResponse.json(
@@ -84,7 +85,7 @@ export async function POST(request: Request) {
   }
   // …with the facts the leader was looking at, recomputed here.
   const [ctx, demanda, forecastCompras] = await Promise.all([
-    cargarContexto(db), cargarDemanda(db, area), cargarForecastCompras(db, bodegaQueSirve(area)),
+    cargarContexto(reads), cargarDemanda(reads, area), cargarForecastCompras(reads, bodegaQueSirve(area)),
   ]);
   const areaCfg = ctx.areas.get(area);
   if (!areaCfg) return NextResponse.json({ error: 'Canal desconocido o inactivo' }, { status: 404 });
@@ -108,7 +109,7 @@ export async function POST(request: Request) {
     })
     .sort((a, b) => a.productId - b.productId);
 
-  const { data: previas } = await db.from('comercial_forecast_bloqueos')
+  const { data: previas } = await reads.from('comercial_forecast_bloqueos')
     .select('version').eq('area', area).eq('month', month).order('version', { ascending: false }).limit(1);
   const version = ((previas?.[0]?.version as number | undefined) ?? 0) + 1;
   const autor = `${auth.displayName ?? ''} <${auth.email}>`.trim();
@@ -140,8 +141,9 @@ export async function PATCH(request: Request) {
   const { month } = body;
   if (!esMesValido(month)) return NextResponse.json({ error: 'month inválido' }, { status: 400 });
 
+  const reads = await createServerSupabaseClient();
   const db = createServiceRoleClient();
-  const lock = await bloqueoActivo(db, permiso.area, month);
+  const lock = await bloqueoActivo(reads, permiso.area, month);
   if (!lock) {
     return NextResponse.json(
       { error: 'Primero bloqueá los cambios: se aprueba el pedido bloqueado, no uno que todavía se puede editar.' }, { status: 409 });
@@ -152,7 +154,7 @@ export async function PATCH(request: Request) {
     .update({ aprobado_at: new Date().toISOString(), aprobado_por: auth.id, aprobado_autor: autor })
     .eq('id', lock.id);
   if (error) return NextResponse.json({ error: 'No se pudo aprobar', detail: error.message }, { status: 500 });
-  return NextResponse.json({ bloqueo: await bloqueoActivo(db, permiso.area, month) });
+  return NextResponse.json({ bloqueo: await bloqueoActivo(reads, permiso.area, month) });
 }
 
 export async function DELETE(request: Request) {
@@ -163,8 +165,9 @@ export async function DELETE(request: Request) {
   const month = url.searchParams.get('month') ?? '';
   if (!area || !esMesValido(month)) return NextResponse.json({ error: 'area y month son obligatorios' }, { status: 400 });
 
+  const reads = await createServerSupabaseClient();
   const db = createServiceRoleClient();
-  const { data: activo } = await db.from('comercial_forecast_bloqueos')
+  const { data: activo } = await reads.from('comercial_forecast_bloqueos')
     .select('id').eq('area', area).eq('month', month).eq('activo', true).maybeSingle();
   if (!activo) return NextResponse.json({ error: 'Ese mes no está bloqueado.' }, { status: 404 });
 

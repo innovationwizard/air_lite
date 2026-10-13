@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { createServiceRoleClient } from '@/lib/supabase/server';
+import { createServerSupabaseClient } from '@/lib/supabase/server';
 
 export const dynamic = 'force-dynamic';
 
@@ -8,7 +8,7 @@ const MAX_PAGES = 20; // 20k rows ceiling; current RPC returns ~2.7k.
 
 export async function GET() {
   try {
-    const supabase = createServiceRoleClient();
+    const supabase = await createServerSupabaseClient();
 
     // PostgREST caps per-response rows at the project's max_rows (1000 here),
     // so page the RPC until it drains.

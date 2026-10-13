@@ -3,7 +3,7 @@
 export const dynamic = 'force-dynamic';
 
 import { useState, useEffect } from 'react';
-import { ClipboardList, Plus, ArrowLeft, X } from 'lucide-react';
+import { ClipboardList, Plus, ArrowLeft } from 'lucide-react';
 
 interface OpenOrder {
   id: number;
@@ -55,13 +55,6 @@ export default function PlanMaestroPage() {
   const [selectedOrder, setSelectedOrder] = useState<OrderDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailLines, setDetailLines] = useState<OrderLine[]>([]);
-  const [savingLines, setSavingLines] = useState(false);
-  const [saveMsg, setSaveMsg] = useState('');
-
-  // Add line form
-  const [newSku, setNewSku] = useState('');
-  const [newQty, setNewQty] = useState('');
-  const [newPrice, setNewPrice] = useState('');
 
   // Form state
   const [formSupplierId, setFormSupplierId] = useState<string>('');
@@ -87,7 +80,6 @@ export default function PlanMaestroPage() {
 
   const loadOrderDetail = (orderId: number) => {
     setDetailLoading(true);
-    setSaveMsg('');
     fetch(`/api/oa/open-orders?id=${orderId}`)
       .then((res) => res.json())
       .then((json) => {
@@ -102,54 +94,6 @@ export default function PlanMaestroPage() {
   const handleOpenDetail = (order: OpenOrder) => {
     setView('detail');
     loadOrderDetail(order.id);
-  };
-
-  const handleAddLine = () => {
-    if (!newSku.trim()) return;
-    const qty = Number(newQty) || 0;
-    const price = Number(newPrice) || 0;
-    setDetailLines((prev) => [
-      ...prev,
-      { sku: newSku.trim(), forecast_qty: qty, unit_price: price, value: qty * price },
-    ]);
-    setNewSku('');
-    setNewQty('');
-    setNewPrice('');
-  };
-
-  const handleRemoveLine = (index: number) => {
-    setDetailLines((prev) => prev.filter((_, i) => i !== index));
-  };
-
-  const handleSaveLines = async () => {
-    if (!selectedOrder) return;
-    setSavingLines(true);
-    setSaveMsg('');
-    try {
-      const res = await fetch('/api/oa/open-orders', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          open_order_id: selectedOrder.id,
-          lines: detailLines.map((l) => ({
-            sku: l.sku,
-            forecast_qty: l.forecast_qty,
-            unit_price: l.unit_price,
-          })),
-        }),
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.error || 'Error al guardar');
-      }
-      setSaveMsg('L\u00edneas guardadas correctamente');
-      loadOrderDetail(selectedOrder.id);
-      loadOrders();
-    } catch (e: unknown) {
-      setSaveMsg(e instanceof Error ? e.message : 'Error al guardar');
-    } finally {
-      setSavingLines(false);
-    }
   };
 
   const handleCreate = async () => {
@@ -233,7 +177,7 @@ export default function PlanMaestroPage() {
         /* Detail view */
         <div className="space-y-6">
           <button
-            onClick={() => { setView('list'); setSelectedOrder(null); setDetailLines([]); setSaveMsg(''); }}
+            onClick={() => { setView('list'); setSelectedOrder(null); setDetailLines([]); }}
             className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700"
           >
             <ArrowLeft className="w-4 h-4" />
@@ -276,22 +220,9 @@ export default function PlanMaestroPage() {
 
               {/* Product lines table */}
               <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-                <div className="px-5 py-3 border-b border-gray-200 bg-gray-50 flex items-center justify-between">
+                <div className="px-5 py-3 border-b border-gray-200 bg-gray-50">
                   <h2 className="text-sm font-semibold text-gray-700">L&iacute;neas de Producto</h2>
-                  <button
-                    onClick={handleSaveLines}
-                    disabled={savingLines}
-                    className="inline-flex items-center gap-1 px-4 py-1.5 bg-emerald-600 text-white rounded-lg text-sm font-medium hover:bg-emerald-700 transition-colors disabled:opacity-50"
-                  >
-                    {savingLines ? 'Guardando...' : 'Guardar L\u00edneas'}
-                  </button>
                 </div>
-
-                {saveMsg && (
-                  <div className={`px-5 py-2 text-sm ${saveMsg.includes('Error') ? 'bg-red-50 text-red-700' : 'bg-emerald-50 text-emerald-700'}`}>
-                    {saveMsg}
-                  </div>
-                )}
 
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
@@ -302,13 +233,12 @@ export default function PlanMaestroPage() {
                         <th className="text-right px-4 py-3 font-medium text-gray-500">Forecast Qty</th>
                         <th className="text-right px-4 py-3 font-medium text-gray-500">Precio Unitario</th>
                         <th className="text-right px-4 py-3 font-medium text-gray-500">Valor</th>
-                        <th className="text-center px-4 py-3 font-medium text-gray-500 w-12"></th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
                       {detailLines.length === 0 ? (
                         <tr>
-                          <td colSpan={6} className="px-4 py-6 text-center text-gray-400">
+                          <td colSpan={5} className="px-4 py-6 text-center text-gray-400">
                             No hay l&iacute;neas de producto a&uacute;n
                           </td>
                         </tr>
@@ -322,68 +252,11 @@ export default function PlanMaestroPage() {
                             <td className="px-4 py-3 text-right font-medium text-gray-900">
                               {fmtGTQ(line.forecast_qty * line.unit_price)}
                             </td>
-                            <td className="px-4 py-3 text-center">
-                              <button
-                                onClick={() => handleRemoveLine(i)}
-                                className="text-gray-400 hover:text-red-600 transition-colors"
-                                title="Eliminar l\u00ednea"
-                              >
-                                <X className="w-4 h-4" />
-                              </button>
-                            </td>
                           </tr>
                         ))
                       )}
                     </tbody>
                   </table>
-                </div>
-
-                {/* Add line form */}
-                <div className="border-t border-gray-200 bg-gray-50 px-4 py-3">
-                  <p className="text-xs font-medium text-gray-500 mb-2">Agregar l&iacute;nea</p>
-                  <div className="flex flex-wrap items-end gap-3">
-                    <div>
-                      <label className="block text-xs text-gray-500 mb-1">SKU</label>
-                      <input
-                        type="text"
-                        value={newSku}
-                        onChange={(e) => setNewSku(e.target.value)}
-                        placeholder="Ej: SKU-001"
-                        className="border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white w-40 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs text-gray-500 mb-1">Forecast Qty</label>
-                      <input
-                        type="number"
-                        min="0"
-                        value={newQty}
-                        onChange={(e) => setNewQty(e.target.value)}
-                        placeholder="0"
-                        className="border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white w-28 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs text-gray-500 mb-1">Precio Unitario</label>
-                      <input
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        value={newPrice}
-                        onChange={(e) => setNewPrice(e.target.value)}
-                        placeholder="0.00"
-                        className="border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white w-28 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-                      />
-                    </div>
-                    <button
-                      onClick={handleAddLine}
-                      disabled={!newSku.trim()}
-                      className="inline-flex items-center gap-1 px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm font-medium hover:bg-emerald-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      <Plus className="w-4 h-4" />
-                      Agregar
-                    </button>
-                  </div>
                 </div>
               </div>
             </>

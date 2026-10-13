@@ -39,7 +39,7 @@ function diasEntre(desde: string, hasta: string): number {
 export async function POST(request: Request) {
   const ctx = await withWriteAuth(request);
   if (ctx instanceof Response) return ctx;
-  const { user, body, service } = ctx;
+  const { user, body, service, reads } = ctx;
 
   const ticket = typeof body.ticket === 'string' ? body.ticket.trim() : '';
   if (!ticket) return badRequest('ticket requerido');
@@ -56,7 +56,7 @@ export async function POST(request: Request) {
   const eta = (etaRaw as string | null | undefined) || null;
 
   // ── Releer el veredicto del servidor ───────────────────────────────────────
-  const { data: staging, error: errStaging } = await service
+  const { data: staging, error: errStaging } = await reads
     .from('reyma_factura_staging')
     .select('id, estado, guia, factura, folio_fiscal, archivo, parse')
     .eq('id', ticket)
@@ -243,8 +243,8 @@ export async function GET() {
   const auth = await withReadAuth();
   if (auth instanceof Response) return auth;
 
-  const { createServiceRoleClient } = await import('@/lib/supabase/server');
-  const service = createServiceRoleClient();
+  const { createServerSupabaseClient } = await import('@/lib/supabase/server');
+  const service = await createServerSupabaseClient();
 
   const { data, error } = await service
     .from('reyma_facturas_pdf')

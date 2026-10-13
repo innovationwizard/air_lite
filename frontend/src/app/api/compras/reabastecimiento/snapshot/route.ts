@@ -24,13 +24,13 @@
  * see the migration's header comment for why that's a deliberate choice, not
  * an oversight.
  *
- * RBAC: middleware `check_route_access` + in-handler requireAuth(CAN_EDIT_COMPRAS)
- * for POST, requireAuth(CAN_VIEW_COMPRAS) for GET.
+ * RBAC: middleware `check_route_access` + in-handler requireAuth(CAN_EDIT_REABASTECIMIENTO)
+ * for POST, requireAuth(CAN_VIEW_REABASTECIMIENTO) for GET.
  */
 import { NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/server';
-import { CAN_EDIT_COMPRAS, CAN_VIEW_COMPRAS } from '@/lib/auth/roles';
-import { createServiceRoleClient } from '@/lib/supabase/server';
+import { CAN_EDIT_REABASTECIMIENTO, CAN_VIEW_REABASTECIMIENTO } from '@/lib/auth/roles';
+import { createServerSupabaseClient, createServiceRoleClient } from '@/lib/supabase/server';
 import { vista } from '@/lib/compras/tabla';
 import { computeKpis, computeAlza, computeTopProveedores } from '@/lib/compras/statusMetrics';
 import { readSnapshotFiltros, readSnapshotOrden } from '@/lib/compras/statusSnapshot';
@@ -45,8 +45,8 @@ const MAX_HISTORY = 50;
 
 export async function POST(request: Request) {
   // Congelar un snapshot escribe en el historial de Wilmer: los roles de sólo
-  // lectura (ceo) no lo hacen — ver CAN_EDIT_COMPRAS.
-  const auth = await requireAuth(CAN_EDIT_COMPRAS);
+  // lectura (ceo) no lo hacen — ver CAN_EDIT_REABASTECIMIENTO.
+  const auth = await requireAuth(CAN_EDIT_REABASTECIMIENTO);
   if (auth instanceof Response) return auth;
 
   let body: Record<string, unknown>;
@@ -62,16 +62,17 @@ export async function POST(request: Request) {
   const orden = readSnapshotOrden(body.orden);
   if (typeof orden === 'string') return badRequest(orden);
 
+  const reads = await createServerSupabaseClient();
   const service = createServiceRoleClient();
 
   try {
-    const bodegas = await knownBodegas(service);
+    const bodegas = await knownBodegas(reads);
     if (!bodegas.includes(bodega)) return badRequest(`bodega desconocida: ${bodega}`);
 
     const [{ rows, maxAsOf, monthStart, coberturaDias }, tiendas, lastSyncRes] = await Promise.all([
-      buildRows(service, bodega),
-      buildTiendas(service),
-      service.from('sync_runs').select('id, status, started_at, finished_at, counts')
+      buildRows(reads, bodega),
+      buildTiendas(reads),
+      reads.from('sync_runs').select('id, status, started_at, finished_at, counts')
         .eq('kind', 'reabastecimiento').order('started_at', { ascending: false })
         .limit(1).maybeSingle(),
     ]);
@@ -139,15 +140,15 @@ export async function POST(request: Request) {
 }
 
 export async function GET(request: Request) {
-  const auth = await requireAuth(CAN_VIEW_COMPRAS);
+  const auth = await requireAuth(CAN_VIEW_REABASTECIMIENTO);
   if (auth instanceof Response) return auth;
 
   const url = new URL(request.url);
   const scope = url.searchParams.get('scope') === 'all' && auth.role === 'superuser' ? 'all' : 'own';
 
-  const service = createServiceRoleClient();
+  const reads = await createServerSupabaseClient();
   try {
-    let query = service
+    let query = reads
       .from('reabastecimiento_status_snapshots')
       .select('id, bodega, filtros, total_filas, created_at, autor, user_id')
       .order('created_at', { ascending: false })

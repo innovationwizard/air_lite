@@ -6,7 +6,7 @@
 import { NextResponse } from 'next/server';
 import { requireAuth, type AuthUser } from '@/lib/auth/server';
 import { CAN_EDIT_COMPRAS_INTERNACIONALES, CAN_VIEW_COMPRAS_INTERNACIONALES } from '@/lib/auth/roles';
-import { createServiceRoleClient } from '@/lib/supabase/server';
+import { createServerSupabaseClient, createServiceRoleClient } from '@/lib/supabase/server';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 /**
@@ -28,11 +28,17 @@ export function badRequest(message: string): NextResponse {
 /**
  * Auth + parse wrapper for the POST handlers: requireAuth(CAN_EDIT_COMPRAS_INTERNACIONALES) —
  * the view list minus the read-only roles (ceo) —,
- * JSON body parse, service client. Returns a Response early on failure.
+ * JSON body parse, service client for writes, session client for reads.
+ * Returns a Response early on failure.
  */
 export async function withWriteAuth(
   request: Request,
-): Promise<Response | { user: AuthUser; body: Record<string, unknown>; service: SupabaseClient }> {
+): Promise<Response | {
+  user: AuthUser;
+  body: Record<string, unknown>;
+  service: SupabaseClient;
+  reads: SupabaseClient;
+}> {
   const auth = await requireAuth(CAN_EDIT_COMPRAS_INTERNACIONALES);
   if (auth instanceof Response) return auth;
   let body: Record<string, unknown>;
@@ -41,7 +47,12 @@ export async function withWriteAuth(
   } catch {
     return badRequest('Cuerpo JSON inválido');
   }
-  return { user: auth, body, service: createServiceRoleClient() };
+  return {
+    user: auth,
+    body,
+    service: createServiceRoleClient(),
+    reads: await createServerSupabaseClient(),
+  };
 }
 
 /**
@@ -51,10 +62,14 @@ export async function withWriteAuth(
  * PDF must not be pulled through `JSON.parse`.
  */
 export async function withUploadAuth(
-): Promise<Response | { user: AuthUser; service: SupabaseClient }> {
+): Promise<Response | { user: AuthUser; service: SupabaseClient; reads: SupabaseClient }> {
   const auth = await requireAuth(CAN_EDIT_COMPRAS_INTERNACIONALES);
   if (auth instanceof Response) return auth;
-  return { user: auth, service: createServiceRoleClient() };
+  return {
+    user: auth,
+    service: createServiceRoleClient(),
+    reads: await createServerSupabaseClient(),
+  };
 }
 
 /** Read gate for the Reyma endpoints — same roles, no body, no service client. */
