@@ -375,6 +375,8 @@ export async function buildRows(
 ): Promise<{
   rows: LiveRow[]; maxAsOf: string; monthStart: string; coberturaDias: number;
   groups: { id: string; displayName: string }[];
+  /** Repeated SKUs. The sync keeps the oldest row of each code. */
+  skusDuplicados: SkuDuplicado[];
   /**
    * Where the pendiente column came from on THIS request. `error` non-null
    * means Odoo (or the ML service) did not answer: every row's `pending` is
