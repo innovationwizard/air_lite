@@ -393,9 +393,14 @@ def sync_catalog(execute, issues, dry_run):
     Returns (odoo_pid -> supabase product id, sku -> odoo id, odoo product
     count, inserted count, names of products with no default_code). The names
     are the full list Wilmer's page shows; they are never inserted."""
+    # standard_price is Odoo's cost. This user lost read access on 2026-10-14
+    # (Fault 4), and requesting it aborts the whole catalog read. Cost is only
+    # copied onto a brand-new products row; existing rows are never updated
+    # from it, and the replenishment math does not use it. New rows store
+    # cost as null until the field is readable again.
     odoo_products = odoo_read_all(
         execute, 'product.product', [],
-        ['id', 'default_code', 'name', 'standard_price', 'list_price', 'uom_id', 'categ_id',
+        ['id', 'default_code', 'name', 'list_price', 'uom_id', 'categ_id',
          'purchase_ok'])
     logger.info('Odoo products: %d', len(odoo_products))
 
