@@ -390,7 +390,9 @@ def sync_catalog(execute, issues, dry_run):
     left alone (the running app reads them; mismatches become issues) except
     for two integration/live-state fields repaired in place: odoo_id (stale
     build ids) and purchase_ok (Odoo's live "Can be Purchased" flag).
-    Returns (odoo_pid -> supabase product id) map."""
+    Returns (odoo_pid -> supabase product id, sku -> odoo id, odoo product
+    count, inserted count, names of products with no default_code). The names
+    are the full list Wilmer's page shows; they are never inserted."""
     odoo_products = odoo_read_all(
         execute, 'product.product', [],
         ['id', 'default_code', 'name', 'standard_price', 'list_price', 'uom_id', 'categ_id',
@@ -406,7 +408,11 @@ def sync_catalog(execute, issues, dry_run):
     # When a SKU matches, the stored odoo_id is REPAIRED to the current build's
     # id (deliberate exception to "never mutate existing rows": odoo_id is an
     # integration key, not business data, and stale values are proven poison).
-    existing = sb_get_all('products?select=id,odoo_id,sku,purchase_ok')
+    # order=id.asc is the definition of "first row wins": the oldest insert.
+    # Without it PostgREST's page order is undefined, and the review list on
+    # Wilmer's page (which also walks products by id) would point at a
+    # different row than the one this sync keeps.
+    existing = sb_get_all('products?select=id,odoo_id,sku,purchase_ok&order=id.asc')
     by_sku, dup_skus = {}, 0
     for p in existing:
         if p['sku']:
@@ -423,8 +429,9 @@ def sync_catalog(execute, issues, dry_run):
 
     by_odoo_id, oid_repairs, new_rows, no_sku = plan_catalog_rows(
         odoo_products, by_sku, stored_oid_by_row)
+    nombres_sin_codigo = sorted(product_label(p) for p in no_sku)
     if no_sku:
-        names = ', '.join(sorted(product_label(p)[:40] for p in no_sku))
+        names = ', '.join(n[:40] for n in nombres_sin_codigo)
         issues.add('warning', 'product',
                    f'{len(no_sku)} Odoo products without default_code — NOT imported. SKU is '
                    f'the only stable key, so a code-less row can never be re-matched: until '
@@ -559,7 +566,7 @@ def sync_catalog(execute, issues, dry_run):
             sb_insert_batched('product_suppliers', new_links)
 
     sku_to_opid = {p['default_code']: p['id'] for p in odoo_products if p.get('default_code')}
-    return by_odoo_id, sku_to_opid, len(odoo_products), len(new_rows)
+    return by_odoo_id, sku_to_opid, len(odoo_products), len(new_rows), nombres_sin_codigo
 
 
 # Patio = 1CET/Entrada ONLY (Jorge, 2026-07-30: "Make patio display
@@ -1769,7 +1776,8 @@ def main():
         whs = execute('stock.warehouse', 'search_read', [], fields=['id', 'code'])
         wh_ids_by_code = {w['code']: w['id'] for w in whs}
 
-        product_map, sku_to_opid, n_odoo_products, n_inserted = sync_catalog(execute, issues, dry_run)
+        product_map, sku_to_opid, n_odoo_products, n_inserted, sin_codigo = sync_catalog(
+            execute, issues, dry_run)
         uom_ctx = load_uom_context(execute)
         stock = sync_stock(execute, by_name, bodega_codes, issues)
         velocity = sync_velocity(execute, bodega_codes, wh_ids_by_code, issues, uom_ctx)
@@ -1811,8 +1819,10 @@ def main():
             'demanda_canal_rows': len(canal_rows),
             'demanda_canal_areas': sorted({r['area'] for r in canal_rows}),
             'data_horizon': horizon or None,
+            # Full names, not the truncated issue line. The page lists these.
+            'productos_sin_codigo': sin_codigo,
         }
-        logger.info('assembled: %s', counts)
+        logger.info('assembled: %s', {**counts, 'productos_sin_codigo': len(sin_codigo)})
 
         if dry_run:
             logger.info('DRY RUN — nothing written. Sample row: %s',

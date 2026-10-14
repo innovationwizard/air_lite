@@ -729,7 +729,46 @@ export async function buildRows(
     rows, maxAsOf, monthStart, coberturaDias, areasComerciales, pendienteReserva,
     bodegaOrigen: origen,
     groups: supplierGroups.map((g) => ({ id: g.id, displayName: g.display_name })),
+    // Same rule as the hourly sync: a repeated SKU counts once, and the first
+    // row wins. `products` arrives ordered by id, which is insertion order.
+    skusDuplicados: skusDuplicados(products),
   };
+}
+
+/** One SKU stored on more than one `products` row. `usada` is the row the sync keeps. */
+export interface SkuDuplicado {
+  sku: string;
+  filas: { id: number; nombre: string; usada: boolean }[];
+}
+
+/**
+ * Duplicate SKUs, in the sense the hourly sync counts them: every row after
+ * the first for a code. The list is grouped by code so a review can see which
+ * row is kept. Products with no SKU are absent here — the sync never matches
+ * them, and they are a different warning.
+ *
+ * `products` must already be in id order (fetchAll's tie-break). That order
+ * is what "the first row" means on this page: the oldest insert.
+ */
+export function skusDuplicados(products: { id: number; sku: string | null; name: string }[]): SkuDuplicado[] {
+  const bySku = new Map<string, { id: number; nombre: string }[]>();
+  for (const p of products) {
+    if (!p.sku) continue;
+    const filas = bySku.get(p.sku);
+    const fila = { id: p.id, nombre: p.name };
+    if (filas) filas.push(fila);
+    else bySku.set(p.sku, [fila]);
+  }
+  const out: SkuDuplicado[] = [];
+  for (const [sku, filas] of bySku) {
+    if (filas.length < 2) continue;
+    out.push({
+      sku,
+      filas: filas.map((f, i) => ({ ...f, usada: i === 0 })),
+    });
+  }
+  out.sort((a, b) => a.sku.localeCompare(b.sku, 'es'));
+  return out;
 }
 
 /**

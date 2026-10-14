@@ -234,7 +234,7 @@ interface ApiMeta {
   coberturaDias: number;
   lastSync: {
     id: string; status: string; started_at: string; finished_at: string | null;
-    counts?: { data_horizon?: string | null };
+    counts?: { data_horizon?: string | null; productos_sin_codigo?: string[] };
   } | null;
   /** Provenance of the live pendiente column — `error` set = every row is ¿? and this says why. */
   pendienteReserva?: { asOf: string | null; codigos: string[]; error: string | null };
@@ -246,8 +246,14 @@ interface Tiendas {
   total: { f6: number; f3: number };
   productos: number;
 }
+/** A code stored on more than one products row. `usada` is the row the sync keeps. */
+interface SkuDuplicado {
+  sku: string;
+  filas: { id: number; nombre: string; usada: boolean }[];
+}
 interface ApiPayload {
   bodega: string; bodegas: string[]; rows: ApiRow[]; groups: ProveedorGrupo[];
+  skusDuplicados?: SkuDuplicado[];
   /** Canales comerciales activos — rotulan y ordenan las columnas de Adicionales. */
   areasComerciales?: { slug: string; nombre: string }[];
   tiendas?: Tiendas; meta: ApiMeta;
@@ -308,6 +314,8 @@ export function VivoClient({ soloLectura = false }: { soloLectura?: boolean } = 
   const [rangos, setRangos] = useState<Partial<Record<ClaveOrdenNumerica, FiltroRango>>>({});
   // Grupos de proveedores (2026-09-04) — panel de gestión, Wilmer-only.
   const [gruposAbierto, setGruposAbierto] = useState(false);
+  const [revisarAbierto, setRevisarAbierto] = useState(false);
+  const [sinCodigoAbierto, setSinCodigoAbierto] = useState(false);
   const { profile } = useUserRole();
   const puedeGestionarGrupos = isAuthorized(profile?.role, CAN_MANAGE_SUPPLIER_GROUPS);
   const onRango = useCallback((k: ClaveOrdenNumerica, r: FiltroRango | null) => {
@@ -520,6 +528,10 @@ export function VivoClient({ soloLectura = false }: { soloLectura?: boolean } = 
   const topProv = useMemo(() => computeTopProveedores(payload?.rows ?? []), [payload]);
 
   const sync = payload?.meta.lastSync ?? null;
+  const skusDuplicados = payload?.skusDuplicados ?? [];
+  // The sync counts every row after the first for a code, not the number of codes.
+  const filasDuplicadas = skusDuplicados.reduce((n, g) => n + g.filas.length - 1, 0);
+  const sinCodigo = sync?.counts?.productos_sin_codigo ?? [];
   const noData = !loading && !error && (payload?.rows.length ?? 0) === 0;
 
   /**
@@ -690,7 +702,7 @@ export function VivoClient({ soloLectura = false }: { soloLectura?: boolean } = 
     <div className="p-6 max-w-[1240px] mx-auto">
       <div className="flex flex-wrap items-center gap-3 mb-4">
         <div>
-          <h1 className="text-xl font-bold text-gray-900">Reabastecimiento en Vivo</h1>
+          <h1 className="text-xl font-bold text-gray-900">Reabastecimiento</h1>
         </div>
         <div className="flex-1" />
         <div className="inline-flex rounded-lg bg-gray-100 p-1">
@@ -716,29 +728,53 @@ export function VivoClient({ soloLectura = false }: { soloLectura?: boolean } = 
       </div>
 
       {/* Freshness */}
-      <div className="flex flex-wrap items-center gap-2 mb-4 text-xs">
-        {sync ? (
-          <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 border ${
-            sync.status === 'success'
-              ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-              : sync.status === 'failed'
-                ? 'bg-red-50 text-red-700 border-red-200'
-                : 'bg-amber-50 text-amber-700 border-amber-200'
-          }`}>
-            <PackageCheck size={13} />
-            {sync.counts?.data_horizon
-              ? `Datos de Odoo al ${new Date(sync.counts.data_horizon.replace(' ', 'T') + 'Z').toLocaleString('es-GT')}`
-              : `Última sincronización Odoo: ${sync.status}`}
-            {payload?.meta.asOf ? ` · sincronizado ${new Date(payload.meta.asOf).toLocaleString('es-GT')}` : ''}
+      <div className="mb-4 text-xs">
+        <div className="flex flex-wrap items-center gap-2">
+          {sync ? (
+            <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 border ${
+              sync.status === 'success'
+                ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                : sync.status === 'failed'
+                  ? 'bg-red-50 text-red-700 border-red-200'
+                  : 'bg-amber-50 text-amber-700 border-amber-200'
+            }`}>
+              <PackageCheck size={13} />
+              {sync.counts?.data_horizon
+                ? `Datos de Odoo al ${new Date(sync.counts.data_horizon.replace(' ', 'T') + 'Z').toLocaleString('es-GT')}`
+                : `Última sincronización Odoo: ${sync.status}`}
+              {payload?.meta.asOf ? ` · sincronizado ${new Date(payload.meta.asOf).toLocaleString('es-GT')}` : ''}
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 text-amber-700 px-2.5 py-1 border border-amber-200">
+              <CloudOff size={13} /> Aún no hay sincronización con Odoo
+            </span>
+          )}
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-gray-100 text-gray-600 px-2.5 py-1 border border-gray-200">
+            Comercial del mes: {payload?.meta.month ?? '—'}
           </span>
-        ) : (
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 text-amber-700 px-2.5 py-1 border border-amber-200">
-            <CloudOff size={13} /> Aún no hay sincronización con Odoo
-          </span>
+        </div>
+        {(filasDuplicadas > 0 || sinCodigo.length > 0) && (
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            {filasDuplicadas > 0 && (
+              <button
+                type="button"
+                onClick={() => setRevisarAbierto(true)}
+                className="inline-flex items-center rounded-full px-2.5 py-1 border bg-orange-50 text-orange-800 border-orange-300 hover:bg-orange-100"
+              >
+                Hay {filasDuplicadas} {filasDuplicadas === 1 ? 'SKU duplicado' : 'SKUs duplicados'} en esta descarga
+              </button>
+            )}
+            {sinCodigo.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setSinCodigoAbierto(true)}
+                className="inline-flex items-center rounded-full px-2.5 py-1 border bg-gray-100 text-gray-700 border-gray-300 hover:bg-gray-200"
+              >
+                Hay {sinCodigo.length} {sinCodigo.length === 1 ? 'producto sin código' : 'productos sin código'} en esta descarga
+              </button>
+            )}
+          </div>
         )}
-        <span className="inline-flex items-center gap-1.5 rounded-full bg-gray-100 text-gray-600 px-2.5 py-1 border border-gray-200">
-          Comercial del mes: {payload?.meta.month ?? '—'}
-        </span>
       </div>
 
       {(error || saveError) && (
@@ -1073,6 +1109,124 @@ export function VivoClient({ soloLectura = false }: { soloLectura?: boolean } = 
       {gruposAbierto && (
         <ProveedorGruposPanel onClose={() => { setGruposAbierto(false); load(bodega, true); }} />
       )}
+      {revisarAbierto && (
+        <RevisarSkusDuplicados
+          grupos={skusDuplicados}
+          onClose={() => setRevisarAbierto(false)}
+        />
+      )}
+      {sinCodigoAbierto && (
+        <ProductosSinCodigo
+          nombres={sinCodigo}
+          onClose={() => setSinCodigoAbierto(false)}
+        />
+      )}
+    </div>
+  );
+}
+
+/**
+ * Review of SKUs stored more than once. The sync keeps the oldest row of each
+ * code (lowest id) and ignores the rest. Nothing here deletes a row — the
+ * action is to look.
+ */
+function RevisarSkusDuplicados({
+  grupos, onClose,
+}: {
+  grupos: SkuDuplicado[];
+  onClose: () => void;
+}) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  return (
+    <div className="fixed inset-0 z-40 flex items-center justify-center p-4">
+      {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions -- overlay: cerrar al hacer click fuera, mismo patrón de ProveedorGruposPanel */}
+      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="revisar-skus-titulo"
+        className="relative z-10 w-full max-w-lg max-h-[80vh] bg-white rounded-xl shadow-xl border border-gray-200 flex flex-col overflow-hidden"
+      >
+        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
+          <h2 id="revisar-skus-titulo" className="text-sm font-semibold text-gray-900">Revisar</h2>
+          <button type="button" onClick={onClose} className="text-gray-400 hover:text-gray-700" aria-label="Cerrar">
+            <X size={16} />
+          </button>
+        </div>
+        <p className="px-4 pt-3 text-xs text-gray-600">
+          La sincronización se queda con la primera fila de cada código y no usa las demás.
+        </p>
+        <div className="overflow-auto px-4 py-3 space-y-4">
+          {grupos.map((g) => (
+            <section key={g.sku}>
+              <h3 className="text-xs font-semibold text-gray-900 font-mono">{g.sku}</h3>
+              <ul className="mt-1 divide-y divide-gray-100 border border-gray-100 rounded-lg">
+                {g.filas.map((f) => (
+                  <li key={f.id} className="flex items-baseline gap-2 px-2.5 py-1.5 text-xs">
+                    <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold ${
+                      f.usada ? 'bg-emerald-50 text-emerald-800' : 'bg-gray-100 text-gray-500'
+                    }`}>
+                      {f.usada ? 'Se usa' : 'No se usa'}
+                    </span>
+                    <span className="text-gray-900">{f.nombre}</span>
+                    <span className="ml-auto font-mono text-[10px] text-gray-400">#{f.id}</span>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Products Odoo has with no code. The sync does not import them, so they
+ * never become rows on this page. Read-only: there is nothing to do here.
+ */
+function ProductosSinCodigo({
+  nombres, onClose,
+}: {
+  nombres: string[];
+  onClose: () => void;
+}) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  return (
+    <div className="fixed inset-0 z-40 flex items-center justify-center p-4">
+      {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions -- overlay: cerrar al hacer click fuera, mismo patrón de ProveedorGruposPanel */}
+      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="sin-codigo-titulo"
+        className="relative z-10 w-full max-w-lg max-h-[80vh] bg-white rounded-xl shadow-xl border border-gray-200 flex flex-col overflow-hidden"
+      >
+        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
+          <h2 id="sin-codigo-titulo" className="text-sm font-semibold text-gray-900">Productos sin código</h2>
+          <button type="button" onClick={onClose} className="text-gray-400 hover:text-gray-700" aria-label="Cerrar">
+            <X size={16} />
+          </button>
+        </div>
+        <p className="px-4 pt-3 text-xs text-gray-600">
+          No aparecen en la tabla de compra. No tienen código en Odoo, y la mayoría no son producto de recompra.
+        </p>
+        <ul className="overflow-auto px-4 py-3 divide-y divide-gray-100">
+          {nombres.map((nombre, i) => (
+            <li key={`${nombre}-${i}`} className="py-1.5 text-xs text-gray-900">{nombre}</li>
+          ))}
+        </ul>
+      </div>
     </div>
   );
 }
