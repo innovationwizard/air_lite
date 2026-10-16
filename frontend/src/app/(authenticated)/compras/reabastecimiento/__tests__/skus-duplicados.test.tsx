@@ -7,14 +7,14 @@ import userEvent from '@testing-library/user-event';
 import { skusDuplicados } from '@/app/api/compras/reabastecimiento/rows';
 import { VivoClient } from '../VivoClient';
 
-function payload(duplicados: unknown, sinCodigo: string[] = []) {
+function payload(duplicados: unknown, sinCodigo: string[] = [], finishedAt = new Date().toISOString()) {
   return {
     bodega: 'General', bodegas: ['General'], rows: [],
     skusDuplicados: duplicados,
     meta: {
       count: 0, asOf: null, month: '2026-10', coberturaDias: 30,
       lastSync: {
-        id: 's1', status: 'success', started_at: '2026-10-14T11:00:00Z', finished_at: '2026-10-14T11:03:00Z',
+        id: 's1', status: 'success', started_at: finishedAt, finished_at: finishedAt,
         counts: { data_horizon: '2026-10-14 11:03:00', productos_sin_codigo: sinCodigo },
       },
     },
@@ -54,6 +54,19 @@ it('cuenta las filas de más, no los códigos', () => {
   expect(lista.map((g) => g.sku)).toEqual(['IMP', 'RCT']);
   expect(lista[0].filas.map((f) => f.usada)).toEqual([true, false]);
   expect(lista[0].filas[0].nombre).toBe('ATC');
+});
+
+it('una sincronización de hace más de tres horas se queda en ámbar y dice la edad', async () => {
+  const finished = new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString();
+  global.fetch = jest.fn().mockResolvedValue({
+    ok: true,
+    json: async () => payload([], [], finished),
+  }) as unknown as typeof fetch;
+  render(<VivoClient />);
+  const pastilla = await screen.findByText(/Datos de Odoo al/);
+  expect(pastilla).toHaveTextContent('hace 5 h');
+  expect(pastilla.className).toContain('amber');
+  expect(pastilla).not.toHaveTextContent('failed');
 });
 
 it('no pinta la pastilla cuando no hay duplicados', async () => {

@@ -34,6 +34,7 @@ import { createServerSupabaseClient, createServiceRoleClient } from '@/lib/supab
 import { vista } from '@/lib/compras/tabla';
 import { computeKpis, computeAlza, computeTopProveedores } from '@/lib/compras/statusMetrics';
 import { readSnapshotFiltros, readSnapshotOrden } from '@/lib/compras/statusSnapshot';
+import { GOOD_SYNC_STATUSES } from '@/lib/syncFreshness';
 import { GENERAL_BODEGA, badRequest, buildTiendas, knownBodegas } from '../lib';
 import { buildRows } from '../rows';
 
@@ -72,8 +73,12 @@ export async function POST(request: Request) {
     const [{ rows, maxAsOf, monthStart, coberturaDias }, tiendas, lastSyncRes] = await Promise.all([
       buildRows(reads, bodega),
       buildTiendas(reads),
+      // Same rule as the live page: the frozen proof cites the last run
+      // that finished, not a failed attempt that happened to be newer.
       reads.from('sync_runs').select('id, status, started_at, finished_at, counts')
-        .eq('kind', 'reabastecimiento').order('started_at', { ascending: false })
+        .eq('kind', 'reabastecimiento')
+        .in('status', [...GOOD_SYNC_STATUSES])
+        .order('started_at', { ascending: false })
         .limit(1).maybeSingle(),
     ]);
 

@@ -72,6 +72,8 @@ from collections import defaultdict
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
+import sync_retry
+
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
 logger = logging.getLogger(__name__)
 
@@ -173,8 +175,12 @@ def _connect_once(attempt):
     logger.info('Odoo connected: uid=%s db=%s (attempt %d)', uid, ODOO_DB, attempt)
 
     def execute(model, method, *args, **kwargs):
-        return models.execute_kw(ODOO_DB, uid, ODOO_API_KEY, model, method,
-                                 list(args), kwargs)
+        def once():
+            return models.execute_kw(ODOO_DB, uid, ODOO_API_KEY, model, method,
+                                     list(args), kwargs)
+
+        return sync_retry.call_with_retry(
+            once, sync_retry.transient_odoo, logger, f'Odoo {model}.{method}')
 
     return execute
 
@@ -193,16 +199,22 @@ def odoo_read_all(execute, model, domain, fields, page=1000):
 # ─── Supabase REST ───────────────────────────────────────────────────────────
 
 def sb_request(method, path, data=None, prefer='return=minimal'):
+    """One PostgREST call. A 502/503/504, a 429, or a dropped connection is
+    retried (sync_retry); a 4xx is raised on the first try."""
     url = f'{SUPABASE_URL}/rest/v1/{path}'
     body = json.dumps(data).encode() if data is not None else None
-    req = urllib.request.Request(url, data=body, method=method)
-    req.add_header('apikey', SUPABASE_KEY)
-    req.add_header('Authorization', f'Bearer {SUPABASE_KEY}')
-    req.add_header('Content-Type', 'application/json')
-    req.add_header('Prefer', prefer)
-    with urllib.request.urlopen(req, timeout=60) as resp:
-        raw = resp.read()
-        return json.loads(raw) if raw else None
+
+    def once():
+        req = urllib.request.Request(url, data=body, method=method)
+        req.add_header('apikey', SUPABASE_KEY)
+        req.add_header('Authorization', f'Bearer {SUPABASE_KEY}')
+        req.add_header('Content-Type', 'application/json')
+        req.add_header('Prefer', prefer)
+        with urllib.request.urlopen(req, timeout=60) as resp:
+            raw = resp.read()
+            return json.loads(raw) if raw else None
+
+    return sync_retry.call_with_retry(once, sync_retry.transient_http, logger, f'{method} {path}')
 
 
 def sb_get_all(path_base, page=1000):

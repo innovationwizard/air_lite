@@ -130,6 +130,9 @@ export async function GET(request: Request) {
 
   const service = await createServerSupabaseClient();
   try {
+    // Last run that finished. A newer failed attempt stays out of this
+    // payload, so the banner keeps the previous good sync. The page turns
+    // the banner amber once that finish is three hours old.
     const { data: runs, error: runErr } = await service
       .from('sync_runs')
       .select('id, started_at, finished_at, counts')

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Activity, AlertTriangle, Info, RotateCcw, Save, Truck, X } from 'lucide-react';
+import { syncAgeLabel, syncIsStale } from '@/lib/syncFreshness';
 import {
   computeMrp,
   modeloDerived,
@@ -202,6 +203,10 @@ export function VivoClient({ modelo = 'reyma', soloLectura = false }: { modelo?:
   const syncDate = payload.sync.finishedAt
     ? new Date(payload.sync.finishedAt).toLocaleString('es-GT')
     : '—';
+  // The API already returns the last successful run, so a failed hour never
+  // replaces this line. Past three hours the banner goes amber and says so.
+  const syncStale = syncIsStale(payload.sync.finishedAt);
+  const syncAge = syncAgeLabel(payload.sync.finishedAt);
   const nEdits = Object.keys(proyEdits).length;
   // El mismo cliente sirve a Reyma y Carvajal (A4.26): el título sale del
   // modelo que devolvió el API, no de un literal. Sin «en vivo» — todo el
@@ -243,8 +248,13 @@ export function VivoClient({ modelo = 'reyma', soloLectura = false }: { modelo?:
           )}
           {saveMsg && <span className="text-xs font-medium text-emerald-700">{saveMsg}</span>}
         </div>
-        <div className="mt-2 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-900">
-          Última sincronización: <strong>{syncDate}</strong> (corrida{' '}
+        <div className={`mt-2 rounded-md border px-3 py-2 text-xs ${
+          syncStale
+            ? 'border-amber-200 bg-amber-50 text-amber-900'
+            : 'border-emerald-200 bg-emerald-50 text-emerald-900'
+        }`}>
+          Última sincronización: <strong>{syncDate}</strong>
+          {syncAge ? <> · {syncAge}</> : null} (corrida{' '}
           <span className="font-mono">{payload.sync.id.slice(0, 8)}</span>). Mismo motor de cálculo que la réplica
           (paridad 2,752/2,752 con el libro de Alexis). Proyección por defecto = promedio móvil de{' '}
           {payload.config.mesesPromedioMovil} meses completos, editable; pendientes por surtir cuentan solo con edad ≤{' '}

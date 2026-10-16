@@ -17,6 +17,7 @@ import { computeKpis, computeAlza, computeTopProveedores } from '@/lib/compras/s
 import { fmtM3, m3Sugerido } from '@/lib/compras/cubicaje';
 import { BODEGA_LABEL, bodegaTienePatio, ordenarBodegas } from '@/lib/compras/bodega';
 import { COBERTURA_MAX_DIAS, COBERTURA_MIN_DIAS, esCoberturaValida } from '@/lib/compras/cobertura';
+import { syncAgeLabel, syncIsStale } from '@/lib/syncFreshness';
 import { ExportarExcel } from './ExportarExcel';
 import { SnapshotButton } from './SnapshotButton';
 import { ProveedorFiltro, type ProveedorGrupo } from './ProveedorFiltro';
@@ -528,6 +529,11 @@ export function VivoClient({ soloLectura = false }: { soloLectura?: boolean } = 
   const topProv = useMemo(() => computeTopProveedores(payload?.rows ?? []), [payload]);
 
   const sync = payload?.meta.lastSync ?? null;
+  // The badge follows the last run that finished. A later failed attempt is
+  // not this object (the API skips it). Past three hours the same pill goes
+  // amber and says the age, instead of turning red.
+  const syncStale = sync ? syncIsStale(sync.finished_at) : false;
+  const syncAge = sync ? syncAgeLabel(sync.finished_at) : null;
   const skusDuplicados = payload?.skusDuplicados ?? [];
   // The sync counts every row after the first for a code, not the number of codes.
   const filasDuplicadas = skusDuplicados.reduce((n, g) => n + g.filas.length - 1, 0);
@@ -732,17 +738,18 @@ export function VivoClient({ soloLectura = false }: { soloLectura?: boolean } = 
         <div className="flex flex-wrap items-center gap-2">
           {sync ? (
             <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 border ${
-              sync.status === 'success'
-                ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                : sync.status === 'failed'
-                  ? 'bg-red-50 text-red-700 border-red-200'
-                  : 'bg-amber-50 text-amber-700 border-amber-200'
+              sync.status === 'failed'
+                ? 'bg-red-50 text-red-700 border-red-200'
+                : syncStale || sync.status !== 'success'
+                  ? 'bg-amber-50 text-amber-700 border-amber-200'
+                  : 'bg-emerald-50 text-emerald-700 border-emerald-200'
             }`}>
               <PackageCheck size={13} />
               {sync.counts?.data_horizon
                 ? `Datos de Odoo al ${new Date(sync.counts.data_horizon.replace(' ', 'T') + 'Z').toLocaleString('es-GT')}`
                 : `Última sincronización Odoo: ${sync.status}`}
               {payload?.meta.asOf ? ` · sincronizado ${new Date(payload.meta.asOf).toLocaleString('es-GT')}` : ''}
+              {syncAge ? ` · ${syncAge}` : ''}
             </span>
           ) : (
             <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 text-amber-700 px-2.5 py-1 border border-amber-200">

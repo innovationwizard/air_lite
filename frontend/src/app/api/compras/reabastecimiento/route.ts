@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/server';
 import { CAN_VIEW_REABASTECIMIENTO } from '@/lib/auth/roles';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
+import { GOOD_SYNC_STATUSES } from '@/lib/syncFreshness';
 import { GENERAL_BODEGA, buildTiendas, knownBodegas } from './lib';
 import { buildRows } from './rows';
 
@@ -51,8 +52,13 @@ export async function GET(request: Request) {
     const [{ rows, maxAsOf, monthStart, coberturaDias, groups, areasComerciales, pendienteReserva, bodegaOrigen, skusDuplicados }, tiendas, lastSync] = await Promise.all([
       buildRows(service, bodega),
       buildTiendas(service),
+      // The badge is the last run that finished and wrote this snapshot.
+      // A newer row with status failed (a 502 mid-run) is an attempt, not
+      // the data on screen — skip it so one blip does not paint the pill red.
       service.from('sync_runs').select('id, status, started_at, finished_at, counts')
-        .eq('kind', 'reabastecimiento').order('started_at', { ascending: false })
+        .eq('kind', 'reabastecimiento')
+        .in('status', [...GOOD_SYNC_STATUSES])
+        .order('started_at', { ascending: false })
         .limit(1).maybeSingle(),
     ]);
 
