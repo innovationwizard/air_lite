@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  AlertTriangle, Boxes, ChevronDown, ChevronUp, ChevronsUpDown, CloudOff, ListFilter, Loader2, PackageCheck,
+  AlertTriangle, Boxes, ChevronDown, ChevronUp, ChevronsUpDown, CloudOff, Info, ListFilter, Loader2, PackageCheck,
   Pencil, Radio, RefreshCw, Search, TrendingUp, X,
 } from 'lucide-react';
 import { MAX_MANUAL_QTY } from '@/lib/compras/qty';
@@ -16,17 +16,23 @@ import {
 import { computeKpis, computeAlza, computeTopProveedores } from '@/lib/compras/statusMetrics';
 import { fmtM3, m3Sugerido } from '@/lib/compras/cubicaje';
 import { BODEGA_LABEL, bodegaTienePatio, ordenarBodegas } from '@/lib/compras/bodega';
-import { COBERTURA_MAX_DIAS, COBERTURA_MIN_DIAS, esCoberturaValida } from '@/lib/compras/cobertura';
+import { COBERTURA_DEFAULTS, esCoberturaValida } from '@/lib/compras/cobertura';
 import { syncAgeLabel, syncIsStale } from '@/lib/syncFreshness';
 import { ExportarExcel } from './ExportarExcel';
 import { SnapshotButton } from './SnapshotButton';
 import { ProveedorFiltro, type ProveedorGrupo } from './ProveedorFiltro';
 import { ProveedorGruposPanel } from './ProveedorGruposPanel';
+import { PorqueDrawer, type FilaPorque } from './PorqueDrawer';
+import { ABC_CUTOFFS } from '@/lib/compras/configRules';
+import type { ColumnaPorque } from '@/lib/compras/reglasConfig';
+import type { CalcRules } from '@/lib/compras/configRules';
+import { TREND_THRESHOLDS } from '@/lib/compras/tendencia';
 import { useUserRole } from '@/lib/auth/useUserRole';
 import { CAN_MANAGE_SUPPLIER_GROUPS, isAuthorized } from '@/lib/auth/roles';
 import {
   COBERTURA_DEFAULT_DIAS,
-  type ProductRow, type Sev, sugerido, doh as dohOf, sev, fmt,
+  DOH_BANDS, ENGINE_FACTORS,
+  type DohBands, type ProductRow, type Sev, sugerido, doh as dohOf, sev, fmt,
 } from '@/lib/compras/reabastecimientoEngine';
 
 /**
@@ -211,8 +217,10 @@ interface ApiRow {
   adicRevision: number;
   /** QUIÉN pidió CUÁNTO: slug del canal → sus cantidades. */
   adicPorArea: Record<string, { directo: number; aRevision: number }>;
+  proyeccion?: number;
+  divergencia?: { estado: string; pct: number | null; motivo: string | null };
   transitoDetalle: { fecha: string | null; qty: number; orden: string | null }[];
-  p6: number; p3: number; h: number; win: 10 | 5;
+  p6: number; p3: number; h: number; win: number;
   /** G4 invoiced lens — display only, never fed to the engine. null = sync has not computed it. */
   f6: number | null; f3: number | null;
   /** Venta del mes en curso (parcial), días transcurridos y ritmo a 30 días. Display only. */
@@ -241,6 +249,8 @@ interface ApiMeta {
   pendienteReserva?: { asOf: string | null; codigos: string[]; error: string | null };
   /** W18 — the bodega that supplies this one (San José → Zacapa → Petén), or null. */
   bodegaOrigen?: string | null;
+  /** Factors behind the numbers. Absent → the previous constants. */
+  reglas?: CalcRules;
 }
 interface Tiendas {
   porTienda: { tienda: string; f6: number; f3: number }[];
@@ -315,6 +325,14 @@ export function VivoClient({ soloLectura = false }: { soloLectura?: boolean } = 
   const [rangos, setRangos] = useState<Partial<Record<ClaveOrdenNumerica, FiltroRango>>>({});
   // Grupos de proveedores (2026-09-04) — panel de gestión, Wilmer-only.
   const [gruposAbierto, setGruposAbierto] = useState(false);
+  const [porque, setPorque] = useState<{ columna: ColumnaPorque; fila: FilaPorque | null } | null>(null);
+  const abrirPorque = useCallback((columna: ColumnaPorque, fila?: ApiRow | null) => {
+    const areas = payload?.areasComerciales ?? [];
+    setPorque((prev) => ({
+      columna,
+      fila: fila === undefined ? (prev?.fila ?? null) : (fila ? aFilaPorque(fila, areas) : null),
+    }));
+  }, [payload]);
   const [revisarAbierto, setRevisarAbierto] = useState(false);
   const [sinCodigoAbierto, setSinCodigoAbierto] = useState(false);
   const { profile } = useUserRole();
@@ -369,6 +387,8 @@ export function VivoClient({ soloLectura = false }: { soloLectura?: boolean } = 
     }
     if (qty !== null) setPayload((prev) => {
       if (!prev) return prev;
+      const factors = prev.meta.reglas?.engine ?? ENGINE_FACTORS;
+      const coberturaDefault = prev.meta.reglas?.cobertura.default_dias ?? COBERTURA_DEFAULT_DIAS;
       const rows = prev.rows.map((r) => {
         if (r.productId !== row.productId) return r;
         const trans = qty;
@@ -376,7 +396,8 @@ export function VivoClient({ soloLectura = false }: { soloLectura?: boolean } = 
         return {
           ...r, trans,
           transOverridden: true,
-          doh: dohOf(er), sug: sugerido(er, trans),
+          doh: dohOf(er, undefined, factors),
+          sug: sugerido(er, trans, factors, coberturaDefault),
         };
       });
       return { ...prev, rows };
@@ -472,6 +493,11 @@ export function VivoClient({ soloLectura = false }: { soloLectura?: boolean } = 
    * (activos primero, urgencia por DOH) se conserva: dejó de ser el único y
    * pasó a ser con el que abre.
    */
+  const reglas = payload?.meta.reglas;
+  const dohBands = reglas?.doh ?? DOH_BANDS;
+  const engineFactors = reglas?.engine ?? ENGINE_FACTORS;
+  const trendThresholds = reglas?.trend ?? TREND_THRESHOLDS;
+  const coberturaBounds = reglas?.cobertura ?? COBERTURA_DEFAULTS;
   const list = useMemo(() => vista(
     payload?.rows ?? [],
     {
@@ -485,7 +511,8 @@ export function VivoClient({ soloLectura = false }: { soloLectura?: boolean } = 
       rangos,
     },
     orden,
-  ), [payload, q, prov, onlySug, onlyCrit, onlyAlza, onlyComprables, abcSel, rangos, orden]);
+    dohBands,
+  ), [payload, q, prov, onlySug, onlyCrit, onlyAlza, onlyComprables, abcSel, rangos, orden, dohBands]);
 
   const onSort = useCallback((k: ClaveOrden) => {
     setOrden((actual) => siguienteOrden(actual, k));
@@ -525,8 +552,11 @@ export function VivoClient({ soloLectura = false }: { soloLectura?: boolean } = 
   // so the "proof of status" snapshot route can compute the identical numbers
   // server-side — one function, two callers, never allowed to drift apart.
   const alza = useMemo(() => computeAlza(payload?.rows ?? []), [payload]);
-  const kpis = useMemo(() => computeKpis(list), [list]);
-  const topProv = useMemo(() => computeTopProveedores(payload?.rows ?? []), [payload]);
+  const kpis = useMemo(() => computeKpis(list, dohBands), [list, dohBands]);
+  const topProv = useMemo(
+    () => computeTopProveedores(payload?.rows ?? [], dohBands),
+    [payload, dohBands],
+  );
 
   const sync = payload?.meta.lastSync ?? null;
   // The badge follows the last run that finished. A later failed attempt is
@@ -573,7 +603,7 @@ export function VivoClient({ soloLectura = false }: { soloLectura?: boolean } = 
   }, [payload]);
 
   const renderFila = useCallback((r: ApiRow) => {
-  const band = sev(r.doh);
+  const band = sev(r.doh, dohBands);
   // El resaltado de fila lo dispara la alerta COMBINADA
   // (sube Y se despegó de su base), no las dos alzas solas:
   // medido el 2026-09-01, subir por sí solo marcaba una
@@ -585,7 +615,8 @@ export function VivoClient({ soloLectura = false }: { soloLectura?: boolean } = 
           ? 'bg-amber-50/70 hover:bg-amber-100/70 shadow-[inset_4px_0_0_0_rgb(245,158,11)]'
           : 'hover:bg-teal-50/50'}>
       <td className="px-3 py-2 border-b border-gray-100 text-left">{r.cod}</td>
-      <td className="px-3 py-2 border-b border-gray-100 text-center">
+      <td className="px-3 py-2 border-b border-gray-100 text-center cursor-pointer"
+          onClick={() => abrirPorque('abc', r)}>
         <span className={`inline-block w-6 text-center px-1.5 py-0.5 rounded-full font-semibold text-xs ${ABC_PILL[r.abc]}`}>
           {r.abc}
         </span>
@@ -594,20 +625,29 @@ export function VivoClient({ soloLectura = false }: { soloLectura?: boolean } = 
         <div className="truncate max-w-[240px] text-gray-800">{r.desc}</div>
         <div className="text-gray-400 text-xs">{r.prov}</div>
       </td>
-      <td className="px-3 py-2 border-b border-gray-100 text-right"
-          title={`existencias ${fmt(r.existencias)} − reservado ${fmt(r.reserved)} − pendiente ${r.pending ?? '¿?'}`}>
+      <td className="px-3 py-2 border-b border-gray-100 text-right cursor-pointer"
+          title={`existencias ${fmt(r.existencias)} − reservado ${fmt(r.reserved)} − pendiente ${r.pending ?? '¿?'}`}
+          onClick={() => abrirPorque('exist', r)}>
         {fmt(r.exist)}
       </td>
-      <td className="px-3 py-2 border-b border-gray-100 text-right text-gray-500">{fmt(r.patio)}</td>
-      <td className="px-3 py-2 border-b border-gray-100 text-right">
+      <td className="px-3 py-2 border-b border-gray-100 text-right text-gray-500 cursor-pointer"
+          onClick={() => abrirPorque('patio', r)}>{fmt(r.patio)}</td>
+      <td className="px-3 py-2 border-b border-gray-100 text-right cursor-pointer"
+          onClick={() => abrirPorque('doh', r)}>
         <span className={`inline-block min-w-[44px] text-center px-2 py-0.5 rounded-full font-semibold text-xs ${SEV_PILL[band]}`}>
           {r.doh.toFixed(1)}
         </span>
       </td>
       {/* W18 — la bodega que abastece, al lado de la propia: comprar o
           trasladar se decide comparando estas dos parejas de columnas. */}
-      {origenLabel ? <OrigenCells origen={r.origen} label={origenLabel} /> : null}
+      {origenLabel ? (
+        <OrigenCells origen={r.origen} label={origenLabel} bands={dohBands} weekdays={engineFactors.weekdays} />
+      ) : null}
       <td className="px-3 py-2 border-b border-gray-100 text-right">
+        <button type="button" className="mr-1 align-middle text-gray-300 hover:text-teal-700"
+          aria-label={`Por qué el tránsito de ${r.cod}`} onClick={() => abrirPorque('trans', r)}>
+          <Info size={12} />
+        </button>
         <QtyInput
           value={r.trans}
           edited={r.transOverridden}
@@ -623,7 +663,8 @@ export function VivoClient({ soloLectura = false }: { soloLectura?: boolean } = 
       {/* Live from Odoo — read-only on purpose. A box here would invite
           typing a number that Odoo already knows better and changes by the
           minute. ¿? = Odoo did not answer this load; 0 = nothing open. */}
-      <td className="px-3 py-2 border-b border-gray-100 text-right"
+      <td className="px-3 py-2 border-b border-gray-100 text-right cursor-pointer"
+          onClick={() => abrirPorque('pend', r)}
           title={r.flags.pendingUnknown
             ? 'Sin dato: Odoo no respondió en esta carga — no es cero'
             : `En vivo desde Odoo: entregas y traslados abiertos sin reservar (${r.cod})`}>
@@ -653,13 +694,19 @@ export function VivoClient({ soloLectura = false }: { soloLectura?: boolean } = 
           </td>
         );
       })}
-      <td className="px-3 py-2 border-b border-gray-100 text-right text-gray-500">{fmt(r.adic)}</td>
-      <td className="px-3 py-2 border-b border-gray-100 text-right text-gray-700">{fmt(r.p6)}</td>
-      <td className="px-3 py-2 border-b border-gray-100 text-right text-gray-700">{fmt(r.p3)}</td>
-      <td className="px-3 py-2 border-b border-gray-100 text-right">
-        <MesEnCurso mtd={r.mtd} dias={r.mtdDias} ritmo={r.mtdRitmo} p3={r.p3} />
+      <td className="px-3 py-2 border-b border-gray-100 text-right text-gray-500 cursor-pointer"
+          onClick={() => abrirPorque('adic', r)}>{fmt(r.adic)}</td>
+      <td className="px-3 py-2 border-b border-gray-100 text-right text-gray-700 cursor-pointer"
+          onClick={() => abrirPorque('p6', r)}>{fmt(r.p6)}</td>
+      <td className="px-3 py-2 border-b border-gray-100 text-right text-gray-700 cursor-pointer"
+          onClick={() => abrirPorque('p3', r)}>{fmt(r.p3)}</td>
+      <td className="px-3 py-2 border-b border-gray-100 text-right cursor-pointer"
+          onClick={() => abrirPorque('mes', r)}>
+        <MesEnCurso mtd={r.mtd} dias={r.mtdDias} ritmo={r.mtdRitmo} p3={r.p3}
+          high={trendThresholds.mtd_color_high} low={trendThresholds.mtd_color_low} />
       </td>
-      <td className="px-3 py-2 border-b border-gray-100 text-center">
+      <td className="px-3 py-2 border-b border-gray-100 text-center cursor-pointer"
+          onClick={() => abrirPorque('tend', r)}>
         <TendenciaCell t={r.tendencia} alerta={r.alerta}
                        sinRef={r.flags.sinReferenciaAnioAnterior} />
       </td>
@@ -675,6 +722,10 @@ export function VivoClient({ soloLectura = false }: { soloLectura?: boolean } = 
         <GapCell ordered={r.p3} invoiced={r.f3} />
       </td> */}
       <td className="px-3 py-2 border-b border-gray-100 text-right">
+        <button type="button" className="mr-1 align-middle text-gray-300 hover:text-teal-700"
+          aria-label={`Por qué pide bodega ${r.cod}`} onClick={() => abrirPorque('pide', r)}>
+          <Info size={12} />
+        </button>
         <QtyInput
           value={r.sugBodega}
           edited={r.sugBodega !== null}
@@ -685,7 +736,8 @@ export function VivoClient({ soloLectura = false }: { soloLectura?: boolean } = 
           clearTip="Quitar el pedido del centro de distribución"
         />
       </td>
-      <td className={`px-3 py-2 border-b border-gray-100 text-right font-bold ${r.sug > 0 ? 'text-teal-700' : 'text-gray-400'}`}
+      <td className={`px-3 py-2 border-b border-gray-100 text-right font-bold cursor-pointer ${r.sug > 0 ? 'text-teal-700' : 'text-gray-400'}`}
+          onClick={() => abrirPorque('sug', r)}
           title={r.flags.seasonalExcluded
             ? `Sin término estacional — ${r.seasonalMotivo ?? ''} Forecast = promedio(6m, 3m) × 1.1.`
             : r.flags.seasonalLowConfidence ? 'Estacional sin datos — confianza baja' : undefined}>
@@ -702,7 +754,8 @@ export function VivoClient({ soloLectura = false }: { soloLectura?: boolean } = 
       </td>
     </tr>
   );
-  }, [commitEdit, commitSugBodega, areasVisibles, origenLabel, soloLectura]);
+  }, [commitEdit, commitSugBodega, areasVisibles, origenLabel, soloLectura, abrirPorque,
+      dohBands, engineFactors.weekdays, trendThresholds]);
 
   return (
     <div className="p-6 max-w-[1240px] mx-auto">
@@ -936,7 +989,7 @@ export function VivoClient({ soloLectura = false }: { soloLectura?: boolean } = 
                     soloEnAlza: onlyAlza, soloComprables: onlyComprables, abc: abcSel, rangos,
                   },
                   orden,
-                  coberturaDias: payload?.meta.coberturaDias ?? COBERTURA_DEFAULT_DIAS,
+                  coberturaDias: payload?.meta.coberturaDias ?? coberturaBounds.default_dias,
                   datosAl: sync?.counts?.data_horizon ?? payload?.meta.asOf ?? null,
                   totalSinFiltros: payload?.rows.length ?? 0,
                   // Es el mismo número en toda la tabla (días transcurridos del
@@ -976,6 +1029,8 @@ export function VivoClient({ soloLectura = false }: { soloLectura?: boolean } = 
               dias={payload.meta.coberturaDias}
               guardando={coberturaGuardando}
               readOnly={soloLectura}
+              min={coberturaBounds.min_dias}
+              max={coberturaBounds.max_dias}
               onCommit={(d) => void commitCobertura(d)}
             />
           ) : null}
@@ -994,14 +1049,18 @@ export function VivoClient({ soloLectura = false }: { soloLectura?: boolean } = 
                   <tr className="text-[11px] uppercase tracking-wide text-gray-500">
                     <Th left tip={COL_TIP.cod} sortKey="cod" orden={orden} onSort={onSort}>Código</Th>
                     <Th tip={`${COL_TIP.abc} Clic para ordenar A→D; otro clic, D→A.`}
-                        sortKey="abc" orden={orden} onSort={onSort}>ABC</Th>
+                        sortKey="abc" orden={orden} onSort={onSort}
+                        onInfo={() => abrirPorque('abc')}>ABC</Th>
                     <Th left tip={COL_TIP.desc} sortKey="prov" orden={orden} onSort={onSort}>Descripción / Proveedor</Th>
                     <Th tip={COL_TIP.exist} sortKey="exist" orden={orden} onSort={onSort}
-                        filtroKey="exist" rango={rangos.exist} onRango={onRango}>Exist. neta</Th>
+                        filtroKey="exist" rango={rangos.exist} onRango={onRango}
+                        onInfo={() => abrirPorque('exist')}>Exist. neta</Th>
                     <Th tip={COL_TIP.patio(bodega)} sortKey="patio" orden={orden} onSort={onSort}
-                        filtroKey="patio" rango={rangos.patio} onRango={onRango}>Patio</Th>
+                        filtroKey="patio" rango={rangos.patio} onRango={onRango}
+                        onInfo={() => abrirPorque('patio')}>Patio</Th>
                     <Th tip={COL_TIP.doh} sortKey="doh" orden={orden} onSort={onSort}
-                        filtroKey="doh" rango={rangos.doh} onRango={onRango}>DOH</Th>
+                        filtroKey="doh" rango={rangos.doh} onRango={onRango}
+                        onInfo={() => abrirPorque('doh')}>DOH</Th>
                     {origenLabel ? (
                       <>
                         <Th tip={COL_TIP.origenExist(origenLabel, BODEGA_LABEL[bodega] ?? bodega)}
@@ -1015,9 +1074,11 @@ export function VivoClient({ soloLectura = false }: { soloLectura?: boolean } = 
                       </>
                     ) : null}
                     <Th tip={COL_TIP.trans} sortKey="trans" orden={orden} onSort={onSort}
-                        filtroKey="trans" rango={rangos.trans} onRango={onRango}><span className="inline-flex items-center gap-1">Tránsito <Pencil size={11} /></span></Th>
+                        filtroKey="trans" rango={rangos.trans} onRango={onRango}
+                        onInfo={() => abrirPorque('trans')}><span className="inline-flex items-center gap-1">Tránsito <Pencil size={11} /></span></Th>
                     <Th tip={COL_TIP.pend} sortKey="pending" orden={orden} onSort={onSort}
-                        filtroKey="pending" rango={rangos.pending} onRango={onRango}><span className="inline-flex items-center gap-1">Pend. reserva <Radio size={11} /></span></Th>
+                        filtroKey="pending" rango={rangos.pending} onRango={onRango}
+                        onInfo={() => abrirPorque('pend')}><span className="inline-flex items-center gap-1">Pend. reserva <Radio size={11} /></span></Th>
                     {/* Ordenables desde 2026-09-25 (Wilmer). `ClaveOrden` sigue
                         siendo una unión, pero ahora admite `canal:<slug>` —
                         los canales son datos que cambian sin despliegue, así
@@ -1034,13 +1095,17 @@ export function VivoClient({ soloLectura = false }: { soloLectura?: boolean } = 
                       </Th>
                     ))}
                     <Th tip={COL_TIP.adic} sortKey="adic" orden={orden} onSort={onSort}
-                        filtroKey="adic" rango={rangos.adic} onRango={onRango}>Adicionales</Th>
+                        filtroKey="adic" rango={rangos.adic} onRango={onRango}
+                        onInfo={() => abrirPorque('adic')}>Adicionales</Th>
                     <Th tip={COL_TIP.ord} sortKey="p6" orden={orden} onSort={onSort}
-                        filtroKey="p6" rango={rangos.p6} onRango={onRango}>Ord. 6m</Th>
+                        filtroKey="p6" rango={rangos.p6} onRango={onRango}
+                        onInfo={() => abrirPorque('p6')}>Ord. 6m</Th>
                     <Th tip={COL_TIP.ord} sortKey="p3" orden={orden} onSort={onSort}
-                        filtroKey="p3" rango={rangos.p3} onRango={onRango}>Ord. 3m</Th>
-                    <Th tip={COL_TIP.mes} filtroKey="mtd" rango={rangos.mtd} onRango={onRango}>Mes en curso</Th>
-                    <Th tip={COL_TIP.tend}>Tendencia</Th>
+                        filtroKey="p3" rango={rangos.p3} onRango={onRango}
+                        onInfo={() => abrirPorque('p3')}>Ord. 3m</Th>
+                    <Th tip={COL_TIP.mes} filtroKey="mtd" rango={rangos.mtd} onRango={onRango}
+                        onInfo={() => abrirPorque('mes')}>Mes en curso</Th>
+                    <Th tip={COL_TIP.tend} onInfo={() => abrirPorque('tend')}>Tendencia</Th>
                     {/* Q9 (Jorge, 2026-08-26) — facturación is off Wilmer's screen.
                         His reason, given twice: "yo trabajo con lo ordenado, no con
                         esto" — invoiced sales are censored by our own stockouts, so
@@ -1051,9 +1116,10 @@ export function VivoClient({ soloLectura = false }: { soloLectura?: boolean } = 
                     {/* <Th tip={COL_TIP.fact}>Fact. 6m</Th>
                     <Th tip={COL_TIP.fact}>Fact. 3m</Th>
                     <Th tip={COL_TIP.gap}>Δ</Th> */}
-                    <Th tip={COL_TIP.sugBodega}>Pide bodega</Th>
+                    <Th tip={COL_TIP.sugBodega} onInfo={() => abrirPorque('pide')}>Pide bodega</Th>
                     <Th tip={COL_TIP.sug} sortKey="sug" orden={orden} onSort={onSort}
-                        filtroKey="sug" rango={rangos.sug} onRango={onRango}>Sugerido</Th>
+                        filtroKey="sug" rango={rangos.sug} onRango={onRango}
+                        onInfo={() => abrirPorque('sug')}>Sugerido</Th>
                     <Th tip={COL_TIP.m3}>m³</Th>
                   </tr>
                 </thead>
@@ -1128,8 +1194,65 @@ export function VivoClient({ soloLectura = false }: { soloLectura?: boolean } = 
           onClose={() => setSinCodigoAbierto(false)}
         />
       )}
+      {porque && (
+        <PorqueDrawer
+          columna={porque.columna}
+          bodega={bodega}
+          etiqueta={BODEGA_LABEL[bodega] ?? bodega}
+          fila={porque.fila}
+          coberturaDias={payload?.meta.coberturaDias}
+          abcFilas={(payload?.rows ?? []).map((r) => ({ cod: r.cod, p3: r.p3 }))}
+          factores={{
+            weekdays: engineFactors.weekdays,
+            t_divisor: engineFactors.t_divisor,
+            general_growth: engineFactors.general_growth,
+            win_general: engineFactors.win_general,
+            default_dias: coberturaBounds.default_dias,
+            min_qty_for_class: (reglas?.abc ?? ABC_CUTOFFS).min_qty_for_class,
+            a_share: (reglas?.abc ?? ABC_CUTOFFS).a_share,
+            b_share: (reglas?.abc ?? ABC_CUTOFFS).b_share,
+            mtd_color_high: trendThresholds.mtd_color_high,
+            mtd_color_low: trendThresholds.mtd_color_low,
+          }}
+          onClose={() => setPorque(null)}
+        />
+      )}
     </div>
   );
+}
+
+function aFilaPorque(r: ApiRow, areas: { slug: string; nombre: string }[] = []): FilaPorque {
+  return {
+    cod: r.cod,
+    exist: r.exist,
+    existencias: r.existencias,
+    reserved: r.reserved,
+    patio: r.patio,
+    pending: r.pending,
+    trans: r.trans,
+    transOverridden: r.transOverridden,
+    transitoDetalle: r.transitoDetalle,
+    doh: r.doh,
+    sug: r.sug,
+    abc: r.abc,
+    p6: r.p6,
+    p3: r.p3,
+    h: r.h,
+    win: r.win,
+    adic: r.adic,
+    adicComercial: r.adicComercial,
+    sugBodega: r.sugBodega,
+    proyeccion: r.proyeccion,
+    mtd: r.mtd,
+    mtdDias: r.mtdDias,
+    mtdRitmo: r.mtdRitmo,
+    tendencia: r.tendencia,
+    divergencia: r.divergencia,
+    alerta: r.alerta,
+    canales: areas
+      .map((a) => ({ nombre: a.nombre, directo: r.adicPorArea?.[a.slug]?.directo ?? 0 }))
+      .filter((c) => c.directo > 0),
+  };
 }
 
 /**
@@ -1315,13 +1438,14 @@ function TendenciaCell(
   );
 }
 
-function MesEnCurso({ mtd, dias, ritmo, p3 }: {
+function MesEnCurso({ mtd, dias, ritmo, p3, high = TREND_THRESHOLDS.mtd_color_high, low = TREND_THRESHOLDS.mtd_color_low }: {
   mtd: number | null; dias: number | null; ritmo: number | null; p3: number;
+  high?: number; low?: number;
 }) {
   if (mtd === null || dias === null) return <span className="text-gray-300">—</span>;
   const tone = !p3 || ritmo === null ? 'text-gray-500'
-    : ritmo > p3 * 1.15 ? 'text-teal-700 font-semibold'
-      : ritmo < p3 * 0.85 ? 'text-amber-700' : 'text-gray-600';
+    : ritmo > p3 * high ? 'text-teal-700 font-semibold'
+      : ritmo < p3 * low ? 'text-amber-700' : 'text-gray-600';
   return (
     <span className={tone}
           title={`${fmt(mtd)} ordenado en ${dias} día${dias === 1 ? '' : 's'} del mes`
@@ -1413,7 +1537,7 @@ function TiendasPanel({ tiendas }: { tiendas: Tiendas }) {
  * son una cifra simple sobre la que «mayor a menor» signifique algo.
  */
 function Th({
-  children, left, tip, sortKey, orden, onSort, filtroKey, rango, onRango, accent,
+  children, left, tip, sortKey, orden, onSort, filtroKey, rango, onRango, accent, onInfo,
 }: {
   children: React.ReactNode;
   left?: boolean;
@@ -1427,6 +1551,7 @@ function Th({
   filtroKey?: ClaveOrdenNumerica;
   rango?: FiltroRango;
   onRango?: (k: ClaveOrdenNumerica, r: FiltroRango | null) => void;
+  onInfo?: () => void;
 }) {
   const activa = Boolean(sortKey && orden && orden.clave === sortKey);
   const ordenable = Boolean(sortKey && onSort);
@@ -1447,6 +1572,16 @@ function Th({
             : <ChevronsUpDown size={11} className="text-gray-300" />
         )}
         {filtroKey && onRango && <RangoFiltro clave={filtroKey} rango={rango} onChange={onRango} />}
+        {onInfo && (
+          <button
+            type="button"
+            className="text-gray-400 hover:text-teal-700"
+            aria-label="Por qué esta columna"
+            onClick={(e) => { e.stopPropagation(); onInfo(); }}
+          >
+            <Info size={12} />
+          </button>
+        )}
       </span>
     </th>
   );
@@ -1638,8 +1773,12 @@ export function QtyInput({ value, edited, unknown, label, onCommit, onClear, cle
  * Se guarda al salir del campo o con Enter, sólo si cambió y es válido
  * (entero 1–365, el CHECK de la tabla). Escape devuelve el valor guardado.
  */
-function CoberturaInput({ bodega, dias, guardando, readOnly, onCommit }: {
-  bodega: string; dias: number; guardando: boolean; readOnly?: boolean; onCommit: (dias: number) => void;
+function CoberturaInput({
+  bodega, dias, guardando, readOnly, onCommit,
+  min = COBERTURA_DEFAULTS.min_dias, max = COBERTURA_DEFAULTS.max_dias,
+}: {
+  bodega: string; dias: number; guardando: boolean; readOnly?: boolean;
+  min?: number; max?: number; onCommit: (dias: number) => void;
 }) {
   const [texto, setTexto] = useState(String(dias));
   useEffect(() => { setTexto(String(dias)); }, [dias]);
@@ -1654,7 +1793,7 @@ function CoberturaInput({ bodega, dias, guardando, readOnly, onCommit }: {
     );
   }
   const valor = texto.trim() === '' ? NaN : Number(texto);
-  const valido = esCoberturaValida(valor);
+  const valido = esCoberturaValida(valor, { min, max });
   const commit = () => {
     if (!valido) { setTexto(String(dias)); return; }
     if (valor !== dias) onCommit(valor);
@@ -1662,13 +1801,13 @@ function CoberturaInput({ bodega, dias, guardando, readOnly, onCommit }: {
   return (
     <div className="mx-3 mb-3 inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-1.5 text-xs text-gray-700"
          title={`Cuántos días de demanda cubre el Sugerido en ${bodega}. Cada bodega tiene el suyo. `
-           + `Digitá el número: cobertura + lead time del proveedor (p. ej. 30 + 35 = 65). Entre ${COBERTURA_MIN_DIAS} y ${COBERTURA_MAX_DIAS}.`}>
+           + `Digitá el número: cobertura + lead time del proveedor (p. ej. 30 + 35 = 65). Entre ${min} y ${max}.`}>
       <span className="font-semibold">Sugerido a</span>
       <input
         type="number"
         inputMode="numeric"
-        min={COBERTURA_MIN_DIAS}
-        max={COBERTURA_MAX_DIAS}
+        min={min}
+        max={max}
         step={1}
         value={texto}
         disabled={guardando}
@@ -1686,7 +1825,7 @@ function CoberturaInput({ bodega, dias, guardando, readOnly, onCommit }: {
       />
       <span className="text-gray-500">días</span>
       {!valido && texto.trim() !== '' ? (
-        <span className="text-red-600">entre {COBERTURA_MIN_DIAS} y {COBERTURA_MAX_DIAS}</span>
+        <span className="text-red-600">entre {min} y {max}</span>
       ) : null}
       {guardando && <Loader2 size={12} className="animate-spin text-gray-400" />}
     </div>
@@ -1718,7 +1857,11 @@ function Kpi({ label, value, sub, icon, accent, danger, warn, tip }: {
  * el mismo semáforo. Sin fila allá se pinta — y no 0: «no está en San José»
  * y «San José tiene 0» llevan a decisiones distintas.
  */
-function OrigenCells({ origen, label }: { origen: ApiRow['origen']; label: string }) {
+function OrigenCells({
+  origen, label, bands = DOH_BANDS, weekdays = ENGINE_FACTORS.weekdays,
+}: {
+  origen: ApiRow['origen']; label: string; bands?: DohBands; weekdays?: number;
+}) {
   if (!origen) {
     return (
       <>
@@ -1731,7 +1874,7 @@ function OrigenCells({ origen, label }: { origen: ApiRow['origen']; label: strin
       </>
     );
   }
-  const band = sev(origen.doh);
+  const band = sev(origen.doh, bands);
   const pendiente = origen.pending === null ? '¿?' : fmt(origen.pending);
   return (
     <>
@@ -1745,7 +1888,7 @@ function OrigenCells({ origen, label }: { origen: ApiRow['origen']; label: strin
         <span className="block text-[11px] text-gray-400 leading-tight">vende {fmt(origen.p3)}/mes</span>
       </td>
       <td className="px-3 py-2 border-b border-gray-100 text-right bg-sky-50/40"
-          title={`${label}: ${fmt(origen.exist)} ÷ (${fmt(origen.p3)} ÷ 26) = ${origen.doh.toFixed(1)} días`}>
+          title={`${label}: ${fmt(origen.exist)} ÷ (${fmt(origen.p3)} ÷ ${weekdays}) = ${origen.doh.toFixed(1)} días`}>
         <span className={`inline-block min-w-[44px] text-center px-2 py-0.5 rounded-full font-semibold text-xs ${SEV_PILL[band]}`}>
           {origen.doh.toFixed(1)}
         </span>

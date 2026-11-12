@@ -67,7 +67,7 @@ export function HistorialClient({ isSuperuser }: { isSuperuser: boolean }) {
           href="/compras/reabastecimiento"
           className="inline-flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700"
         >
-          <ArrowLeft size={13} /> Volver a Reabastecimiento en Vivo
+          <ArrowLeft size={13} /> Volver a Reabastecimiento
         </Link>
         <h1 className="mt-1 text-xl font-bold text-gray-900">Historial de snapshots</h1>
         <p className="text-sm text-gray-500">Pruebas de estado emitidas — cada una es un registro inmutable, para auditorías</p>
