@@ -67,6 +67,16 @@ from collections import defaultdict
 from datetime import datetime, timezone
 
 import sync_retry
+from config_rules import (
+    TRANSIT_CUTOFF_TODAY_UTC,
+    accept_engine_factors,
+    accept_excluded_wh,
+    accept_existencias,
+    accept_patio,
+    accept_prefix_map,
+    accept_transit_rules,
+    read_config,
+)
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
 logger = logging.getLogger(__name__)
@@ -145,6 +155,12 @@ SUCURSAL_PREFIX_TO_WH = {
                             #                        SO-T6Mix-, el de OC no)
 }
 
+# Confirmed purchase-order states. Fallback for config_rules `transit.rules`
+# together with TRANSIT_CUTOFF_TODAY_UTC (`today_utc`): header date_planned
+# >= today's UTC midnight, compared as '%Y-%m-%d 00:00:00'. The seed is
+# these two states and that cutoff. Draft/sent stay out (INCLUDE_DRAFT_TRANSIT).
+TRANSIT_STATES = ('purchase', 'done')
+
 SUPABASE_BATCH = 500
 
 
@@ -175,6 +191,17 @@ def record_failed_run(kind, message):
         logger.warning('could not record the failed run in sync_runs', exc_info=True)
 
 
+class OdooAuthenticationFailed(Exception):
+    """authenticate answered, but the value is not a user id."""
+
+
+def _accepted_user_id(uid):
+    """A successful login is a positive int. False, None, 0, and other shapes are not."""
+    if isinstance(uid, bool) or not isinstance(uid, int) or uid <= 0:
+        return None
+    return uid
+
+
 def connect_odoo(kind='reabastecimiento'):
     if not all([ODOO_URL, ODOO_DB, ODOO_USERNAME, ODOO_API_KEY]):
         msg = 'Missing Odoo env vars: ODOO_URL, ODOO_DB, ODOO_USERNAME, ODOO_API_KEY'
@@ -187,6 +214,14 @@ def connect_odoo(kind='reabastecimiento'):
         try:
             return _connect_once(attempt)
         except Exception as e:
+            # The hourly cron must not retry a rejected login or die on a traceback.
+            # A missing user id is logged once and exits with the same status as
+            # the other recorded failures. Network blips still retry below.
+            if isinstance(e, OdooAuthenticationFailed) and kind == 'reabastecimiento':
+                msg = 'cron-hourly-wilmer: Odoo authentication failed; no user id was returned'
+                logger.error(msg)
+                record_failed_run(kind, msg)
+                sys.exit(1)
             last = e
             logger.warning('Odoo connect attempt %d/%d failed: %s',
                            attempt, ODOO_CONNECT_ATTEMPTS, e)
@@ -201,10 +236,9 @@ def connect_odoo(kind='reabastecimiento'):
 
 def _connect_once(attempt):
     common = xmlrpc.client.ServerProxy(f'{ODOO_URL}/xmlrpc/2/common', allow_none=True)
-    uid = common.authenticate(ODOO_DB, ODOO_USERNAME, ODOO_API_KEY, {})
-    if not uid:
-        # Also retried: during maintenance Odoo answers but refuses auth.
-        raise RuntimeError('Odoo authentication returned no uid (per-database API key?)')
+    uid = _accepted_user_id(common.authenticate(ODOO_DB, ODOO_USERNAME, ODOO_API_KEY, {}))
+    if uid is None:
+        raise OdooAuthenticationFailed('Odoo authentication returned no uid (per-database API key?)')
     models = xmlrpc.client.ServerProxy(f'{ODOO_URL}/xmlrpc/2/object', allow_none=True)
     logger.info('Odoo connected: uid=%s db=%s (attempt %d)', uid, ODOO_DB, attempt)
 
@@ -335,6 +369,7 @@ def location_ids_for(by_name, wh_codes, kinds, issues):
 
 # Warehouses excluded from the 'General' aggregate (Wilmer 2026-08-06:
 # "Todas, menos 5DEP" — 5DEP is reempaque: no sales, occasional stock).
+# Fallback for config_rules `bodega.general_excluded_wh`. The seed is this tuple.
 GENERAL_EXCLUDED_WH = ('5DEP',)
 # El nombre de la vista de roll-up. Se usaba como literal 'General' en varios
 # puntos; W15-B lo necesita también en la atribución del tránsito, así que aquí
@@ -342,13 +377,22 @@ GENERAL_EXCLUDED_WH = ('5DEP',)
 GENERAL_BODEGA = 'General'
 
 
-def general_exist_location_ids(by_name):
-    """The 'General' display aggregate: every */Existencias location except
-    GENERAL_EXCLUDED_WH. Entrada deliberately NOT summed (Wilmer 2026-08-06,
-    supersedes 07-28 "también patio" — I6, latest transcript wins)."""
-    excluded = tuple(f'{wh}/' for wh in GENERAL_EXCLUDED_WH)
+def general_exist_location_ids(by_name, excluded_wh=None, kind=None):
+    """The 'General' display aggregate: every */{kind} location except
+    excluded_wh. Entrada deliberately NOT summed (Wilmer 2026-08-06,
+    supersedes 07-28 "también patio" — I6, latest transcript wins).
+
+    Defaults are the constants. sync_stock passes the config_rules values,
+    which equal these defaults when the seed has not been edited.
+    """
+    if excluded_wh is None:
+        excluded_wh = GENERAL_EXCLUDED_WH
+    if not kind:
+        kind = 'Existencias'
+    excluded = tuple(f'{wh}/' for wh in excluded_wh)
+    suffix = f'/{kind}'
     return [i for n, i in by_name.items()
-            if n.endswith('/Existencias') and not n.startswith(excluded)]
+            if n.endswith(suffix) and not n.startswith(excluded)]
 
 
 def product_label(p):
@@ -596,42 +640,72 @@ def sync_catalog(execute, issues, dry_run):
 # (Wilmer, 2026-09-29, SKU 77205001: Patio 1,240 was PO-P-3077 sitting in
 # 1CET/Entrada, a different furgón from Zacapa's own tránsito). Those two
 # store patio 0. The screen applies the same rule to rows already synced.
+# Fallback for config_rules `stock.patio`. The seed is this location and these bodegas.
 PATIO_LOCATION = '1CET/Entrada'
 PATIO_BODEGAS = frozenset({'San Jose VN', GENERAL_BODEGA})
 
 
-def patio_ids_for(bodega, patio_ids):
-    """Yard location ids for this bodega. Empty outside San José and General."""
-    return list(patio_ids) if bodega in PATIO_BODEGAS else []
+def patio_ids_for(bodega, patio_ids, bodegas=None):
+    """Yard location ids for this bodega. Empty outside San José and General.
+
+    `bodegas` defaults to PATIO_BODEGAS. sync_stock passes the set it read
+    from config_rules, which is this set when the seed has not been edited.
+    """
+    allowed = PATIO_BODEGAS if bodegas is None else bodegas
+    return list(patio_ids) if bodega in allowed else []
+
+
+def _stock_rules():
+    """Location kind, patio, and the General exclusion, with the constants as fallback."""
+    return read_config({
+        'stock.existencias.locations': ({'kind': 'Existencias'}, accept_existencias),
+        'stock.patio': (
+            {'location': PATIO_LOCATION, 'bodegas': PATIO_BODEGAS},
+            accept_patio,
+        ),
+        'bodega.general_excluded_wh': (GENERAL_EXCLUDED_WH, accept_excluded_wh),
+    })
 
 
 def sync_stock(execute, by_name, bodega_codes, issues):
     """Per bodega: {odoo_pid: {'exist','reserved','patio'}} from stock.quant.
     Patio = 1CET/Entrada on San José and General only. 'General' existencias =
-    ALL physical */Existencias locations (incl. tiendas)."""
+    ALL physical */Existencias locations (incl. tiendas).
+
+    The location segment, the patio location, which bodegas keep the patio,
+    and the warehouses left out of General come from config_rules. Each one
+    falls back to the constant in this module, so a missing table selects
+    the same locations this function selected before the table existed.
+    """
+    loaded = _stock_rules()
+    kind = loaded['stock.existencias.locations']['kind']
+    patio_location = loaded['stock.patio']['location']
+    patio_bodegas = loaded['stock.patio']['bodegas']
+    excluded_wh = loaded['bodega.general_excluded_wh']
+
     patio_ids = []
-    if PATIO_LOCATION in by_name:
-        patio_ids = [by_name[PATIO_LOCATION]]
+    if patio_location in by_name:
+        patio_ids = [by_name[patio_location]]
     else:
         issues.add('warning', 'bodega_map',
-                   f'patio location "{PATIO_LOCATION}" not found — patio=0 everywhere',
-                   odoo_id=PATIO_LOCATION)
+                   f'patio location "{patio_location}" not found — patio=0 everywhere',
+                   odoo_id=patio_location)
 
     result = {}
     targets = dict(bodega_codes)  # purchasing bodegas from bodega_map
     for bodega, codes in targets.items():
-        exist_ids = location_ids_for(by_name, codes, ['Existencias'], issues)
+        exist_ids = location_ids_for(by_name, codes, [kind], issues)
         result[bodega] = _stock_for_locations(
-            execute, exist_ids, patio_ids_for(bodega, patio_ids))
+            execute, exist_ids, patio_ids_for(bodega, patio_ids, patio_bodegas))
 
     # General display aggregate: every */Existencias incl. tiendas, minus
-    # GENERAL_EXCLUDED_WH; Entrada out (Wilmer 2026-08-06 — see module doc).
-    exist_ids = general_exist_location_ids(by_name)
+    # the excluded warehouses; Entrada out (Wilmer 2026-08-06 — see module doc).
+    exist_ids = general_exist_location_ids(by_name, excluded_wh, kind)
     result['General'] = _stock_for_locations(
-        execute, exist_ids, patio_ids_for(GENERAL_BODEGA, patio_ids))
-    logger.info('stock synced for bodegas: %s (+General over %d Existencias locations, '
+        execute, exist_ids, patio_ids_for(GENERAL_BODEGA, patio_ids, patio_bodegas))
+    logger.info('stock synced for bodegas: %s (+General over %d %s locations, '
                 'excl. %s; patio=%s on %s)', list(targets), len(exist_ids),
-                GENERAL_EXCLUDED_WH, PATIO_LOCATION, sorted(PATIO_BODEGAS))
+                kind, excluded_wh, patio_location, sorted(patio_bodegas))
     return result
 
 
@@ -1292,7 +1366,8 @@ def sync_seasonal(execute, sku_to_opid, issues):
 
 
 def attribute_transit(lines, wh_by_order, bodega_codes,
-                      fecha_por_orden=None, nombre_por_orden=None):
+                      fecha_por_orden=None, nombre_por_orden=None,
+                      excluded_wh=None):
     """Reparte las líneas pendientes entre bodegas según el almacén que las
     recibe. Puro — sin I/O, para poder probarlo (mismo criterio que
     `aggregate_invoiced`).
@@ -1319,6 +1394,9 @@ def attribute_transit(lines, wh_by_order, bodega_codes,
     wh_to_bodega = {code: bodega for bodega, codes in bodega_codes.items() for code in codes}
     fecha_por_orden = fecha_por_orden or {}
     nombre_por_orden = nombre_por_orden or {}
+    # General's roll-up uses the same exclusion as its stock. The default is
+    # the constant; sync_transit passes the config_rules value.
+    excluded = GENERAL_EXCLUDED_WH if excluded_wh is None else excluded_wh
     for ln in lines:
         if not ln.get('product_id'):
             continue
@@ -1347,7 +1425,7 @@ def attribute_transit(lines, wh_by_order, bodega_codes,
             # Sucursal sin bodega asignada (hoy el CD Zona 11) o sin sucursal
             # legible. Se le pone nombre al hueco en vez de adivinarlo.
             fuera_de_alcance[code or '(sin sucursal)'] += pending
-        if code not in GENERAL_EXCLUDED_WH:
+        if code not in excluded:
             transit[GENERAL_BODEGA][opid] += pending
         counted += 1
     return transit, fuera_de_alcance, counted, detalle
@@ -1389,7 +1467,7 @@ def prefijo_de_orden(name):
     return None
 
 
-def resolve_sucursal_warehouses(orders, prefix_by_branch):
+def resolve_sucursal_warehouses(orders, prefix_by_branch, prefix_map=None):
     """Orden -> código de almacén de compras, por SUCURSAL. Puro, para poder
     probarlo (mismo criterio que `attribute_transit`).
 
@@ -1403,6 +1481,9 @@ def resolve_sucursal_warehouses(orders, prefix_by_branch):
     wh_by_order = {}
     stats = {'por_campo': 0, 'por_nombre': 0, 'sin_sucursal': 0,
              'fuera_de_mapa': defaultdict(int), 'discrepancia_nombre': 0}
+    # Exact prefix → warehouse. Default is the constant; sync_transit passes
+    # the config_rules map, which is this dict when the seed has not been edited.
+    mapping = SUCURSAL_PREFIX_TO_WH if prefix_map is None else prefix_map
     for o in orders:
         loc = o.get('location_id')
         etiqueta = loc[1] if loc and len(loc) > 1 else None
@@ -1417,7 +1498,7 @@ def resolve_sucursal_warehouses(orders, prefix_by_branch):
             stats['por_campo'] += 1
         elif prefijo_nombre:
             stats['por_nombre'] += 1
-        code = SUCURSAL_PREFIX_TO_WH.get(prefijo) if prefijo else None
+        code = mapping.get(prefijo) if prefijo else None
         if code is None:
             if etiqueta or prefijo:
                 code = f'sucursal:{etiqueta or prefijo}'
@@ -1570,9 +1651,28 @@ def sync_transit(execute, issues, bodega_codes):
     as transit until received (falsified live by Wilmer 2026-08-06: transit=0
     while 4 trucks arrived that day). Past-dated headers remain excluded
     (the never-cancelled pile) and are reported."""
+    loaded = read_config({
+        'transit.rules': (
+            {'states': TRANSIT_STATES, 'date_cutoff': TRANSIT_CUTOFF_TODAY_UTC},
+            accept_transit_rules,
+        ),
+        'transit.prefix_map': (dict(SUCURSAL_PREFIX_TO_WH), accept_prefix_map),
+        'bodega.general_excluded_wh': (GENERAL_EXCLUDED_WH, accept_excluded_wh),
+    })
+    transit_rules = loaded['transit.rules']
+    prefix_map = loaded['transit.prefix_map']
+    excluded_wh = loaded['bodega.general_excluded_wh']
+    states = list(transit_rules['states'])
+    # date_cutoff 'today_utc' is this comparison, not a stored timestamp:
+    # the header date_planned, as text, is in transit at today's UTC midnight
+    # and later. Empty and earlier headers stay out. accept_transit_rules
+    # rejects any other cutoff, so a bad row keeps TRANSIT_STATES and this
+    # same midnight.
+    if transit_rules['date_cutoff'] != TRANSIT_CUTOFF_TODAY_UTC:
+        states = list(TRANSIT_STATES)
     today0 = datetime.now(timezone.utc).strftime('%Y-%m-%d 00:00:00')
     orders = odoo_read_all(execute, 'purchase.order',
-                           [['state', 'in', ['purchase', 'done']]],
+                           [['state', 'in', states]],
                            ['name', 'date_planned', 'picking_type_id', 'location_id'])
     future = [o for o in orders if (o.get('date_planned') or '') >= today0]
     future_ids = [o['id'] for o in future]
@@ -1580,7 +1680,7 @@ def sync_transit(execute, issues, bodega_codes):
 
     # Orden -> almacén de la SUCURSAL dueña. Medido 100% resoluble 2026-09-08.
     wh_by_order, attr = resolve_sucursal_warehouses(
-        future, sucursal_prefixes(execute, issues))
+        future, sucursal_prefixes(execute, issues), prefix_map)
     sin_sucursal = attr['sin_sucursal']
 
     # El primer tramo, sólo para CONTRASTAR. No atribuye nada: su diferencia
@@ -1609,14 +1709,15 @@ def sync_transit(execute, issues, bodega_codes):
     fecha_por_orden = {o['id']: (o.get('date_planned') or None) for o in future}
     nombre_por_orden = {o['id']: o.get('name') for o in future}
     transit, fuera_de_alcance, counted, transito_detalle = attribute_transit(
-        lines, wh_by_order, bodega_codes, fecha_por_orden, nombre_por_orden)
+        lines, wh_by_order, bodega_codes, fecha_por_orden, nombre_por_orden,
+        excluded_wh)
 
     por_bodega = ', '.join(
         f'{b}={sum(v.values()):,.0f}' for b, v in sorted(transit.items()) if b != GENERAL_BODEGA
     ) or '(ninguna)'
     issues.add('info', 'transit',
                f'transit = pending on orders expected today-or-later, header date, '
-               f'states purchase+done (rule fixed 2026-08-06 after Wilmer falsified transit=0): '
+               f'states {"+".join(states)} (rule fixed 2026-08-06 after Wilmer falsified transit=0): '
                f'{counted} lines counted; {past_excluded} pending lines on past-dated orders excluded '
                f'(incl. the no-auto-cancel pile back to 2024-10 — cleanup with David). '
                f'Atribuido por SUCURSAL de la orden (location_id, con el correlativo del '
@@ -1683,8 +1784,17 @@ def sync_transit(execute, issues, bodega_codes):
     return {b: dict(v) for b, v in transit.items()}, transito_detalle
 
 
+# Projection window written onto each row. Fallback for config_rules
+# `engine.factors` win_general / win_other. General=10, every other bodega=5.
 WINDOW_BY_BODEGA = {'General': 10}  # measured: General=10, locations=5
 DEFAULT_WINDOW = 5
+ENGINE_FACTORS_FALLBACK = {
+    'general_growth': 1.1,
+    't_divisor': 20,
+    'weekdays': 26,
+    'win_general': WINDOW_BY_BODEGA['General'],
+    'win_other': DEFAULT_WINDOW,
+}
 
 
 def assemble_inputs(product_map, stock, velocity, transit, seasonal, invoiced, sync_id, issues):
@@ -1699,10 +1809,15 @@ def assemble_inputs(product_map, stock, velocity, transit, seasonal, invoiced, s
     # NULL is reserved for exactly one thing: this column predates the row.
     zero_series = {label: 0.0 for label, _s, _e in
                    month_buckets(datetime.now(timezone.utc).date())}
+    factors = read_config({
+        'engine.factors': (ENGINE_FACTORS_FALLBACK, accept_engine_factors),
+    })['engine.factors']
+    win_general = factors['win_general']
+    win_other = factors['win_other']
     rows = []
     unmapped = set()
     for bodega in stock:
-        win = WINDOW_BY_BODEGA.get(bodega, DEFAULT_WINDOW)
+        win = win_general if bodega == GENERAL_BODEGA else win_other
         pids = set(stock[bodega]) | set(velocity.get(bodega, {}))
         for opid in pids:
             sb_pid = product_map.get(str(opid))

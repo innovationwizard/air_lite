@@ -137,6 +137,17 @@ def record_failed_run(kind, message):
         logger.warning('could not record the failed run in sync_runs', exc_info=True)
 
 
+class OdooAuthenticationFailed(Exception):
+    """authenticate answered, but the value is not a user id."""
+
+
+def _accepted_user_id(uid):
+    """A successful login is a positive int. False, None, 0, and other shapes are not."""
+    if isinstance(uid, bool) or not isinstance(uid, int) or uid <= 0:
+        return None
+    return uid
+
+
 def connect_odoo(kind='reyma'):
     if not all([ODOO_URL, ODOO_DB, ODOO_USERNAME, ODOO_API_KEY]):
         msg = 'Missing Odoo env vars: ODOO_URL, ODOO_DB, ODOO_USERNAME, ODOO_API_KEY'
@@ -148,7 +159,15 @@ def connect_odoo(kind='reyma'):
     for attempt in range(1, ODOO_CONNECT_ATTEMPTS + 1):
         try:
             return _connect_once(attempt)
-        except Exception as e:  # noqa: BLE001 — cualquier fallo de red/auth se reintenta
+        except Exception as e:  # noqa: BLE001 — un fallo de red se reintenta; auth no
+            # The hourly cron must not retry a rejected login or die on a traceback.
+            # A missing user id is logged once and exits with the same status as
+            # the other recorded failures. Network blips still retry below.
+            if isinstance(e, OdooAuthenticationFailed) and kind == 'reyma':
+                msg = 'cron-hourly-alexis: Odoo authentication failed; no user id was returned'
+                logger.error(msg)
+                record_failed_run(kind, msg)
+                sys.exit(1)
             last = e
             logger.warning('Odoo connect attempt %d/%d failed: %s',
                            attempt, ODOO_CONNECT_ATTEMPTS, e)
@@ -167,10 +186,9 @@ def _connect_once(attempt):
     variables del bucle (ruff B023) — frágil ante cualquier refactor que no
     retorne de inmediato. Misma forma que odoo_sync_reabastecimiento."""
     common = xmlrpc.client.ServerProxy(f'{ODOO_URL}/xmlrpc/2/common', allow_none=True)
-    uid = common.authenticate(ODOO_DB, ODOO_USERNAME, ODOO_API_KEY, {})
-    if not uid:
-        # También se reintenta: en mantenimiento Odoo responde pero rechaza auth.
-        raise RuntimeError('Odoo authentication returned no uid')
+    uid = _accepted_user_id(common.authenticate(ODOO_DB, ODOO_USERNAME, ODOO_API_KEY, {}))
+    if uid is None:
+        raise OdooAuthenticationFailed('Odoo authentication returned no uid')
     models = xmlrpc.client.ServerProxy(f'{ODOO_URL}/xmlrpc/2/object', allow_none=True)
     logger.info('Odoo connected: uid=%s db=%s (attempt %d)', uid, ODOO_DB, attempt)
 
