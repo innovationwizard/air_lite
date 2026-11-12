@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/server';
-import { CAN_VIEW_ADMIN } from '@/lib/auth/roles';
+import { CAN_MANAGE_REGLAS } from '@/lib/auth/roles';
 import { PREVIEW_KEYS, aceptarRegla, esRuleKey } from '@/lib/compras/reglasConfig';
 import { explicarSku } from '@/lib/compras/explicarSku';
 
@@ -13,7 +13,7 @@ export const dynamic = 'force-dynamic';
  * both rule sets in memory. Nothing is written to reabastecimiento_inputs.
  */
 export async function POST(request: Request) {
-  const auth = await requireAuth(CAN_VIEW_ADMIN);
+  const auth = await requireAuth(CAN_MANAGE_REGLAS);
   if (auth instanceof Response) return auth;
 
   const body = await request.json().catch(() => null) as {

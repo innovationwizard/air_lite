@@ -32,6 +32,7 @@ import {
   CAN_VIEW_OA,
   CAN_VIEW_OPERACIONES,
   CAN_VIEW_ADMIN,
+  CAN_MANAGE_REGLAS,
   CAN_VIEW_SYSTEM,
   type Role,
 } from '@/lib/auth/roles';
@@ -252,6 +253,7 @@ describe('ROLLOUT_FOCUS — confinamiento de varias rutas', () => {
     expect(focusRoutes('compras')).toEqual([
       '/compras/reabastecimiento', '/compras/reabastecimiento/historial',
       '/compras/reabastecimiento/proveedores', '/comercial/forecast',
+      '/configuracion/reglas',
     ]);
   });
 
@@ -350,7 +352,7 @@ describe('ROLLOUT_FOCUS — confinamiento de varias rutas', () => {
       CAN_MANAGE_SUPPLIER_GROUPS, CAN_VIEW_STATUS, CAN_EDIT_COMPRAS,
       CAN_EDIT_COMPRAS_INTERNACIONALES, CAN_RUN_BACKTEST, CAN_VIEW_OPERATIONAL,
       CAN_VIEW_FORECAST_COMERCIAL, CAN_CAPTURE_FORECAST, CAN_VIEW_OA,
-      CAN_VIEW_OPERACIONES, CAN_VIEW_ADMIN, CAN_VIEW_SYSTEM,
+      CAN_VIEW_OPERACIONES, CAN_VIEW_ADMIN, CAN_MANAGE_REGLAS, CAN_VIEW_SYSTEM,
     };
     for (const [nombre, lista] of Object.entries(listas)) {
       expect({ lista: nombre, sm: lista.includes('sales_manager') })

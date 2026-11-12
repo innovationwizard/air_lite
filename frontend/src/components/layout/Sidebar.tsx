@@ -27,12 +27,14 @@ import {
   // FileText,        // unused while Órdenes Abiertas section is hidden (2026-05-27)
   // Wrench,          // unused while Órdenes Abiertas section is hidden (2026-05-27)
   ScanEye,
+  SlidersHorizontal,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useUserRole } from '@/lib/auth/useUserRole';
 import {
   isAuthorized,
   CAN_VIEW_ADMIN,
+  CAN_MANAGE_REGLAS,
   CAN_VIEW_SYSTEM,
   // CAN_VIEW_OA,    // unused while Órdenes Abiertas section is hidden (2026-05-27)
   CAN_VIEW_COMPRAS,
@@ -401,13 +403,21 @@ const allNavGroups: NavGroup[] = [
   },
   {
     section: 'Administración',
-    requiredRoles: CAN_VIEW_ADMIN,
+    requiredRoles: CAN_MANAGE_REGLAS,
     items: [
       {
         name: 'Gestión de Usuarios',
         href: '/admin/usuarios',
         icon: Users,
         subtitle: null,
+        requiredRoles: CAN_VIEW_ADMIN,
+      },
+      {
+        name: 'Reglas de cálculo',
+        href: '/configuracion/reglas',
+        icon: SlidersHorizontal,
+        subtitle: 'Existencias, patio, tránsito y pendiente',
+        requiredRoles: CAN_MANAGE_REGLAS,
       },
     ],
   },

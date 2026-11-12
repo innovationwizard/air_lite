@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/server';
-import { CAN_VIEW_ADMIN } from '@/lib/auth/roles';
+import { CAN_MANAGE_REGLAS } from '@/lib/auth/roles';
 import { createServerSupabaseClient, createServiceRoleClient } from '@/lib/supabase/server';
 import {
   FALLBACK, RULE_KEYS, aceptarRegla, esRuleKey, resumenRegla, type RuleKey,
@@ -11,14 +11,14 @@ export const dynamic = 'force-dynamic';
 /**
  * GET/PUT /api/configuracion/reglas
  *
- * Admin read and write of the calculation rules. PUT updates one key.
+ * Read and write of the calculation rules for admin and compras. PUT updates one key.
  * The history trigger records the new value. A shape the sync would ignore
  * is rejected, so a save cannot look applied while the calculation keeps
  * the previous constant.
  */
 
 export async function GET() {
-  const auth = await requireAuth(CAN_VIEW_ADMIN);
+  const auth = await requireAuth(CAN_MANAGE_REGLAS);
   if (auth instanceof Response) return auth;
 
   const db = await createServerSupabaseClient();
@@ -52,7 +52,7 @@ export async function GET() {
 }
 
 export async function PUT(request: Request) {
-  const auth = await requireAuth(CAN_VIEW_ADMIN);
+  const auth = await requireAuth(CAN_MANAGE_REGLAS);
   if (auth instanceof Response) return auth;
 
   const body = await request.json().catch(() => null) as { key?: unknown; value?: unknown } | null;

@@ -68,6 +68,13 @@ export const CAN_VIEW_SYSTEM: Role[] = ['superuser'];
 export const CAN_VIEW_ADMIN: Role[] = ['superuser', 'admin'];
 
 /**
+ * Who may open and edit the reabastecimiento rules page.
+ * `compras` is included so Wilmer can maintain the rules himself.
+ * This is not CAN_VIEW_ADMIN: user management stays with admin and superuser.
+ */
+export const CAN_MANAGE_REGLAS: Role[] = ['superuser', 'admin', 'compras'];
+
+/**
  * `ventas` was removed 2026-09-11 (Jorge): the channel heads' accounts
  * (tiendas@, etc.) may open the Forecast Comercial and NOTHING else — the
  * tiendas login was seeing the whole Riesgos Empresariales group. See
@@ -240,6 +247,7 @@ export const ROLLOUT_FOCUS: Partial<Record<Role, string[]>> = {
   compras: [
     '/compras/reabastecimiento', '/compras/reabastecimiento/historial',
     '/compras/reabastecimiento/proveedores', '/comercial/forecast',
+    '/configuracion/reglas',
   ],
   // A6.20 — los CUATRO modelos de Alexis, cada uno con su juego de reglas.
   // `reyma-vivo` sigue primero: es la landing y el modelo validado.
@@ -359,6 +367,9 @@ export const PAGE_PERMISSIONS: Record<string, Role[]> = {
   '/superuser': CAN_VIEW_SYSTEM,
   '/admin': CAN_VIEW_ADMIN,
   '/configuracion': CAN_VIEW_ADMIN,
+  // More specific than `/configuracion`, so `compras` reaches the rules page
+  // and nothing else under that prefix. admin stays on the list.
+  '/configuracion/reglas': CAN_MANAGE_REGLAS,
   // Restricted 2026-09-03 (Jorge): pm, gerencia, superuser only — see
   // CAN_VIEW_STATUS.
   '/status': CAN_VIEW_STATUS,
@@ -369,13 +380,11 @@ export const PAGE_PERMISSIONS: Record<string, Role[]> = {
 };
 
 /**
- * NOTE on `/configuracion`: that entry points at a page which does not exist
- * (the directory is empty). It is kept ON PURPOSE, and the reason is the
- * opposite of the one governing `route_permissions`. This map RESTRICTS — a
- * page with no entry is open to every authenticated session — so an entry
- * without a page grants nothing today and protects that path in advance if it
- * is ever created. A GRANT pointing at a missing route is the dangerous
- * direction, and those were revoked in 20260901000003_rbac_limpieza.sql.
+ * `/configuracion` stays CAN_VIEW_ADMIN. `/configuracion/reglas` is the
+ * longer prefix, so it is the one the middleware applies to that page.
+ * This map RESTRICTS — a page with no entry is open to every authenticated
+ * session. The `/configuracion` entry existed before the page did, on
+ * purpose, so the path was never wide open.
  */
 
 /**
