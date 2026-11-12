@@ -35,6 +35,7 @@ export function ReglasClient() {
   const [preview, setPreview] = useState<ExplicacionSku | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [previewCargando, setPreviewCargando] = useState(false);
+  const [revision, setRevision] = useState<Partial<Record<RuleKey, number>>>({});
 
   const aplicarRespuesta = useCallback((lista: ReglaCargada[]) => {
     setReglas(lista);
@@ -97,17 +98,26 @@ export function ReglasClient() {
       });
       const cuerpo = await r.json();
       if (!r.ok) throw new Error(cuerpo.error ?? `HTTP ${r.status}`);
-      setReglas((lista) => (lista ?? []).map((item) => item.key === key
-        ? { ...item, value: cuerpo.value, origen: 'tabla', resumen: cuerpo.resumen, updatedBy: 'ahora' }
-        : item));
-      setDraft((d) => ({ ...d, [key]: cuerpo.value }));
-      setTexto((t) => ({ ...t, [key]: JSON.stringify(cuerpo.value, null, 2) }));
-      setAviso((a) => ({ ...a, [key]: 'Guardado. El historial quedó en config_rules_history.' }));
+      aplicarEscritura(key, cuerpo, 'Guardado. El historial quedó en config_rules_history.');
     } catch (e) {
       setAviso((a) => ({ ...a, [key]: e instanceof Error ? e.message : 'No se pudo guardar' }));
     } finally {
       setGuardando(null);
     }
+  }
+
+  function aplicarEscritura(
+    key: RuleKey,
+    cuerpo: { value: unknown; resumen: string },
+    mensaje: string,
+  ) {
+    setReglas((lista) => (lista ?? []).map((item) => item.key === key
+      ? { ...item, value: cuerpo.value, origen: 'tabla', resumen: cuerpo.resumen, updatedBy: 'ahora' }
+      : item));
+    setDraft((d) => ({ ...d, [key]: cuerpo.value }));
+    setTexto((t) => ({ ...t, [key]: JSON.stringify(cuerpo.value, null, 2) }));
+    setAviso((a) => ({ ...a, [key]: mensaje }));
+    setRevision((n) => ({ ...n, [key]: (n[key] ?? 0) + 1 }));
   }
 
   async function comparar() {
@@ -146,8 +156,9 @@ export function ReglasClient() {
         <h1 className="text-xl font-semibold text-gray-900">Reglas de reabastecimiento</h1>
         <p className="mt-1 text-sm text-gray-600">
           Estas once reglas son las que usa el cálculo. Guardar escribe <code>config_rules</code> y
-          el historial. La grilla no cambia hasta la próxima sincronización, salvo el pendiente de
-          reserva, que se lee en vivo. La semilla reproduce el comportamiento anterior.
+          el historial. Restaurar vuelve a un valor anterior por la misma vía. La grilla no cambia
+          hasta la próxima sincronización, salvo el pendiente de reserva, que se lee en vivo. La
+          semilla reproduce el comportamiento anterior.
         </p>
       </header>
 
@@ -212,6 +223,12 @@ export function ReglasClient() {
           }}
           onTexto={(value) => setTexto((t) => ({ ...t, [regla.key]: value }))}
           onGuardar={() => void guardar(regla.key)}
+          onRestaurado={(cuerpo) => aplicarEscritura(
+            regla.key,
+            cuerpo,
+            'Restaurado. El historial registró este valor.',
+          )}
+          revision={revision[regla.key] ?? 0}
         />
       ))}
     </div>
@@ -219,7 +236,7 @@ export function ReglasClient() {
 }
 
 function Tarjeta({
-  regla, valor, modoCrudo, texto, aviso, guardando, onValor, onModo, onTexto, onGuardar,
+  regla, valor, modoCrudo, texto, aviso, guardando, onValor, onModo, onTexto, onGuardar, onRestaurado, revision,
 }: {
   regla: ReglaCargada;
   valor: unknown;
@@ -231,6 +248,8 @@ function Tarjeta({
   onModo: (raw: boolean) => void;
   onTexto: (value: string) => void;
   onGuardar: () => void;
+  onRestaurado: (cuerpo: { value: unknown; resumen: string }) => void;
+  revision: number;
 }) {
   const resumen = aceptarRegla(regla.key, modoCrudo ? safeParse(texto) : valor)
     ? resumenRegla(regla.key, modoCrudo ? safeParse(texto) : valor)
@@ -266,11 +285,124 @@ function Tarjeta({
           {guardando ? 'Guardando…' : 'Guardar'}
         </button>
         {aviso && (
-          <p className={`text-sm ${aviso.startsWith('Guardado') ? 'text-gray-700' : 'text-red-700'}`}>{aviso}</p>
+          <p className={`text-sm ${aviso.startsWith('Guardado') || aviso.startsWith('Restaurado') ? 'text-gray-700' : 'text-red-700'}`}>{aviso}</p>
         )}
       </div>
+      <Historial clave={regla.key} vigente={regla.value} revision={revision} onRestaurado={onRestaurado} />
     </section>
   );
+}
+
+interface FilaHistorial {
+  id: number | string;
+  value: unknown;
+  changedAt: string | null;
+  changedBy: string | null;
+  resumen: string | null;
+}
+
+function Historial({
+  clave, vigente, revision, onRestaurado,
+}: {
+  clave: RuleKey;
+  vigente: unknown;
+  revision: number;
+  onRestaurado: (cuerpo: { value: unknown; resumen: string }) => void;
+}) {
+  const [filas, setFilas] = useState<FilaHistorial[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [restaurando, setRestaurando] = useState<number | string | null>(null);
+
+  const cargar = useCallback(async () => {
+    const r = await fetch(`/api/configuracion/reglas?historial=${encodeURIComponent(clave)}`);
+    const cuerpo = await r.json();
+    if (!r.ok) throw new Error(cuerpo.error ?? `HTTP ${r.status}`);
+    return (cuerpo.historial ?? []) as FilaHistorial[];
+  }, [clave]);
+
+  useEffect(() => {
+    let vivo = true;
+    cargar()
+      .then((lista) => { if (vivo) { setFilas(lista); setError(null); } })
+      .catch((e: unknown) => {
+        if (vivo) setError(e instanceof Error ? e.message : 'No se pudo leer el historial');
+      });
+    return () => { vivo = false; };
+  }, [cargar, revision]);
+
+  async function restaurar(id: number | string) {
+    setRestaurando(id);
+    setError(null);
+    try {
+      const r = await fetch('/api/configuracion/reglas', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ historyId: id }),
+      });
+      const cuerpo = await r.json();
+      if (!r.ok) throw new Error(cuerpo.error ?? `HTTP ${r.status}`);
+      onRestaurado({ value: cuerpo.value, resumen: cuerpo.resumen });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'No se pudo restaurar');
+    } finally {
+      setRestaurando(null);
+    }
+  }
+
+  return (
+    <div className="mt-4 border-t border-gray-100 pt-3">
+      <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Historial</h3>
+      <p className="mt-1 text-xs text-gray-500">
+        Valores anteriores, del más reciente al más antiguo. Restaurar lo escribe como regla vigente.
+      </p>
+      {error && <p className="mt-2 text-sm text-red-700">{error}</p>}
+      {!filas && !error && <p className="mt-2 text-xs text-gray-500">Cargando historial…</p>}
+      {filas && filas.length === 0 && (
+        <p className="mt-2 text-xs text-gray-500">Esta regla todavía no tiene historial.</p>
+      )}
+      {filas && filas.length > 0 && (
+        <ul className="mt-2 max-h-64 space-y-2 overflow-auto">
+          {filas.map((fila) => {
+            const yaVigente = mismaRegla(clave, fila.value, vigente);
+            return (
+              <li key={String(fila.id)} className="flex items-start justify-between gap-3 rounded border border-gray-100 px-2 py-2">
+                <div>
+                  <p className="text-[11px] text-gray-500">
+                    {fecha(fila.changedAt)}
+                    {fila.changedBy ? ` · ${fila.changedBy}` : ''}
+                    {yaVigente ? ' · Vigente' : ''}
+                  </p>
+                  <p className="text-sm text-gray-700">{fila.resumen ?? JSON.stringify(fila.value)}</p>
+                </div>
+                <button
+                  type="button"
+                  className="shrink-0 rounded border border-gray-300 px-2 py-1 text-xs font-medium text-gray-800 disabled:opacity-40"
+                  disabled={yaVigente || restaurando !== null}
+                  onClick={() => void restaurar(fila.id)}
+                >
+                  {restaurando === fila.id ? 'Restaurando…' : 'Restaurar'}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function mismaRegla(key: RuleKey, a: unknown, b: unknown): boolean {
+  const left = aceptarRegla(key, a);
+  const right = aceptarRegla(key, b);
+  if (left === null || right === null) return JSON.stringify(a) === JSON.stringify(b);
+  return JSON.stringify(left) === JSON.stringify(right);
+}
+
+function fecha(iso: string | null): string {
+  if (!iso) return 'Sin fecha';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleString('es-GT', { dateStyle: 'medium', timeStyle: 'short' });
 }
 
 function Editor({ clave, valor, onChange }: { clave: RuleKey; valor: unknown; onChange: (v: unknown) => void }) {
