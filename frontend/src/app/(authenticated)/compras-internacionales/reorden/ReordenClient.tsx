@@ -1,22 +1,40 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { AlertTriangle, Save, Truck } from 'lucide-react';
 import {
   calcularModelo,
   type EstadoReorden, type FilaReorden, type ParamsReorden, type ResultadoReorden,
 } from '@/lib/compras-internacionales/reorden';
+import {
+  capacidadContenedor,
+  lineasDeSugerido,
+  payloadPlan,
+  proyectarFurgones,
+  type FurgonVista,
+  type PayloadPlanReorden,
+} from '@/lib/compras-internacionales/reordenPlan';
+import { packLines } from '../reyma-vivo/packLines';
 
 /**
  * Pantalla del modelo de punto de reorden — Darnel y Asia (A4.27).
  *
  * El cálculo corre ACÁ, con el mismo módulo que las pruebas contrastan contra
  * el libro del 20-ago. La API sirve insumos; nadie recalcula del otro lado.
+ * El plan de furgones también se arma acá: `packLines` reparte la columna
+ * Pedir (millares) con el m³ por millar, en la capacidad del contenedor.
  *
  * DOS COSAS QUE ESTA PANTALLA DICE EN VOZ ALTA en vez de esconder, porque son
  * hallazgos del libro y no defectos nuestros:
  *   · los productos EN LIQUIDACIÓN, que el libro pide por tener rota su regla;
  *   · los parámetros que nadie declaró, que se muestran como «sin definir».
  */
+
+interface UltimoPlan {
+  autor: string;
+  fecha: string;
+  capacidadM3: number;
+}
 
 interface Datos {
   modelo: { slug: string; nombre: string; provisional: boolean; notas: string | null;
@@ -26,6 +44,7 @@ interface Datos {
   transitoDetalle: Record<string, { fecha: string | null; cantidadMl: number;
                                     referencia: string | null }[]>;
   extra: Record<string, { codProveedor: string | null; um: string | null }>;
+  ultimoPlan: UltimoPlan | null;
 }
 
 const ORDEN_ESTADO: EstadoReorden[] = [
@@ -57,24 +76,37 @@ const n1 = (v: number | null | undefined) =>
   v === null || v === undefined ? '—' : v.toLocaleString('es-GT', { maximumFractionDigits: 1 });
 const n0 = (v: number | null | undefined) =>
   v === null || v === undefined ? '—' : v.toLocaleString('es-GT', { maximumFractionDigits: 0 });
+const nMl = (v: number) => v.toLocaleString('es-GT', { maximumFractionDigits: 3 });
+const nM3 = (v: number) => v.toLocaleString('es-GT', {
+  minimumFractionDigits: 2, maximumFractionDigits: 2,
+});
 
-export function ReordenClient({ modelo }: { modelo: string }) {
+export function ReordenClient({ modelo, soloLectura = false }: {
+  modelo: string;
+  soloLectura?: boolean;
+}) {
   const [d, setD] = useState<Datos | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [filtro, setFiltro] = useState<EstadoReorden | ''>('');
   const [busqueda, setBusqueda] = useState('');
   const [abierta, setAbierta] = useState<string | null>(null);
 
-  useEffect(() => {
-    fetch(`/api/compras-internacionales/reorden?modelo=${encodeURIComponent(modelo)}`)
-      .then(async (r) => {
-        const j = await r.json();
-        if (!r.ok) throw new Error(j.error ?? 'No se pudo cargar');
-        return j;
-      })
-      .then(setD)
-      .catch((e) => setError(e.message));
+  const cargar = useCallback(async (conservar: boolean) => {
+    try {
+      const r = await fetch(`/api/compras-internacionales/reorden?modelo=${encodeURIComponent(modelo)}`);
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.error ?? 'No se pudo cargar');
+      setD(j as Datos);
+      setError(null);
+    } catch (e) {
+      if (!conservar) setError(e instanceof Error ? e.message : 'No se pudo cargar');
+      else throw e;
+    }
   }, [modelo]);
+
+  useEffect(() => {
+    void cargar(false);
+  }, [cargar]);
 
   const resultado = useMemo(
     () => (d ? calcularModelo(d.filas, d.params) : null), [d]);
@@ -97,6 +129,7 @@ export function ReordenClient({ modelo }: { modelo: string }) {
 
   const enLiquidacionQueElLibroPide = resultado.filas.filter(
     (f) => f.estado === 'EN LIQUIDACION').length;
+  const cap = capacidadContenedor(d.params.capacidadContenedorM3);
 
   return (
     <div className="max-w-[1500px] mx-auto px-4 sm:px-6 py-6 space-y-5">
@@ -116,6 +149,15 @@ export function ReordenClient({ modelo }: { modelo: string }) {
           </span>
         )}
       </header>
+
+      {cap === null && (
+        <div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-950">
+          <AlertTriangle className="mr-1 inline h-3.5 w-3.5" />
+          <strong>{d.modelo.nombre}</strong> no tiene capacidad de contenedor
+          (<span className="font-mono">modelo_proveedor.capacidad_contenedor_m3</span> está vacía). El plan de
+          despacho no se arma hasta que se cargue la capacidad de este modelo.
+        </div>
+      )}
 
       {/* Parámetros — los que faltan se ven, no se sustituyen */}
       <section className="bg-white border border-gray-200 rounded-lg p-4">
@@ -154,6 +196,18 @@ export function ReordenClient({ modelo }: { modelo: string }) {
           </p>
         )}
       </section>
+
+      <PlanFurgones
+        key={d.modelo.slug}
+        nombre={d.modelo.nombre}
+        slug={d.modelo.slug}
+        cap={cap}
+        filas={resultado.filas}
+        inventario={d.filas}
+        soloLectura={soloLectura}
+        ultimo={d.ultimoPlan ?? null}
+        recargar={() => cargar(true)}
+      />
 
       {/* Semáforo */}
       <section className="flex flex-wrap gap-2">
@@ -325,5 +379,236 @@ function FilaTabla({ f, detalle, abierta, onToggle }: {
         </tr>
       )}
     </>
+  );
+}
+
+async function postJson(path: string, body: unknown): Promise<string | null> {
+  try {
+    const r = await fetch(path, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (!r.ok) {
+      const j = (await r.json().catch(() => ({}))) as { error?: string };
+      return j.error ?? `HTTP ${r.status}`;
+    }
+    return null;
+  } catch (e) {
+    return e instanceof Error ? e.message : 'error de red';
+  }
+}
+
+function fechaCorta(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleDateString('es-GT');
+}
+
+/**
+ * Arma y muestra el plan de furgones. La cantidad es la columna Pedir
+ * (millares) y el cubicaje es el m³ por millar del mismo inventario.
+ * `packLines` reparte eso en la capacidad del contenedor del modelo.
+ */
+function PlanFurgones({
+  nombre, slug, cap, filas, inventario, soloLectura, ultimo, recargar,
+}: {
+  nombre: string;
+  slug: string;
+  cap: number | null;
+  filas: ResultadoReorden[];
+  inventario: FilaReorden[];
+  soloLectura: boolean;
+  ultimo: UltimoPlan | null;
+  recargar: () => Promise<void>;
+}) {
+  const [furgones, setFurgones] = useState<FurgonVista[] | null>(null);
+  const [avisos, setAvisos] = useState<string[]>([]);
+  const [guardado, setGuardado] = useState<PayloadPlanReorden | null>(null);
+  const [capUsado, setCapUsado] = useState<number | null>(null);
+  const [saveMsg, setSaveMsg] = useState<string | null>(null);
+  const [guardando, setGuardando] = useState(false);
+  const puedeGenerar = cap !== null;
+
+  const generar = () => {
+    if (cap === null) {
+      setFurgones(null);
+      setGuardado(null);
+      setCapUsado(null);
+      setAvisos([]);
+      return;
+    }
+    const cub = new Map(inventario.map((f) => [f.codigo, f.cubMillar]));
+    const built = lineasDeSugerido(filas.map((f) => ({
+      codigo: f.codigo,
+      descripcion: f.descripcion,
+      pedirMl: f.pedirMl,
+      coberturaTotal: f.coberturaTotal,
+      cubMillar: cub.get(f.codigo) ?? null,
+    })), cap);
+    try {
+      const packed = packLines(built.lines, cap);
+      setFurgones(proyectarFurgones(packed, built.meta));
+      setGuardado(payloadPlan(cap, packed, built.meta));
+      setCapUsado(cap);
+      setAvisos(built.avisos);
+      setSaveMsg(null);
+    } catch (e) {
+      setFurgones(null);
+      setGuardado(null);
+      setCapUsado(null);
+      setAvisos([e instanceof Error ? e.message : 'No se pudo armar el plan']);
+    }
+  };
+
+  const guardar = async () => {
+    if (!guardado || soloLectura) return;
+    setGuardando(true);
+    try {
+      const err = await postJson('/api/compras-internacionales/reorden/plan', {
+        modelo: slug,
+        payload: guardado,
+      });
+      if (err) {
+        setSaveMsg(`Error al guardar plan: ${err}`);
+        return;
+      }
+      try {
+        await recargar();
+        setSaveMsg('Plan guardado');
+      } catch (e) {
+        setSaveMsg(e instanceof Error
+          ? `Plan guardado. No se actualizó el sello: ${e.message}`
+          : 'Plan guardado');
+      }
+    } finally {
+      setGuardando(false);
+    }
+  };
+
+  const totalMl = furgones?.reduce((a, f) => a + f.totalMl, 0) ?? 0;
+  const totalM3 = furgones?.reduce((a, f) => a + f.totalM3, 0) ?? 0;
+  const capTarjeta = capUsado ?? cap;
+
+  return (
+    <section className="bg-white border border-slate-200 rounded-lg p-4">
+      <h2 className="text-sm font-semibold text-slate-700 mb-2 flex items-center gap-2">
+        <Truck className="h-4 w-4" />
+        Plan de furgones ({puedeGenerar ? `contenedor de ${n1(cap)} m³` : 'capacidad de contenedor sin definir'})
+      </h2>
+      <p className="text-xs text-slate-500 mb-3">
+        Usa las cantidades sugeridas de esta pantalla, en millares, y el m³ por millar
+        de cada producto. Entran todos los que tienen pedido, no sólo los del filtro.
+        Menor cobertura va primero.
+      </p>
+      <div className="flex flex-wrap items-center gap-3 text-xs mb-3">
+        <button
+          type="button"
+          onClick={generar}
+          disabled={!puedeGenerar || guardando}
+          title={puedeGenerar ? undefined : 'Falta la capacidad del contenedor'}
+          className={`rounded px-3 py-1 font-medium text-white ${
+            puedeGenerar && !guardando
+              ? 'bg-emerald-600 hover:bg-emerald-700'
+              : 'cursor-not-allowed bg-slate-300'
+          }`}
+        >
+          Generar plan
+        </button>
+        {guardado && !soloLectura && (
+          <button
+            type="button"
+            onClick={() => void guardar()}
+            disabled={guardando}
+            className="inline-flex items-center gap-1 rounded border border-emerald-500 bg-emerald-50 px-3 py-1 font-medium text-emerald-800 hover:bg-emerald-100 disabled:opacity-60"
+          >
+            <Save className="h-3 w-3" /> {guardando ? 'Guardando…' : 'Guardar plan'}
+          </button>
+        )}
+        {saveMsg && (
+          <span className={`font-medium ${saveMsg.startsWith('Error') ? 'text-red-700' : 'text-emerald-700'}`}>
+            {saveMsg}
+          </span>
+        )}
+        {ultimo && (
+          <span className="text-[11px] text-slate-500">
+            Último guardado: {fechaCorta(ultimo.fecha)} por {ultimo.autor} ({n1(ultimo.capacidadM3)} m³)
+          </span>
+        )}
+      </div>
+      {cap === null && (
+        <div className="mb-2 flex items-start gap-1.5 rounded border border-amber-200 bg-amber-50 px-3 py-1.5 text-[11px] text-amber-800">
+          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          {nombre} no tiene capacidad de contenedor. El plan queda detenido hasta
+          cargarla en modelo_proveedor.
+        </div>
+      )}
+      {avisos.map((a) => (
+        <div key={a} className="mb-2 flex items-start gap-1.5 rounded border border-amber-200 bg-amber-50 px-3 py-1.5 text-[11px] text-amber-800">
+          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" /> {a}
+        </div>
+      ))}
+      {furgones && furgones.length > 0 && (
+        <>
+          <p className="mb-3 text-sm text-slate-600">
+            {furgones.length === 1 ? '1 furgón' : `${furgones.length} furgones`}
+            {' · '}{nMl(totalMl)} ML{' · '}{nM3(totalM3)} m³
+          </p>
+          <div className="grid gap-3 lg:grid-cols-3">
+            {furgones.map((f) => (
+              <div key={f.no} className="rounded border border-slate-200">
+                <div className="border-b bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-700">
+                  Furgón {f.no}
+                </div>
+                <table className="w-full text-xs border-collapse">
+                  <thead>
+                    <tr className="text-[10px] text-slate-500">
+                      <th className="px-2 py-1 text-left font-medium">Código</th>
+                      <th className="px-2 py-1 text-left font-medium">Descripción</th>
+                      <th className="px-2 py-1 text-right font-medium">ML</th>
+                      <th className="px-2 py-1 text-right font-medium">m³</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {f.lineas.map((l, i) => (
+                      <tr key={`${f.no}-${l.codigo}-${i}`} className="border-t border-slate-100">
+                        <td className="px-2 py-1 font-mono whitespace-nowrap">{l.codigo}</td>
+                        <td className="px-2 py-1 max-w-[160px] truncate" title={l.descripcion}>
+                          {l.descripcion || '—'}
+                        </td>
+                        <td className="px-2 py-1 text-right tabular-nums">{nMl(l.cantidadMl)}</td>
+                        <td className="px-2 py-1 text-right tabular-nums">{nM3(l.m3)}</td>
+                      </tr>
+                    ))}
+                    <tr className="border-t border-slate-300 bg-slate-50 font-semibold">
+                      <td className="px-2 py-1" colSpan={2}>Total</td>
+                      <td className="px-2 py-1 text-right tabular-nums">{nMl(f.totalMl)}</td>
+                      <td className={`px-2 py-1 text-right tabular-nums ${
+                        capTarjeta != null && f.totalM3 > capTarjeta + 1e-6 ? 'text-red-600' : ''
+                      }`}>
+                        {nM3(f.totalM3)}
+                        {capTarjeta != null ? ` (${n1((f.totalM3 / capTarjeta) * 100)}%)` : ''}
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+      {furgones && furgones.length === 0 && (
+        <p className="text-[11px] text-slate-500">
+          No hay cantidades sugeridas con cubicaje para armar un furgón.
+        </p>
+      )}
+      {!furgones && (
+        <p className="text-[11px] text-slate-500">
+          {puedeGenerar
+            ? `Genera el plan a partir del pedido sugerido: prioriza menor cobertura y llena furgones de ${n1(cap)} m³.`
+            : `El plan no se arma: ${nombre} no tiene capacidad de contenedor cargada.`}
+        </p>
+      )}
+    </section>
   );
 }

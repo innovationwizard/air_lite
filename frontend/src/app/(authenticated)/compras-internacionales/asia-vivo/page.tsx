@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation';
 import { getAuthUser } from '@/lib/auth/server';
-import { isAuthorized, CAN_VIEW_COMPRAS_INTERNACIONALES, getDefaultPage } from '@/lib/auth/roles';
+import { isAuthorized, CAN_EDIT_COMPRAS_INTERNACIONALES, CAN_VIEW_COMPRAS_INTERNACIONALES, getDefaultPage } from '@/lib/auth/roles';
 import { ReordenClient } from '../reorden/ReordenClient';
 
 export const dynamic = 'force-dynamic';
@@ -18,5 +18,11 @@ export default async function AsiaVivoPage() {
   if (!user) redirect('/login');
   if (!isAuthorized(user.role, CAN_VIEW_COMPRAS_INTERNACIONALES)) redirect(getDefaultPage(user.role));
 
-  return <ReordenClient modelo="asia" />;
+  // Quien ve pero no escribe (ceo) arma el plan en el navegador y no lo guarda.
+  return (
+    <ReordenClient
+      modelo="asia"
+      soloLectura={!isAuthorized(user.role, CAN_EDIT_COMPRAS_INTERNACIONALES)}
+    />
+  );
 }

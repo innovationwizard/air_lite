@@ -42,6 +42,12 @@ interface TransitoDb {
   codigo: string; fecha: string | null; cantidad_ml: number; referencia: string | null;
 }
 
+interface PlanDb {
+  capacidad_m3: number | string;
+  autor: string;
+  created_at: string;
+}
+
 export async function GET(request: Request) {
   const auth = await requireAuth(CAN_VIEW_COMPRAS_INTERNACIONALES);
   if (auth instanceof Response) return auth;
@@ -69,7 +75,7 @@ export async function GET(request: Request) {
       { error: `No existe un modelo de reorden llamado «${modelo}»` }, { status: 404 });
   }
 
-  const [{ data: invRaw, error: errInv }, { data: trRaw }] = await Promise.all([
+  const [{ data: invRaw, error: errInv }, { data: trRaw }, { data: planRaw, error: errPlan }] = await Promise.all([
     db.from('reorden_inventario')
       .select('codigo, cod_proveedor, descripcion, um, und_fardo, cub_millar, '
         + 'sj, z11, zacapa, peten, patios_sj, pend_surtir_sj, pend_surtir_peten, '
@@ -79,14 +85,28 @@ export async function GET(request: Request) {
     db.from('reorden_transito')
       .select('codigo, fecha, cantidad_ml, referencia')
       .eq('modelo', modelo).order('fecha', { ascending: true }),
+    db.from('reorden_plan_despacho')
+      .select('capacidad_m3, autor, created_at')
+      .eq('modelo', modelo)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle(),
   ]);
   if (errInv) {
     return NextResponse.json(
       { error: 'No se pudo leer el inventario', detail: errInv.message }, { status: 500 });
   }
+  // Sin la tabla de planes el modelo sigue cargando: el sello queda vacío y
+  // guardar dirá que la tabla no existe. Cualquier otro error sí detiene la página.
+  if (errPlan && errPlan.code !== '42P01' && errPlan.code !== 'PGRST205') {
+    return NextResponse.json(
+      { error: 'No se pudo leer el plan guardado', detail: errPlan.message }, { status: 500 });
+  }
 
   const inv = (invRaw ?? []) as unknown as InvDb[];
   const transito = (trRaw ?? []) as unknown as TransitoDb[];
+  const plan = (errPlan ? null : planRaw) as PlanDb | null;
+  const capacidadPlan = plan == null ? null : Number(plan.capacidad_m3);
 
   // El motor necesita el TOTAL de tránsito confirmado; la pantalla necesita el
   // desglose. Se manda lo uno y lo otro, y no se recalcula en dos lugares.
@@ -138,5 +158,8 @@ export async function GET(request: Request) {
     extra: Object.fromEntries(inv.map((r) => [r.codigo, {
       codProveedor: r.cod_proveedor, um: r.um,
     }])),
+    ultimoPlan: plan && capacidadPlan != null && Number.isFinite(capacidadPlan)
+      ? { autor: plan.autor, fecha: plan.created_at, capacidadM3: capacidadPlan }
+      : null,
   });
 }
