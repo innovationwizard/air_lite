@@ -56,16 +56,30 @@ export function bodegaOrigen(bodega: string): string | null {
  * 1CET/Entrada en todas las bodegas, y en esas pestañas el furgón de San José
  * se leía como existencia del CD (Wilmer, 2026-09-29, 77205001). El patio no
  * entra al Sugerido; el número que se muestra sí tiene que ser el de esa bodega.
+ *
+ * Fallback for config_rules `stock.patio`. The seed lists these two names:
+ * San Jose VN, then General.
  */
-const BODEGAS_CON_PATIO = new Set<string>(['General', 'San Jose VN']);
+export const BODEGAS_CON_PATIO: readonly string[] = ['San Jose VN', 'General'];
 
-export function bodegaTienePatio(bodega: string): boolean {
-  return BODEGAS_CON_PATIO.has(bodega);
+export function bodegaTienePatio(
+  bodega: string,
+  bodegas: readonly string[] = BODEGAS_CON_PATIO,
+): boolean {
+  return bodegas.includes(bodega);
 }
 
-/** Patio que se muestra y se exporta. Fuera de San José y General es 0. */
-export function patioDeBodega(bodega: string, patio: number): number {
-  return bodegaTienePatio(bodega) ? patio : 0;
+/**
+ * Patio que se muestra y se exporta. Fuera de San José y General es 0.
+ * `bodegas` defaults to BODEGAS_CON_PATIO. The page passes the list it read
+ * from config_rules, which is this list when the seed has not been edited.
+ */
+export function patioDeBodega(
+  bodega: string,
+  patio: number,
+  bodegas: readonly string[] = BODEGAS_CON_PATIO,
+): number {
+  return bodegaTienePatio(bodega, bodegas) ? patio : 0;
 }
 
 /**

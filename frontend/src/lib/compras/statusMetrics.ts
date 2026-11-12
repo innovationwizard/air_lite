@@ -12,6 +12,7 @@
  * Pure, no DOM/React dependency — usable from a Next.js route handler.
  */
 import { m3Sugerido } from '@/lib/compras/cubicaje';
+import { DOH_BANDS, type DohBands } from '@/lib/compras/reabastecimientoEngine';
 
 /** The minimal shape either the client's `ApiRow` or the server's `LiveRow` satisfies. */
 export interface FilaMetrica {
@@ -41,7 +42,7 @@ export interface Kpis {
 }
 
 /** Computed over the currently filtered/sorted view — "what he's looking at right now". */
-export function computeKpis(list: readonly FilaMetrica[]): Kpis {
+export function computeKpis(list: readonly FilaMetrica[], bands: DohBands = DOH_BANDS): Kpis {
   const need = list.filter((r) => r.sug > 0);
   let m3Sug = 0;
   let sinCubicaje = 0;
@@ -53,7 +54,7 @@ export function computeKpis(list: readonly FilaMetrica[]): Kpis {
     total: list.length,
     need: need.length,
     totSug: need.reduce((a, r) => a + r.sug, 0),
-    crit: list.filter((r) => r.doh < 3).length,
+    crit: list.filter((r) => r.doh < bands.critico).length,
     m3Sug,
     sinCubicaje,
   };
@@ -83,13 +84,16 @@ export interface TopProveedores {
 }
 
 /** Top 8 suppliers by Sugerido, over the whole bodega (not the filtered list). */
-export function computeTopProveedores(rows: readonly FilaMetrica[]): TopProveedores {
+export function computeTopProveedores(
+  rows: readonly FilaMetrica[],
+  bands: DohBands = DOH_BANDS,
+): TopProveedores {
   const by: Record<string, { sug: number; crit: number }> = {};
   for (const r of rows) {
     if (!r.prov) continue;
     by[r.prov] = by[r.prov] || { sug: 0, crit: 0 };
     by[r.prov].sug += r.sug;
-    if (r.doh < 3 && r.sug > 0) by[r.prov].crit += 1;
+    if (r.doh < bands.critico && r.sug > 0) by[r.prov].crit += 1;
   }
   const arr = Object.entries(by).map(([p, v]) => ({ p, ...v }))
     .sort((a, b) => b.sug - a.sug).slice(0, 8);

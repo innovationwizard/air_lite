@@ -112,7 +112,9 @@ function noEvaluable(motivo: string): Tendencia {
  */
 export function evaluarTendencia(
   serie: Record<string, unknown> | null | undefined,
+  rises = TREND_RISES,
 ): Tendencia {
+  const ventanaMeses = rises + 1;
   if (serie === null || serie === undefined || typeof serie !== 'object') {
     return noEvaluable('sin serie mensual sincronizada');
   }
@@ -123,21 +125,21 @@ export function evaluarTendencia(
     // 'YYYY-MM' sorts chronologically as a plain string.
     .sort((a, b) => (a.month < b.month ? -1 : a.month > b.month ? 1 : 0));
 
-  if (meses.length < TREND_WINDOW_MONTHS) {
+  if (meses.length < ventanaMeses) {
     return noEvaluable(
       `sólo ${meses.length} ${meses.length === 1 ? 'mes completo' : 'meses completos'} `
-      + `en la serie (se necesitan ${TREND_WINDOW_MONTHS})`,
+      + `en la serie (se necesitan ${ventanaMeses})`,
     );
   }
 
-  const ventana = meses.slice(-TREND_WINDOW_MONTHS);
+  const ventana = meses.slice(-ventanaMeses);
 
   // Adjacency is checked, not assumed: a series with a gap (jul, may, feb)
   // would otherwise be read as a three-month run and reported as a trend.
   for (let i = 1; i < ventana.length; i += 1) {
     if (monthIndex(ventana[i].month) !== monthIndex(ventana[i - 1].month) + 1) {
       return noEvaluable(
-        `los ${TREND_WINDOW_MONTHS} meses más recientes de la serie no son consecutivos `
+        `los ${ventanaMeses} meses más recientes de la serie no son consecutivos `
         + `(${ventana.map((m) => m.month).join(', ')})`,
       );
     }
@@ -234,6 +236,25 @@ export function evaluarTendencia(
  */
 export const DIVERGENCIA_UMBRAL = 0.40;
 
+/**
+ * Fallback for config_rules `trend.thresholds`.
+ * rises is the two consecutive rises; divergence is |p3−p6|/p6;
+ * the MTD colors are the pace vs the 3-month average.
+ */
+export interface TrendThresholds {
+  rises: number;
+  divergence: number;
+  mtd_color_high: number;
+  mtd_color_low: number;
+}
+
+export const TREND_THRESHOLDS: TrendThresholds = {
+  rises: TREND_RISES,
+  divergence: DIVERGENCIA_UMBRAL,
+  mtd_color_high: 1.15,
+  mtd_color_low: 0.85,
+};
+
 export type DivergenciaEstado = 'divergente' | 'sin-divergencia' | 'sin-base';
 
 export interface Divergencia {
@@ -250,7 +271,11 @@ export interface Divergencia {
  * EXCLUIDAS de disparar, no sólo etiquetadas — una fila que igual alerta con un
  * cartelito explicativo no arregla nada, sólo agrega una excusa al ruido.
  */
-export function evaluarDivergencia(p3: number, p6: number): Divergencia {
+export function evaluarDivergencia(
+  p3: number,
+  p6: number,
+  umbral = DIVERGENCIA_UMBRAL,
+): Divergencia {
   if (!Number.isFinite(p3) || !Number.isFinite(p6)) {
     return { estado: 'sin-base', pct: null, motivo: 'sin promedios sincronizados' };
   }
@@ -259,7 +284,7 @@ export function evaluarDivergencia(p3: number, p6: number): Divergencia {
   }
   const pct = (p3 - p6) / p6;
   return {
-    estado: Math.abs(pct) > DIVERGENCIA_UMBRAL ? 'divergente' : 'sin-divergencia',
+    estado: Math.abs(pct) > umbral ? 'divergente' : 'sin-divergencia',
     pct,
     motivo: null,
   };

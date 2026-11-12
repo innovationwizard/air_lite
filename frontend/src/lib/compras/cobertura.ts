@@ -1,3 +1,5 @@
+import { COBERTURA_DEFAULT_DIAS } from './reabastecimientoEngine';
+
 /**
  * Coverage horizon for the Sugerido — how many days of demand it should
  * cover, configurable per bodega (bodega_cobertura, migration
@@ -16,7 +18,26 @@
 export const COBERTURA_MIN_DIAS = 1;
 export const COBERTURA_MAX_DIAS = 365;
 
-export function esCoberturaValida(v: unknown): v is number {
+/** Fallback for config_rules `cobertura.defaults`. */
+export interface CoberturaDefaults {
+  default_dias: number;
+  min_dias: number;
+  max_dias: number;
+}
+
+export const COBERTURA_DEFAULTS: CoberturaDefaults = {
+  default_dias: COBERTURA_DEFAULT_DIAS,
+  min_dias: COBERTURA_MIN_DIAS,
+  max_dias: COBERTURA_MAX_DIAS,
+};
+
+export function esCoberturaValida(
+  v: unknown,
+  bounds: { min: number; max: number } = {
+    min: COBERTURA_MIN_DIAS,
+    max: COBERTURA_MAX_DIAS,
+  },
+): v is number {
   return typeof v === 'number' && Number.isInteger(v)
-    && v >= COBERTURA_MIN_DIAS && v <= COBERTURA_MAX_DIAS;
+    && v >= bounds.min && v <= bounds.max;
 }

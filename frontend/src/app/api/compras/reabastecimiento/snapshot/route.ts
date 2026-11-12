@@ -70,7 +70,7 @@ export async function POST(request: Request) {
     const bodegas = await knownBodegas(reads);
     if (!bodegas.includes(bodega)) return badRequest(`bodega desconocida: ${bodega}`);
 
-    const [{ rows, maxAsOf, monthStart, coberturaDias }, tiendas, lastSyncRes] = await Promise.all([
+    const [{ rows, maxAsOf, monthStart, coberturaDias, reglas }, tiendas, lastSyncRes] = await Promise.all([
       buildRows(reads, bodega),
       buildTiendas(reads),
       // Same rule as the live page: the frozen proof cites the last run
@@ -85,14 +85,14 @@ export async function POST(request: Request) {
     // Filter + sort with the SAME pure function the on-screen table uses
     // (lib/compras/tabla.ts) — the frozen row order matches exactly what
     // Wilmer was looking at.
-    const filas = vista(rows, filtros, orden);
+    const filas = vista(rows, filtros, orden, reglas.doh);
     if (filas.length > MAX_SNAPSHOT_FILAS) {
       return badRequest(`demasiadas filas (${filas.length}); el máximo es ${MAX_SNAPSHOT_FILAS}`);
     }
 
-    const kpis = computeKpis(filas);
+    const kpis = computeKpis(filas, reglas.doh);
     const alza = computeAlza(rows);
-    const topProveedores = computeTopProveedores(rows).arr;
+    const topProveedores = computeTopProveedores(rows, reglas.doh).arr;
     const meta = {
       asOf: maxAsOf || null,
       month: monthStart,

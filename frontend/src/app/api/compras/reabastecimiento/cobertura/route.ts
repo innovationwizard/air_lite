@@ -2,7 +2,8 @@ import { NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/server';
 import { CAN_EDIT_REABASTECIMIENTO } from '@/lib/auth/roles';
 import { createServerSupabaseClient, createServiceRoleClient } from '@/lib/supabase/server';
-import { esCoberturaValida, COBERTURA_MIN_DIAS, COBERTURA_MAX_DIAS } from '@/lib/compras/cobertura';
+import { esCoberturaValida } from '@/lib/compras/cobertura';
+import { readLiveRules } from '@/lib/compras/configRules';
 import { badRequest, knownBodegas } from '../lib';
 
 export const dynamic = 'force-dynamic';
@@ -45,12 +46,14 @@ export async function POST(request: Request) {
     return badRequest('cuerpo JSON inválido');
   }
 
-  const { bodega, dias } = body;
-  if (!esCoberturaValida(dias)) {
-    return badRequest(`dias debe ser un entero entre ${COBERTURA_MIN_DIAS} y ${COBERTURA_MAX_DIAS}`);
-  }
-
   const reads = await createServerSupabaseClient();
+  const { calc } = await readLiveRules(reads);
+  const { bodega, dias } = body;
+  if (!esCoberturaValida(dias, { min: calc.cobertura.min_dias, max: calc.cobertura.max_dias })) {
+    return badRequest(
+      `dias debe ser un entero entre ${calc.cobertura.min_dias} y ${calc.cobertura.max_dias}`,
+    );
+  }
   const service = createServiceRoleClient();
   try {
     const bodegas = await knownBodegas(reads);

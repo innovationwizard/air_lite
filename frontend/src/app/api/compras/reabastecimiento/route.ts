@@ -49,7 +49,7 @@ export async function GET(request: Request) {
 
     // Rows come from the SHARED builder the xlsx export also uses — see rows.ts.
     // tiendas comes from the SHARED lib.ts builder — the snapshot route uses it too.
-    const [{ rows, maxAsOf, monthStart, coberturaDias, groups, areasComerciales, pendienteReserva, bodegaOrigen, skusDuplicados }, tiendas, lastSync] = await Promise.all([
+    const [{ rows, maxAsOf, monthStart, coberturaDias, groups, areasComerciales, pendienteReserva, bodegaOrigen, skusDuplicados, reglas }, tiendas, lastSync] = await Promise.all([
       buildRows(service, bodega),
       buildTiendas(service),
       // The badge is the last run that finished and wrote this snapshot.
@@ -85,6 +85,10 @@ export async function GET(request: Request) {
         // W18 — the bodega that supplies this one (San José → Zacapa → Petén),
         // or null. Set = every row carries `origen` and the page shows its columns.
         bodegaOrigen,
+        // The factors behind Sugerido, DOH, ABC, trend and cobertura. The
+        // client uses the same object for a local recompute. Seed = the
+        // previous constants.
+        reglas,
       },
     });
   } catch (e) {

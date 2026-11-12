@@ -16,6 +16,8 @@
  * como campo, no se inventa aquí.
  */
 
+import { DOH_BANDS, type DohBands } from '@/lib/compras/reabastecimientoEngine';
+
 /** Lo mínimo que una fila necesita para ordenarse y filtrarse. */
 export interface FilaOrdenable {
   cod: string;
@@ -262,7 +264,11 @@ export interface Filtros {
  * Aplica los filtros. Se combinan con Y — cada uno estrecha al anterior, que es
  * como funciona el autofiltro de Excel del que viene el pedido.
  */
-export function filtrar<T extends FilaOrdenable>(filas: readonly T[], f: Filtros): T[] {
+export function filtrar<T extends FilaOrdenable>(
+  filas: readonly T[],
+  f: Filtros,
+  bands: DohBands = DOH_BANDS,
+): T[] {
   const texto = (f.texto ?? '').trim().toLowerCase();
   const rangos = Object.entries(f.rangos ?? {}) as [ClaveOrdenNumerica, FiltroRango][];
   return filas.filter((r) => {
@@ -275,7 +281,7 @@ export function filtrar<T extends FilaOrdenable>(filas: readonly T[], f: Filtros
         && !r.cod.toLowerCase().includes(texto)
         && !r.desc.toLowerCase().includes(texto)) return false;
     if (f.soloConSugerido && r.sug <= 0) return false;
-    if (f.soloCriticos && r.doh >= 3) return false;
+    if (f.soloCriticos && r.doh >= bands.critico) return false;
     if (f.soloEnAlza && !r.flags.tendenciaCreciente) return false;
     if (f.soloComprables && !r.purchaseOk) return false;
     if (f.abc && f.abc.length > 0 && !f.abc.includes(r.abc)) return false;
@@ -295,8 +301,9 @@ export function vista<T extends FilaOrdenable>(
   filas: readonly T[],
   filtros: Filtros,
   orden: Orden | null,
+  bands: DohBands = DOH_BANDS,
 ): T[] {
-  return ordenar(filtrar(filas, filtros), orden);
+  return ordenar(filtrar(filas, filtros, bands), orden);
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════

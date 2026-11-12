@@ -11,7 +11,6 @@
  */
 import type { SupabaseClient } from '@supabase/supabase-js';
 import {
-  COBERTURA_DEFAULT_DIAS,
   type ProductRow,
   sugerido,
   forecast,
@@ -25,6 +24,7 @@ import {
 import { fetchAll } from '@/lib/supabase/paginado';
 import { fetchPendienteReserva, pendientePorSku } from '@/lib/compras/pendienteReserva';
 import { bodegaOrigen, ordenarAreas, patioDeBodega } from '@/lib/compras/bodega';
+import { readLiveRules, type AbcCutoffs, type CalcRules } from '@/lib/compras/configRules';
 import { GENERAL_BODEGA, round1 } from './lib';
 
 /**
@@ -394,6 +394,8 @@ export async function buildRows(
   areasComerciales: { slug: string; nombre: string }[];
   /** W18 — la bodega que abastece a ésta, o null (General, San José). */
   bodegaOrigen: string | null;
+  /** Resolved calculation rules (config_rules, or the previous constants). */
+  reglas: CalcRules;
 }> {
     // El mes cuyo forecast se está capturando, NO el mes del calendario.
     // `${new Date().toISOString().slice(0, 7)}-01` leía el mes en curso, así
@@ -405,9 +407,14 @@ export async function buildRows(
     const monthStart = mesPorDefecto(new Date());
 
     // Which Odoo warehouses this bodega is — the live pendiente fetch needs
-    // the codes up front, so this small read goes first, alone.
-    const { data: bodegaMapData, error: bodegaMapError } =
-      await service.from('bodega_map').select('odoo_warehouse_code, bodega, in_scope').eq('in_scope', true);
+    // the codes up front. The patio bodegas come from config_rules in the
+    // same round trip; a missing row or a failed read keeps BODEGAS_CON_PATIO.
+    const [{ data: bodegaMapData, error: bodegaMapError }, liveRules] = await Promise.all([
+      service.from('bodega_map').select('odoo_warehouse_code, bodega, in_scope').eq('in_scope', true),
+      readLiveRules(service),
+    ]);
+    const patioRule = liveRules.patio;
+    const calc = liveRules.calc;
     if (bodegaMapError) throw new Error(bodegaMapError.message);
     const codigosBodega = ((bodegaMapData as BodegaMapRow[] | null) ?? [])
       .filter((b) => bodega === GENERAL_BODEGA || b.bodega === bodega)
@@ -505,7 +512,7 @@ export async function buildRows(
       todasLasAreas.filter((a) => !a.padre).map(({ slug, nombre }) => ({ slug, nombre })));
 
     const coberturaDias = (cobertura?.data as { dias: number } | null)?.dias
-      ?? COBERTURA_DEFAULT_DIAS;
+      ?? calc.cobertura.default_dias;
 
     const productById = new Map(products.map((p) => [p.id, p]));
     const supplierById = new Map(suppliers.map((s) => [s.id, s.name]));
@@ -585,14 +592,14 @@ export async function buildRows(
           exist: round1(existOrigen),
           existencias: round1(o.existencias),
           reserved: round1(o.reserved),
-          patio: round1(patioDeBodega(origen ?? '', o.patio)),
+          patio: round1(patioDeBodega(origen ?? '', o.patio, patioRule.bodegas)),
           pending: pendingOrigen,
           p3: round1(o.p3),
           // El motor, no la fórmula re-tecleada: sólo lee exist y p3.
           doh: round1(doh({
             cod: ref?.sku ?? '', desc: '', prov: '', exist: existOrigen, doh: 0, trans: 0, sug: 0,
-            p6: 0, p3: o.p3, h: 0, adic: 0, win: 5,
-          })),
+            p6: 0, p3: o.p3, h: 0, adic: 0, win: calc.engine.win_other,
+          }, undefined, calc.engine)),
         };
       }
       /**
@@ -634,10 +641,10 @@ export async function buildRows(
       const hEffective = seasonalExcluded ? (r.p6 + r.p3) / 2 : r.h;
       // Display only — the trend NEVER touches engineRow. Wilmer asked to be
       // warned, not to have the number changed for him.
-      const tendencia = evaluarTendencia(r.demanda_mensual);
+      const tendencia = evaluarTendencia(r.demanda_mensual, calc.trend.rises);
       // Divergencia sobre p3/p6, NO sobre `h`: medido el 2026-09-01, la base
       // interanual daba 75% de divergencia mediana y 49% de cobertura.
-      const divergencia = evaluarDivergencia(r.p3, r.p6);
+      const divergencia = evaluarDivergencia(r.p3, r.p6, calc.trend.divergence);
       const alerta = evaluarAlerta(tendencia, divergencia);
 
       const engineRow: ProductRow = {
@@ -652,7 +659,7 @@ export async function buildRows(
         p3: r.p3,
         h: hEffective,
         adic,
-        win: r.win === 10 ? 10 : 5,
+        win: r.win === calc.engine.win_general ? calc.engine.win_general : calc.engine.win_other,
         coberturaDias,
       };
       return {
@@ -677,7 +684,7 @@ export async function buildRows(
         exist: round1(existNet),
         existencias: round1(r.existencias),
         reserved: round1(r.reserved),
-        patio: round1(patioDeBodega(bodega, r.patio)),
+        patio: round1(patioDeBodega(bodega, r.patio, patioRule.bodegas)),
         pending,
         trans: round1(trans),
         transOverridden: transOverride !== null,
@@ -705,15 +712,15 @@ export async function buildRows(
           ? null
           : round1((r.mtd / r.mtd_dias) * 30),
         win: engineRow.win,
-        doh: round1(doh(engineRow)),
-        sug: round1(sugerido(engineRow, trans)),
-        proyeccion: round1(forecast(engineRow)),
+        doh: round1(doh(engineRow, undefined, calc.engine)),
+        sug: round1(sugerido(engineRow, trans, calc.engine, calc.cobertura.default_dias)),
+        proyeccion: round1(forecast(engineRow, calc.engine, calc.cobertura.default_dias)),
         tendencia,
         divergencia,
         alerta,
         flags: {
           pendingUnknown: pending === null,
-          seasonalLowConfidence: engineRow.win === 10 && r.h === 0,
+          seasonalLowConfidence: engineRow.win === calc.engine.win_general && r.h === 0,
           seasonalExcluded,
           tendenciaCreciente: tendencia.estado === 'creciente',
           revisar: alerta.estado === 'revisar',
@@ -725,11 +732,12 @@ export async function buildRows(
       };
     });
 
-    classifyAbc(rows);
+    classifyAbc(rows, calc.abc);
 
   return {
     rows, maxAsOf, monthStart, coberturaDias, areasComerciales, pendienteReserva,
     bodegaOrigen: origen,
+    reglas: calc,
     groups: supplierGroups.map((g) => ({ id: g.id, displayName: g.display_name })),
     // Same rule as the hourly sync: a repeated SKU counts once, and the first
     // row wins. `products` arrives ordered by id, which is insertion order.
@@ -783,17 +791,18 @@ export function skusDuplicados(products: { id: number; sku: string | null; name:
  * cola que sobra después de 95% NO se vuelve su propia categoría: se queda
  * en C (documentado así porque no es obvio de dónde sale ese último tramo).
  */
-function classifyAbc(rows: LiveRow[]): void {
-  const resto = rows.filter((r) => r.p3 >= 10);
+function classifyAbc(rows: LiveRow[], cutoffs: AbcCutoffs): void {
+  const floor = cutoffs.min_qty_for_class;
+  const resto = rows.filter((r) => r.p3 >= floor);
   resto.sort((a, b) => b.p3 - a.p3);
   const total = resto.reduce((sum, r) => sum + r.p3, 0);
   let acumulado = 0;
   for (const r of resto) {
     acumulado += r.p3;
     const pct = total === 0 ? 0 : acumulado / total;
-    r.abc = pct <= 0.5 ? 'A' : pct <= 0.8 ? 'B' : 'C';
+    r.abc = pct <= cutoffs.a_share ? 'A' : pct <= cutoffs.b_share ? 'B' : 'C';
   }
   for (const r of rows) {
-    if (r.p3 < 10) r.abc = 'D';
+    if (r.p3 < floor) r.abc = 'D';
   }
 }

@@ -18,7 +18,8 @@ export interface ProductRow {
   p3: number;
   h: number;
   adic: number;
-  win: 10 | 5;
+  /** General uses win_general (10); every other bodega uses win_other (5). */
+  win: number;
   /** Days of demand the Sugerido should cover. Absent means COBERTURA_DEFAULT_DIAS. */
   coberturaDias?: number;
 }
@@ -32,16 +33,52 @@ export interface ProductRow {
 export const COBERTURA_DEFAULT_DIAS = 30;
 
 /**
+ * Workbook factors. Fallback for config_rules `engine.factors`.
+ * general_growth is the ×1.1 on the General forecast; t_divisor is the 20
+ * in T = (p3 / 20) × win; weekdays is the 26 in DOH.
+ */
+export interface EngineFactors {
+  general_growth: number;
+  t_divisor: number;
+  weekdays: number;
+  win_general: number;
+  win_other: number;
+}
+
+export const ENGINE_FACTORS: EngineFactors = {
+  general_growth: 1.1,
+  t_divisor: 20,
+  weekdays: 26,
+  win_general: 10,
+  win_other: 5,
+};
+
+/** DOH bands. Fallback for config_rules `doh.bands`. crítico < 3, bajo < 7, normal ≤ 30. */
+export interface DohBands {
+  critico: number;
+  bajo: number;
+  normal: number;
+}
+
+export const DOH_BANDS: DohBands = { critico: 3, bajo: 7, normal: 30 };
+
+/**
  * forecast = mean(6-mo, 3-mo, seasonal) × 1.1  (General)  |  mean(6-mo, 3-mo)  (locations)
  * …then scaled to the bodega's coverage horizon.
  *
  * The scale is linear because the base is a month of demand. With
  * `coberturaDias` absent the factor is exactly 1.
  */
-export function forecast(r: ProductRow): number {
-  const base = r.win === 10 ? ((r.p6 + r.p3 + r.h) / 3) * 1.1 : (r.p6 + r.p3) / 2;
-  const dias = r.coberturaDias ?? COBERTURA_DEFAULT_DIAS;
-  return base * (dias / COBERTURA_DEFAULT_DIAS);
+export function forecast(
+  r: ProductRow,
+  factors: EngineFactors = ENGINE_FACTORS,
+  coberturaDefault = COBERTURA_DEFAULT_DIAS,
+): number {
+  const base = r.win === factors.win_general
+    ? ((r.p6 + r.p3 + r.h) / 3) * factors.general_growth
+    : (r.p6 + r.p3) / 2;
+  const dias = r.coberturaDias ?? coberturaDefault;
+  return base * (dias / coberturaDefault);
 }
 
 /**
@@ -54,26 +91,35 @@ export function forecast(r: ProductRow): number {
  * `T` (the projection window `win`) is not scaled. It is the consumption
  * expected during the resupply cycle, separate from how much cover to hold.
  */
-export function sugerido(r: ProductRow, trans: number): number {
-  const T = (r.p3 / 20) * r.win;
+export function sugerido(
+  r: ProductRow,
+  trans: number,
+  factors: EngineFactors = ENGINE_FACTORS,
+  coberturaDefault = COBERTURA_DEFAULT_DIAS,
+): number {
+  const T = (r.p3 / factors.t_divisor) * r.win;
   const U = r.exist + trans - T;
   const V = U > 0 ? U : 0;
-  const X = forecast(r) - V;
+  const X = forecast(r, factors, coberturaDefault) - V;
   return Math.max(0, (X > 0 ? X : 0) + r.adic);
 }
 
 /** Días On Hand = existencias ÷ (promedio 3 meses ÷ 26 días hábiles) */
-export function doh(r: ProductRow, existOverride?: number): number {
+export function doh(
+  r: ProductRow,
+  existOverride?: number,
+  factors: EngineFactors = ENGINE_FACTORS,
+): number {
   const e = existOverride ?? r.exist;
-  return r.p3 ? e / (r.p3 / 26) : 0;
+  return r.p3 ? e / (r.p3 / factors.weekdays) : 0;
 }
 
 /** DOH severity band: crítico < 3, bajo < 7, normal through 30, exceso above 30. */
 export type Sev = 'crit' | 'low' | 'ok' | 'exc';
-export function sev(d: number): Sev {
-  if (d < 3) return 'crit';
-  if (d < 7) return 'low';
-  if (d <= 30) return 'ok';
+export function sev(d: number, bands: DohBands = DOH_BANDS): Sev {
+  if (d < bands.critico) return 'crit';
+  if (d < bands.bajo) return 'low';
+  if (d <= bands.normal) return 'ok';
   return 'exc';
 }
 
