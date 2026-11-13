@@ -1,3 +1,4 @@
+# Paused until Odoo authentication is restored. Do not re-enable without explicit confirmation.
 """Odoo -> Supabase sync for the live Reyma model (INVENTARIOS / Alexis).
 
 Phase-2 batch L1 of docs/inventarios/ALEXIS_REYMA_LIVE_PLAN.md. Populates the

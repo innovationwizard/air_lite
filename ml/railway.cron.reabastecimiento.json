@@ -6,7 +6,7 @@
   },
   "deploy": {
     "startCommand": "python odoo_sync_reabastecimiento.py",
-    "cronSchedule": "0 * * * *",
+    "cronSchedule": null,
     "restartPolicyType": "NEVER"
   }
 }

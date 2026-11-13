@@ -1,3 +1,4 @@
+# Paused until Odoo authentication is restored. Do not re-enable without explicit confirmation.
 """Odoo -> Supabase sync for the live Reabastecimiento engine (COMPRAS / Wilmer).
 
 Populates `reabastecimiento_inputs` (one row per product x bodega) with the
