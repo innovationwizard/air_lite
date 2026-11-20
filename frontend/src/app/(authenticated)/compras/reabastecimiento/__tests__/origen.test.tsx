@@ -32,10 +32,15 @@ function row(over: Record<string, unknown>) {
   };
 }
 
+const sanJose = {
+  exist: 5000, existencias: 5200, reserved: 200, patio: 0, pending: 0, p3: 200, doh: 650,
+};
+
 const rows = [
   row({
     productId: 1, cod: 'A1', desc: 'Con origen', doh: 1, sug: 5,
-    origen: { exist: 5000, existencias: 5200, reserved: 200, patio: 0, pending: 0, p3: 200, doh: 650 },
+    origen: sanJose,
+    referencias: [{ bodega: 'San Jose VN', etiqueta: 'San José', dato: sanJose }],
   }),
   row({ productId: 2, cod: 'B2', desc: 'Sin fila en San José', doh: 5, sug: 3, origen: null }),
 ];
@@ -50,12 +55,20 @@ function mockPayload(bodega: string, bodegaOrigen: string | null) {
   }) as unknown as typeof fetch;
 }
 
-it('en Zacapa aparecen «Exist. San José» y «DOH San José», con la venta debajo y — sin fila allá', async () => {
-  mockPayload('Zacapa', 'San Jose VN');
+/** La pantalla abre en General. Las columnas siguen la pestaña elegida. */
+async function abrirZacapa() {
+  const user = userEvent.setup();
   render(<VivoClient />);
   await waitFor(() => expect(screen.getByText('A1')).toBeInTheDocument());
+  await user.click(screen.getByRole('button', { name: 'Zacapa' }));
+  await waitFor(() => expect(screen.getByText('Exist. San José')).toBeInTheDocument());
+  return user;
+}
 
-  expect(screen.getByText('Exist. San José')).toBeInTheDocument();
+it('en Zacapa aparecen «Exist. San José» y «DOH San José», con la venta debajo y — sin fila allá', async () => {
+  mockPayload('Zacapa', 'San Jose VN');
+  await abrirZacapa();
+
   expect(screen.getByText('DOH San José')).toBeInTheDocument();
 
   const filaA = screen.getByText('A1').closest('tr')!;
@@ -69,9 +82,7 @@ it('en Zacapa aparecen «Exist. San José» y «DOH San José», con la venta de
 
 it('ordenar por «DOH San José» pone primero lo que un traslado cubriría, y sin origen al final', async () => {
   mockPayload('Zacapa', 'San Jose VN');
-  const user = userEvent.setup();
-  render(<VivoClient />);
-  await waitFor(() => expect(screen.getByText('A1')).toBeInTheDocument());
+  const user = await abrirZacapa();
 
   // Por defecto B2 (doh 5) va después de A1 (doh 1); al ordenar asc por
   // origen, A1 sigue primero y B2 (sin origen) queda al final igual.
