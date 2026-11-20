@@ -11,6 +11,7 @@
  */
 import type { SupabaseClient } from '@supabase/supabase-js';
 import {
+  type EngineFactors,
   type ProductRow,
   sugerido,
   forecast,
@@ -23,7 +24,8 @@ import {
 } from '@/lib/compras/tendencia';
 import { fetchAll } from '@/lib/supabase/paginado';
 import { fetchPendienteReserva, pendientePorSku } from '@/lib/compras/pendienteReserva';
-import { bodegaOrigen, ordenarAreas, patioDeBodega } from '@/lib/compras/bodega';
+import { bodegaOrigen, bodegasReferencia, esBodegaSinPestana, etiquetaBodega, ordenarAreas, patioDeBodega } from '@/lib/compras/bodega';
+import { dohReferencia } from '@/lib/compras/referencia';
 import { readLiveRules, type AbcCutoffs, type CalcRules } from '@/lib/compras/configRules';
 import { GENERAL_BODEGA, round1 } from './lib';
 
@@ -84,6 +86,7 @@ interface InputRow {
 /** W18 — lo que se lee de la bodega que ABASTECE: sólo lo que sus columnas muestran. */
 interface OrigenInputRow {
   product_id: number;
+  bodega: string;
   existencias: number; reserved: number; patio: number; p3: number;
 }
 interface ProductRef {
@@ -129,7 +132,8 @@ export interface OrigenRow {
   pending: number | null;
   /** Su venta: Ord. 3m — lo que decide si puede prestar o no. */
   p3: number;
-  doh: number;
+  /** null = no hay venta ordenada: los días no se pueden calcular. No es cero. */
+  doh: number | null;
 }
 
 export interface LiveRow {
@@ -194,6 +198,16 @@ export interface LiveRow {
    * casos por `meta.bodegaOrigen`.
    */
   origen: OrigenRow | null;
+  /**
+   * Inventario y días de inventario de otras bodegas, en el orden de
+   * `bodegasReferencia`. `dato` null = el producto no está en esa bodega.
+   */
+  referencias: { bodega: string; etiqueta: string; dato: OrigenRow | null }[];
+  /**
+   * Cantidad digitada para cubicar esta línea en esta bodega. null = la
+   * casilla está vacía y el cubicaje usa el Sugerido. No entra a la fórmula.
+   */
+  cantidadPedida: number | null;
   flags: {
     pendingUnknown: boolean; seasonalLowConfidence: boolean;
     seasonalExcluded: boolean; tendenciaCreciente: boolean;
@@ -368,6 +382,29 @@ export function consolidarSugeridoBodega(
   return out;
 }
 
+function armarReferencia(
+  o: OrigenInputRow | undefined,
+  pendingBySku: Map<string, number> | null,
+  sku: string,
+  bodegaNombre: string,
+  patioBodegas: readonly string[],
+  factors: EngineFactors,
+): OrigenRow | null {
+  if (!o) return null;
+  const pending = pendingBySku === null ? null : round1(pendingBySku.get(sku) ?? 0);
+  const exist = o.existencias - o.reserved - (pending ?? 0);
+  const p3 = Number(o.p3);
+  return {
+    exist: round1(exist),
+    existencias: round1(o.existencias),
+    reserved: round1(o.reserved),
+    patio: round1(patioDeBodega(bodegaNombre, o.patio, patioBodegas)),
+    pending,
+    p3: round1(p3),
+    doh: dohReferencia(exist, Number.isFinite(p3) ? p3 : 0, factors),
+  };
+}
+
 /** Everything the page and the export both need for one bodega. */
 export async function buildRows(
   service: SupabaseClient,
@@ -410,26 +447,30 @@ export async function buildRows(
     // the codes up front. The patio bodegas come from config_rules in the
     // same round trip; a missing row or a failed read keeps BODEGAS_CON_PATIO.
     const [{ data: bodegaMapData, error: bodegaMapError }, liveRules] = await Promise.all([
-      service.from('bodega_map').select('odoo_warehouse_code, bodega, in_scope').eq('in_scope', true),
+      service.from('bodega_map').select('odoo_warehouse_code, bodega, in_scope'),
       readLiveRules(service),
     ]);
     const patioRule = liveRules.patio;
     const calc = liveRules.calc;
     if (bodegaMapError) throw new Error(bodegaMapError.message);
-    const codigosBodega = ((bodegaMapData as BodegaMapRow[] | null) ?? [])
+    const mapRows = (bodegaMapData as BodegaMapRow[] | null) ?? [];
+    const codigosDe = (nombre: string) => mapRows
+      .filter((b) => b.bodega === nombre)
+      .map((b) => b.odoo_warehouse_code)
+      .sort();
+    // General suma las bodegas de compra. Zona 11 es referencia: su pendiente
+    // no entra a la exist. neta de General.
+    const codigosBodega = mapRows
+      .filter((b) => b.in_scope && !esBodegaSinPestana(b.bodega))
       .filter((b) => bodega === GENERAL_BODEGA || b.bodega === bodega)
       .map((b) => b.odoo_warehouse_code)
       .sort();
-    // W18 — la bodega que abastece a ésta. Sus códigos van en la MISMA
-    // llamada a Odoo (una sesión, un viaje) y se separan al leer la respuesta.
     const origen = bodegaOrigen(bodega);
-    const codigosOrigen = origen === null ? [] : ((bodegaMapData as BodegaMapRow[] | null) ?? [])
-      .filter((b) => b.bodega === origen)
-      .map((b) => b.odoo_warehouse_code)
-      .sort();
+    const referenciasNombres = bodegasReferencia(bodega);
+    const codigosReferencia = [...new Set(referenciasNombres.flatMap(codigosDe))].sort();
 
     const [inputs, products, links, suppliers, transitoOv, pendienteLive, comercial, aprobaciones, sugBodegaOv, detalleTr, cobertura,
-           supplierGroups, supplierGroupMembers, areasCom, inputsOrigen] =
+           supplierGroups, supplierGroupMembers, areasCom, inputsOrigen, cantidadOv] =
       await Promise.all([
         // El desempate por columna única de cada consulta NO ES OPCIONAL —
         // ver el comentario de `fetchAll` en ./lib.ts: sin él el paginado
@@ -453,7 +494,7 @@ export async function buildRows(
         // Pendiente de tomar reserva — live from Odoo, in parallel with the
         // Supabase reads. The manual table was dropped. Wilmer's own Odoo
         // filter, per request, never stored. Never throws — a failure is a value.
-        fetchPendienteReserva([...new Set([...codigosBodega, ...codigosOrigen])]),
+        fetchPendienteReserva([...new Set([...codigosBodega, ...codigosReferencia])]),
         fetchAll<ComercialRow>(() =>
           service.from('comercial_forecast')
             .select('product_id, bodega, quantity, motivo, area, created_at')
@@ -497,12 +538,17 @@ export async function buildRows(
         // columnas lo fija `ordenarAreas` (tipos de cliente, luego sedes);
         // `order('nombre')` sólo hace la lectura determinista.
         service.from('comercial_areas').select('slug, nombre, padre').eq('activa', true).order('nombre'),
-        // W18 — lectura ESTRECHA de la bodega de origen: sólo las columnas
-        // que se muestran, no un segundo `buildRows`. Sin origen, ninguna
-        // consulta.
-        origen === null ? Promise.resolve([] as OrigenInputRow[]) : fetchAll<OrigenInputRow>(() =>
+        // Inventario de las bodegas que esta pestaña muestra al lado. Sin
+        // referencias, ninguna consulta. Zona 11 llega acá cuando el sync ya
+        // escribió sus filas; antes, la columna queda en —.
+        referenciasNombres.length === 0 ? Promise.resolve([] as OrigenInputRow[]) : fetchAll<OrigenInputRow>(() =>
           service.from('reabastecimiento_inputs')
-            .select('product_id, existencias, reserved, patio, p3').eq('bodega', origen), 'id'),
+            .select('product_id, bodega, existencias, reserved, patio, p3')
+            .in('bodega', [...referenciasNombres]), 'id'),
+        fetchAll<OverrideRow>(() =>
+          service.from('cantidad_pedida').select('product_id, qty, created_at')
+            .eq('bodega', bodega).order('created_at', { ascending: false }),
+          { columna: 'id', ascending: false }),
       ]);
     const todasLasAreas =
       (areasCom?.data as { slug: string; nombre: string; padre: string | null }[] | null) ?? [];
@@ -539,6 +585,7 @@ export async function buildRows(
       return m;
     };
     const transitoByProduct = latest(transitoOv);
+    const cantidadByProduct = latest(cantidadOv);
     // A4.17 — el pedido adicional del encargado del CD. Append-only y
     // gana-la-última como tránsito, pero el último-gana es por (producto ×
     // bodega) y General SUMA las bodegas físicas: ver `consolidarSugeridoBodega`.
@@ -557,8 +604,19 @@ export async function buildRows(
     // Live pendiente by SKU (the stable key across Odoo builds). When Odoo did
     // not answer, the map is null and every row is UNKNOWN — never 0.
     const pendingBySku = pendienteLive.ok ? pendientePorSku(pendienteLive.live, codigosBodega) : null;
-    const pendingOrigenBySku = pendienteLive.ok ? pendientePorSku(pendienteLive.live, codigosOrigen) : null;
-    const origenByProduct = new Map(inputsOrigen.map((r) => [r.product_id, r]));
+    const inputsPorBodega = new Map<string, Map<number, OrigenInputRow>>();
+    for (const row of inputsOrigen) {
+      const porProducto = inputsPorBodega.get(row.bodega) ?? new Map<number, OrigenInputRow>();
+      porProducto.set(row.product_id, row);
+      inputsPorBodega.set(row.bodega, porProducto);
+    }
+    const pendingPorReferencia = new Map<string, Map<string, number> | null>();
+    for (const nombre of referenciasNombres) {
+      pendingPorReferencia.set(
+        nombre,
+        pendienteLive.ok ? pendientePorSku(pendienteLive.live, codigosDe(nombre)) : null,
+      );
+    }
     const pendienteReserva = pendienteLive.ok
       ? { asOf: pendienteLive.live.asOf, codigos: codigosBodega, error: null }
       : { asOf: null, codigos: codigosBodega, error: pendienteLive.error };
@@ -578,30 +636,19 @@ export async function buildRows(
       // No answer at all = unknown, and unknown subtracts nothing but flags.
       const pending = pendingBySku === null ? null : round1(pendingBySku.get(ref?.sku ?? '') ?? 0);
       const existNet = r.existencias - r.reserved - (pending ?? 0);
-      // W18 — las cifras de la bodega que abastece, calculadas IGUAL que las
-      // propias: misma resta, mismo motor de DOH. Si el producto no existe
-      // allá, null — no 0: «no está en San José» y «San José tiene 0» son
-      // respuestas distintas para quien decide trasladar.
-      const o = origenByProduct.get(r.product_id);
-      let origenRow: OrigenRow | null = null;
-      if (o) {
-        const pendingOrigen = pendingOrigenBySku === null
-          ? null : round1(pendingOrigenBySku.get(ref?.sku ?? '') ?? 0);
-        const existOrigen = o.existencias - o.reserved - (pendingOrigen ?? 0);
-        origenRow = {
-          exist: round1(existOrigen),
-          existencias: round1(o.existencias),
-          reserved: round1(o.reserved),
-          patio: round1(patioDeBodega(origen ?? '', o.patio, patioRule.bodegas)),
-          pending: pendingOrigen,
-          p3: round1(o.p3),
-          // El motor, no la fórmula re-tecleada: sólo lee exist y p3.
-          doh: round1(doh({
-            cod: ref?.sku ?? '', desc: '', prov: '', exist: existOrigen, doh: 0, trans: 0, sug: 0,
-            p6: 0, p3: o.p3, h: 0, adic: 0, win: calc.engine.win_other,
-          }, undefined, calc.engine)),
-        };
-      }
+      const referencias = referenciasNombres.map((nombre) => ({
+        bodega: nombre,
+        etiqueta: etiquetaBodega(nombre),
+        dato: armarReferencia(
+          inputsPorBodega.get(nombre)?.get(r.product_id),
+          pendingPorReferencia.get(nombre) ?? null,
+          ref?.sku ?? '',
+          nombre,
+          patioRule.bodegas,
+          calc.engine,
+        ),
+      }));
+      const origenRow = referencias[0]?.dato ?? null;
       /**
        * Tránsito — dos capas, de la más específica a la más general:
        *
@@ -681,6 +728,8 @@ export async function buildRows(
         // eso es justo lo que no puede pasar acá.
         volM3: volumenM3(productById.get(r.product_id)?.volume_m3),
         origen: origenRow,
+        referencias,
+        cantidadPedida: cantidadByProduct.get(r.product_id) ?? null,
         exist: round1(existNet),
         existencias: round1(r.existencias),
         reserved: round1(r.reserved),

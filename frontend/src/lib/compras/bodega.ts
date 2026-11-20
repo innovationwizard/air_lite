@@ -15,7 +15,27 @@ export function ordenBodega(b: string): number {
   return i === -1 ? BODEGA_ORDEN.length : i;
 }
 
-export const BODEGA_LABEL: Record<string, string> = { 'San Jose VN': 'San José' };
+/** CD Zona 11. Columnas en Zacapa. No es pestaña. */
+export const BODEGA_ZONA_11 = 'Zona 11';
+
+/**
+ * Bodegas que el sync guarda para mostrarlas en columnas de otra pestaña.
+ * No aparecen en la franja de pestañas y no son una bodega de compra.
+ */
+export const BODEGAS_SIN_PESTANA: readonly string[] = [BODEGA_ZONA_11];
+
+export function esBodegaSinPestana(bodega: string): boolean {
+  return BODEGAS_SIN_PESTANA.includes(bodega);
+}
+
+export const BODEGA_LABEL: Record<string, string> = {
+  'San Jose VN': 'San José',
+  [BODEGA_ZONA_11]: 'Zona 11',
+};
+
+export function etiquetaBodega(bodega: string): string {
+  return BODEGA_LABEL[bodega] ?? bodega;
+}
 
 export function ordenarBodegas<T extends string>(bodegas: readonly T[]): T[] {
   return [...bodegas].sort((a, b) => ordenBodega(a) - ordenBodega(b));
@@ -47,6 +67,24 @@ export const BODEGA_ORIGEN: Readonly<Record<string, string>> = {
 /** La bodega que abastece a `bodega`, o null si compra al proveedor / es General. */
 export function bodegaOrigen(bodega: string): string | null {
   return BODEGA_ORIGEN[bodega] ?? null;
+}
+
+/**
+ * Inventario y días de inventario que se ven trabajando en esta pestaña,
+ * en el orden de las columnas.
+ *
+ * Petén conserva Zacapa, que es quien la abastece, y suma San José.
+ * Zacapa conserva San José, que es quien la abastece, y suma el CD Zona 11.
+ * Wilmer, 2026-11-19: antes de comprar, ver si otra bodega tiene existencia
+ * para trasladar.
+ */
+export const BODEGA_REFERENCIAS: Readonly<Record<string, readonly string[]>> = {
+  Zacapa: ['San Jose VN', BODEGA_ZONA_11],
+  'Petén': ['Zacapa', 'San Jose VN'],
+};
+
+export function bodegasReferencia(bodega: string): readonly string[] {
+  return BODEGA_REFERENCIAS[bodega] ?? [];
 }
 
 /**

@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import {
   AlertTriangle, Boxes, ChevronDown, ChevronUp, ChevronsUpDown, CloudOff, Info, ListFilter, Loader2, PackageCheck,
   Pencil, Radio, RefreshCw, Search, TrendingUp, X,
@@ -11,11 +11,11 @@ import { tablaATsv } from '@/lib/compras/tabla';
 import {
   CLASES_ABC, type ClaseAbc, claveCanal, esClaveCanal,
   type ClaveOrden, type ClaveOrdenNumerica, type FiltroRango, type OperadorRango,
-  type Orden, siguienteOrden, vista,
+  type Orden, claveRef, siguienteOrden, vista,
 } from '@/lib/compras/tabla';
 import { computeKpis, computeAlza, computeTopProveedores } from '@/lib/compras/statusMetrics';
-import { fmtM3, m3Sugerido } from '@/lib/compras/cubicaje';
-import { BODEGA_LABEL, bodegaTienePatio, ordenarBodegas } from '@/lib/compras/bodega';
+import { fmtM3, m3Sugerido, cantidadACubicar } from '@/lib/compras/cubicaje';
+import { BODEGA_LABEL, BODEGA_ZONA_11, bodegaOrigen, bodegaTienePatio, bodegasReferencia, etiquetaBodega, ordenarBodegas } from '@/lib/compras/bodega';
 import { COBERTURA_DEFAULTS, esCoberturaValida } from '@/lib/compras/cobertura';
 import { syncAgeLabel, syncIsStale } from '@/lib/syncFreshness';
 import { ExportarExcel } from './ExportarExcel';
@@ -179,9 +179,21 @@ const COL_TIP = {
     `DOH DE ${origen.toUpperCase()}: existencias ÷ (promedio 3 meses ÷ 26) de la bodega que abastece a ${bodega}. `
     + 'Misma cuenta que la columna DOH, no la cobertura de 90 días. Mismo semáforo: en rojo o ámbar no puede prestar; '
     + 'en azul (exceso, > 30 días) es candidata a traslado. Ordená por esta columna para ver '
-    + 'primero lo que un traslado cubriría.',
+    + 'primero lo que un traslado cubriría. ¿? = no hay venta ordenada en 3 meses y los días no se pueden calcular.',
+  referenciaExist: (origen: string, bodega: string) =>
+    `EXISTENCIA NETA DE ${origen.toUpperCase()} mientras se trabaja ${bodega}: existencias − reservado − pendiente en vivo. `
+    + 'Debajo, en gris, lo que esa bodega vende al mes (Ord. 3m). Sirve para trasladar existencia antes de comprar. '
+    + '— = el producto no está en esa bodega (no es cero).',
+  referenciaDoh: (origen: string) =>
+    `DOH DE ${origen.toUpperCase()}: existencias ÷ (promedio 3 meses ÷ 26). `
+    + '¿? = no hay venta ordenada en 3 meses y los días no se pueden calcular. No es cero.',
+  aPedir:
+    'Cantidad que digitás para cubicar esta línea en esta bodega. Vacía = el cubicaje, la copia y el Excel '
+    + 'usan el Sugerido. Un número no cambia el Sugerido ni lo que pidió la bodega. '
+    + 'El botón ✕ quita la captura.',
   m3:
-    'CUBICAJE del Sugerido: Sugerido × m³ por unidad (el volumen del producto en Odoo). '
+    'CUBICAJE de la cantidad a pedir: A pedir × m³ por unidad cuando digitaste la casilla, '
+    + 'y Sugerido × m³ por unidad cuando está vacía. '
     + 'Es lo que pidió Wilmer el 2026-08-26: "los metros cúbicos del sugerido… tengo un límite '
     + 'de 3 furgones locales, entonces yo tengo que cubicar no más de eso". '
     + '¿? = el producto NO tiene volumen medido en Odoo — no es cero, y por eso no entra al '
@@ -204,8 +216,12 @@ interface ApiRow {
    */
   origen: {
     exist: number; existencias: number; reserved: number; patio: number;
-    pending: number | null; p3: number; doh: number;
+    pending: number | null; p3: number; doh: number | null;
   } | null;
+  /** Inventario de otras bodegas, en el orden de las columnas. */
+  referencias?: { bodega: string; etiqueta: string; dato: ApiRow['origen'] }[];
+  /** Cantidad digitada para cubicar. null = la casilla está vacía. */
+  cantidadPedida?: number | null;
   /** Odoo product.template "Can be Purchased" — drives el filtro «Solo comprables». */
   purchaseOk: boolean;
   exist: number; existencias: number; reserved: number; patio: number;
@@ -447,6 +463,45 @@ export function VivoClient({ soloLectura = false }: { soloLectura?: boolean } = 
     }
   }, [bodega, load]);
 
+  /**
+   * Cantidad digitada para cubicar. No entra al Sugerido, así que el m³ se
+   * puede mover en la pantalla antes de que el servidor confirme: la casilla
+   * vacía vuelve a ser el Sugerido. El refetch deja la fila como quedó guardada.
+   */
+  const commitCantidad = useCallback(async (row: ApiRow, qty: number | null) => {
+    setSaveError(null);
+    if (qty !== null && qty > MAX_MANUAL_QTY) {
+      setSaveError(
+        `No se guardó la cantidad a pedir (${row.cod}): supera el máximo de captura manual `
+        + `(${fmt(MAX_MANUAL_QTY)}).`,
+      );
+      return;
+    }
+    setPayload((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        rows: prev.rows.map((r) => (r.productId === row.productId ? { ...r, cantidadPedida: qty } : r)),
+      };
+    });
+    try {
+      const res = await fetch('/api/compras/reabastecimiento/cantidad-pedida', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ productId: row.productId, bodega, qty }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error ?? `HTTP ${res.status}`);
+      }
+      load(bodega, true);
+    } catch (e) {
+      setSaveError(
+        `No se guardó la cantidad a pedir (${row.cod}): ${e instanceof Error ? e.message : e}`);
+      load(bodega, true);
+    }
+  }, [bodega, load]);
+
   const [coberturaGuardando, setCoberturaGuardando] = useState(false);
   const commitCobertura = useCallback(async (dias: number) => {
     setSaveError(null);
@@ -595,12 +650,18 @@ export function VivoClient({ soloLectura = false }: { soloLectura?: boolean } = 
   const areasVisibles = useMemo(
     () => (canalesAbiertos ? areas : []), [canalesAbiertos, areas]);
 
-  // W18 — cómo se llama la bodega que abastece a la que se está mirando
-  // (Zacapa ← San José, Petén ← Zacapa). Null = no hay columnas de origen.
-  const origenLabel = useMemo(() => {
-    const o = payload?.meta.bodegaOrigen ?? null;
-    return o === null ? null : (BODEGA_LABEL[o] ?? o);
-  }, [payload]);
+  // Bodegas cuyo inventario y DOH se ven en esta pestaña, en orden de columna.
+  // La primera que abastece conserva las claves de orden `origenExist` /
+  // `origenDoh`. Las demás usan `ref:<bodega>:exist|doh`.
+  const referencias = useMemo(
+    () => bodegasReferencia(bodega).map((nombre) => ({
+      bodega: nombre,
+      etiqueta: etiquetaBodega(nombre),
+      abastece: bodegaOrigen(bodega) === nombre,
+    })),
+    [bodega],
+  );
+  const origenLabel = referencias.find((r) => r.abastece)?.etiqueta ?? null;
 
   const renderFila = useCallback((r: ApiRow) => {
   const band = sev(r.doh, dohBands);
@@ -640,9 +701,15 @@ export function VivoClient({ soloLectura = false }: { soloLectura?: boolean } = 
       </td>
       {/* W18 — la bodega que abastece, al lado de la propia: comprar o
           trasladar se decide comparando estas dos parejas de columnas. */}
-      {origenLabel ? (
-        <OrigenCells origen={r.origen} label={origenLabel} bands={dohBands} weekdays={engineFactors.weekdays} />
-      ) : null}
+      {referencias.map((ref) => (
+        <OrigenCells
+          key={ref.bodega}
+          origen={r.referencias?.find((x) => x.bodega === ref.bodega)?.dato ?? null}
+          label={ref.etiqueta}
+          bands={dohBands}
+          weekdays={engineFactors.weekdays}
+        />
+      ))}
       <td className="px-3 py-2 border-b border-gray-100 text-right">
         <button type="button" className="mr-1 align-middle text-gray-300 hover:text-teal-700"
           aria-label={`Por qué el tránsito de ${r.cod}`} onClick={() => abrirPorque('trans', r)}>
@@ -750,11 +817,22 @@ export function VivoClient({ soloLectura = false }: { soloLectura?: boolean } = 
         {r.flags.seasonalExcluded ? <span className="text-indigo-500">†</span> : null}
       </td>
       <td className="px-3 py-2 border-b border-gray-100 text-right">
-        <M3Cell sug={r.sug} volM3={r.volM3} />
+        <QtyInput
+          value={r.cantidadPedida ?? null}
+          edited={r.cantidadPedida != null}
+          readOnly={soloLectura}
+          label={`A pedir ${r.cod}`}
+          onCommit={(v) => commitCantidad(r, v)}
+          onClear={r.cantidadPedida != null ? () => commitCantidad(r, null) : undefined}
+          clearTip="Quitar la cantidad digitada — el cubicaje vuelve al Sugerido"
+        />
+      </td>
+      <td className="px-3 py-2 border-b border-gray-100 text-right">
+        <M3Cell sug={cantidadACubicar(r.sug, r.cantidadPedida)} volM3={r.volM3} />
       </td>
     </tr>
   );
-  }, [commitEdit, commitSugBodega, areasVisibles, origenLabel, soloLectura, abrirPorque,
+  }, [commitEdit, commitSugBodega, commitCantidad, areasVisibles, referencias, soloLectura, abrirPorque,
       dohBands, engineFactors.weekdays, trendThresholds]);
 
   return (
@@ -859,7 +937,7 @@ export function VivoClient({ soloLectura = false }: { soloLectura?: boolean } = 
              tip={`Productos visibles con los filtros actuales. ${BODEGA_TIP[bodega] ?? ''}`} />
         <Kpi label="Requieren compra" value={fmt(kpis.need)} sub="sugerido > 0" accent
              tip="Productos con Sugerido > 0 (tras filtros)." />
-        <Kpi label="Unidades sugeridas" value={fmt(kpis.totSug)} sub="total a comprar" accent
+        <Kpi label="Unidades sugeridas" value={fmt(kpis.totSug)} sub="suma del Sugerido" accent
              tip="Suma del Sugerido de los productos que requieren compra (tras filtros)." />
         {/* W21 — the running total he books furgones against. The holes are
             said on the card itself, not in a tooltip: a total that reads as
@@ -868,9 +946,9 @@ export function VivoClient({ soloLectura = false }: { soloLectura?: boolean } = 
         <Kpi label="m³ sugerido" value={fmtM3(kpis.m3Sug)}
              sub={kpis.sinCubicaje > 0
                ? `⚠ ${fmt(kpis.sinCubicaje)} sin cubicaje — total incompleto`
-               : 'cubicaje del total a comprar'}
+               : 'A pedir, o el Sugerido si la casilla está vacía'}
              accent warn={kpis.sinCubicaje > 0}
-             tip={'Suma de Sugerido × m³ por unidad de los productos que requieren compra (tras filtros). '
+             tip={'Suma de la cantidad a cubicar × m³ por unidad (A pedir, o el Sugerido si la casilla está vacía). '
                + 'Los productos sin volumen medido en Odoo NO suman: se cuentan aparte como «sin cubicaje». '
                + 'La unidad del volumen de Odoo no está verificada contra la UoM de stock y las bolsas '
                + 'están mal medidas (O7) — no reserves furgones con esta cifra sin revisar esas filas.'} />
@@ -983,6 +1061,7 @@ export function VivoClient({ soloLectura = false }: { soloLectura?: boolean } = 
                   bodegaLabel: BODEGA_LABEL[bodega] ?? bodega,
                   bodegaDetalle: BODEGA_TIP[bodega],
                   bodegaOrigenLabel: origenLabel,
+                  etiquetasReferencia: referencias.map((r) => r.etiqueta),
                   proveedorLabel,
                   filtros: {
                     texto: q, proveedor: prov, soloConSugerido: onlySug, soloCriticos: onlyCrit,
@@ -1043,6 +1122,13 @@ export function VivoClient({ soloLectura = false }: { soloLectura?: boolean } = 
               Sin datos para <b>{bodega}</b> — la sincronización con Odoo aún no ha corrido.
             </div>
           ) : (
+            <>
+            {bodega === 'Zacapa' && (payload?.rows.length ?? 0) > 0
+              && payload!.rows.every((r) => !r.referencias?.some((ref) => ref.bodega === BODEGA_ZONA_11 && ref.dato)) ? (
+              <div className="mx-3 mb-3 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-900">
+                Zona 11 entra con la próxima sincronización con Odoo. Hasta entonces estas columnas quedan en —.
+              </div>
+            ) : null}
             <div className="overflow-auto max-h-[60vh]">
               <table className="w-full text-[13px]">
                 <thead className="sticky top-0 bg-white z-10">
@@ -1061,18 +1147,28 @@ export function VivoClient({ soloLectura = false }: { soloLectura?: boolean } = 
                     <Th tip={COL_TIP.doh} sortKey="doh" orden={orden} onSort={onSort}
                         filtroKey="doh" rango={rangos.doh} onRango={onRango}
                         onInfo={() => abrirPorque('doh')}>DOH</Th>
-                    {origenLabel ? (
-                      <>
-                        <Th tip={COL_TIP.origenExist(origenLabel, BODEGA_LABEL[bodega] ?? bodega)}
-                            sortKey="origenExist" orden={orden} onSort={onSort}
-                            filtroKey="origenExist" rango={rangos.origenExist} onRango={onRango}
-                            accent>Exist. {origenLabel}</Th>
-                        <Th tip={COL_TIP.origenDoh(origenLabel, BODEGA_LABEL[bodega] ?? bodega)}
-                            sortKey="origenDoh" orden={orden} onSort={onSort}
-                            filtroKey="origenDoh" rango={rangos.origenDoh} onRango={onRango}
-                            accent>DOH {origenLabel}</Th>
-                      </>
-                    ) : null}
+                    {referencias.map((ref) => {
+                      const sortExist = ref.abastece ? 'origenExist' as const : claveRef(ref.bodega, 'exist');
+                      const sortDoh = ref.abastece ? 'origenDoh' as const : claveRef(ref.bodega, 'doh');
+                      const tipExist = ref.abastece
+                        ? COL_TIP.origenExist(ref.etiqueta, etiquetaBodega(bodega))
+                        : COL_TIP.referenciaExist(ref.etiqueta, etiquetaBodega(bodega));
+                      const tipDoh = ref.abastece
+                        ? COL_TIP.origenDoh(ref.etiqueta, etiquetaBodega(bodega))
+                        : COL_TIP.referenciaDoh(ref.etiqueta);
+                      return (
+                        <Fragment key={ref.bodega}>
+                          <Th tip={tipExist}
+                              sortKey={sortExist} orden={orden} onSort={onSort}
+                              filtroKey={sortExist} rango={rangos[sortExist]} onRango={onRango}
+                              accent>Exist. {ref.etiqueta}</Th>
+                          <Th tip={tipDoh}
+                              sortKey={sortDoh} orden={orden} onSort={onSort}
+                              filtroKey={sortDoh} rango={rangos[sortDoh]} onRango={onRango}
+                              accent>DOH {ref.etiqueta}</Th>
+                        </Fragment>
+                      );
+                    })}
                     <Th tip={COL_TIP.trans} sortKey="trans" orden={orden} onSort={onSort}
                         filtroKey="trans" rango={rangos.trans} onRango={onRango}
                         onInfo={() => abrirPorque('trans')}><span className="inline-flex items-center gap-1">Tránsito <Pencil size={11} /></span></Th>
@@ -1120,6 +1216,7 @@ export function VivoClient({ soloLectura = false }: { soloLectura?: boolean } = 
                     <Th tip={COL_TIP.sug} sortKey="sug" orden={orden} onSort={onSort}
                         filtroKey="sug" rango={rangos.sug} onRango={onRango}
                         onInfo={() => abrirPorque('sug')}>Sugerido</Th>
+                    <Th tip={COL_TIP.aPedir}><span className="inline-flex items-center gap-1">A pedir <Pencil size={11} /></span></Th>
                     <Th tip={COL_TIP.m3}>m³</Th>
                   </tr>
                 </thead>
@@ -1128,6 +1225,7 @@ export function VivoClient({ soloLectura = false }: { soloLectura?: boolean } = 
                 </tbody>
               </table>
             </div>
+            </>
           )}
           <div className="text-xs text-gray-500 px-3 py-2.5 border-t border-gray-100">
             Mostrando <b>{Math.min(MAX_FILAS_RENDER, list.length)}</b> de <b>{list.length}</b> productos
@@ -1874,7 +1972,7 @@ function OrigenCells({
       </>
     );
   }
-  const band = sev(origen.doh, bands);
+  const band = origen.doh === null ? null : sev(origen.doh, bands);
   const pendiente = origen.pending === null ? '¿?' : fmt(origen.pending);
   return (
     <>
@@ -1888,10 +1986,16 @@ function OrigenCells({
         <span className="block text-[11px] text-gray-400 leading-tight">vende {fmt(origen.p3)}/mes</span>
       </td>
       <td className="px-3 py-2 border-b border-gray-100 text-right bg-sky-50/40"
-          title={`${label}: ${fmt(origen.exist)} ÷ (${fmt(origen.p3)} ÷ ${weekdays}) = ${origen.doh.toFixed(1)} días`}>
-        <span className={`inline-block min-w-[44px] text-center px-2 py-0.5 rounded-full font-semibold text-xs ${SEV_PILL[band]}`}>
-          {origen.doh.toFixed(1)}
-        </span>
+          title={origen.doh === null
+            ? `${label}: sin venta ordenada en 3 meses. Los días de inventario no se pueden calcular.`
+            : `${label}: ${fmt(origen.exist)} ÷ (${fmt(origen.p3)} ÷ ${weekdays}) = ${origen.doh.toFixed(1)} días`}>
+        {origen.doh === null ? (
+          <span className="text-amber-600 font-semibold">¿?</span>
+        ) : (
+          <span className={`inline-block min-w-[44px] text-center px-2 py-0.5 rounded-full font-semibold text-xs ${SEV_PILL[band ?? 'ok']}`}>
+            {origen.doh.toFixed(1)}
+          </span>
+        )}
       </td>
     </>
   );
@@ -1935,9 +2039,9 @@ function M3Cell({ sug, volM3 }: { sug: number; volM3: number | null }) {
  * nada. Ese fue el defecto del 26-ago: el archivo se armaba por su cuenta y
  * devolvía otra bodega y códigos de otro proveedor.
  *
- * Las columnas son las de digitación —código, descripción, sugerido— y no toda
- * la tabla: lo que se pega en una orden de compra es eso. El resto de la
- * pantalla es para decidir, no para pegar.
+ * Las columnas son las de digitación —código, descripción, cantidad a pedir—
+ * y no toda la tabla. La cantidad es A pedir cuando la digitó, y el Sugerido
+ * cuando la casilla está vacía. El resto de la pantalla es para decidir.
  */
 function CopiarTabla({ filas, bodega }: { filas: ApiRow[]; bodega: string }) {
   const [copiado, setCopiado] = useState<string | null>(null);
@@ -1946,7 +2050,7 @@ function CopiarTabla({ filas, bodega }: { filas: ApiRow[]; bodega: string }) {
     const tsv = tablaATsv(filas, [
       { encabezado: 'Código', valor: (r: ApiRow) => r.cod },
       { encabezado: 'Descripción', valor: (r: ApiRow) => r.desc },
-      { encabezado: 'Sugerido', valor: (r: ApiRow) => Math.round(r.sug) },
+      { encabezado: 'A pedir', valor: (r: ApiRow) => Math.round(cantidadACubicar(r.sug, r.cantidadPedida)) },
     ]);
     try {
       await navigator.clipboard.writeText(tsv);
@@ -1966,7 +2070,7 @@ function CopiarTabla({ filas, bodega }: { filas: ApiRow[]; bodega: string }) {
         disabled={filas.length === 0}
         className="whitespace-nowrap rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs
                    text-gray-600 hover:bg-gray-50 disabled:opacity-40"
-        title={`Copiar las ${filas.length} filas visibles de ${bodega} para pegarlas en Odoo`}
+        title={`Copiar código, descripción y la cantidad a pedir de las ${filas.length} filas visibles de ${bodega}. Casilla vacía = Sugerido.`}
       >
         Copiar
       </button>

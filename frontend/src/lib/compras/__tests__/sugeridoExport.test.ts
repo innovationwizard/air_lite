@@ -395,6 +395,30 @@ describe('W18 — columnas de la bodega que abastece', () => {
     expect(origen).toContain('Exist. / Ord. 3m / DOH San José');
     expect(origen).toContain('abastece a Zacapa');
   });
+
+  it('con dos bodegas escribe las dos, y el m³ usa A pedir cuando está digitada', () => {
+    const f = fila({
+      sug: 1000,
+      cantidadPedida: 100,
+      volM3: 0.01,
+      referencias: [
+        { etiqueta: 'San José', dato: { exist: 50, p3: 200, doh: 6.5 } },
+        { etiqueta: 'Zona 11', dato: { exist: 8, p3: 0, doh: null } },
+      ],
+    });
+    const hoja = construirHojaSugerido([f], [], ['San José', 'Zona 11']);
+    const h = hoja.columns.map((c) => c.header);
+    const i = h.indexOf('DOH');
+    expect(h.slice(i, i + 7)).toEqual([
+      'DOH', 'Exist. San José', 'Ord. 3m San José', 'DOH San José',
+      'Exist. Zona 11', 'Ord. 3m Zona 11', 'DOH Zona 11',
+    ]);
+    expect(hoja.rows[0][h.indexOf('Sugerido')]).toBe(1000);
+    expect(hoja.rows[0][h.indexOf('A pedir')]).toBe(100);
+    expect(hoja.rows[0][h.indexOf('m³ sugerido')]).toBeCloseTo(1, 10);
+    expect(hoja.rows[0][h.indexOf('DOH Zona 11')]).toBeNull();
+    expect(hoja.rows[0][h.indexOf('Exist. Zona 11')]).toBe(8);
+  });
 });
 
 describe('construirLibroSugerido', () => {

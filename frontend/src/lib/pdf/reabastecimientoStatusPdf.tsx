@@ -195,13 +195,17 @@ function FilaBlock({ f }: { f: SnapshotFila }) {
         Existencia {n(f.exist)} (bruta {n(f.existencias)}, reservada {n(f.reserved)}) · Patio {n(f.patio)} ·
         {' '}Pendiente {f.pending === null ? 'desconocido' : n(f.pending)} · Tránsito {n(f.trans)}
         {f.transOverridden ? ' (capturado a mano)' : ''} · DOH {n(f.doh, 1)}
-        {f.origen
-          ? ` · Bodega que abastece: exist. ${n(f.origen.exist)}${f.origen.pending === null ? ' (pendiente sin dato)' : ''}`
-            + ` · vende ${n(f.origen.p3)}/mes · DOH ${n(f.origen.doh, 1)}`
-          : ''}
+        {(f.referencias && f.referencias.length)
+          ? f.referencias.map((ref) => ref.dato
+            ? ` · ${ref.etiqueta}: exist. ${n(ref.dato.exist)} · vende ${n(ref.dato.p3)}/mes · DOH ${ref.dato.doh === null ? 'no calculable' : n(ref.dato.doh, 1)}`
+            : ` · ${ref.etiqueta}: sin fila`).join('')
+          : f.origen
+            ? ` · Bodega que abastece: exist. ${n(f.origen.exist)}${f.origen.pending === null ? ' (pendiente sin dato)' : ''}`
+              + ` · vende ${n(f.origen.p3)}/mes · DOH ${f.origen.doh === null ? 'no calculable' : n(f.origen.doh, 1)}`
+            : ''}
       </Text>
       <Text style={styles.statLine}>
-        Sugerido {n(f.sug)} · Adicional {n(f.adic)} (comercial {n(f.adicComercial)}) ·
+        Sugerido {n(f.sug)} · A pedir {f.cantidadPedida == null ? '—' : n(f.cantidadPedida)} · Adicional {n(f.adic)} (comercial {n(f.adicComercial)}) ·
         {' '}Sugerido bodega {f.sugBodega === null ? '—' : n(f.sugBodega)}
         {f.destino ? ` · Destino ${f.destino}${f.destinoProvisional ? ' (provisional)' : ''}` : ''}
       </Text>

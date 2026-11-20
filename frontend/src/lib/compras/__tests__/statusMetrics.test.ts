@@ -41,6 +41,19 @@ describe('computeKpis', () => {
     expect(k.sinCubicaje).toBe(2);
     expect(k.need).toBe(3);
   });
+
+  it('a typed quantity replaces the Sugerido in the m³ total, including a line the formula would skip', () => {
+    const list = [
+      fila({ sug: 1000, volM3: 0.0042, cantidadPedida: 100 }),
+      fila({ sug: 0, volM3: 1, cantidadPedida: 3 }),
+      fila({ sug: 10, volM3: 1, cantidadPedida: 0 }),
+    ];
+    const k = computeKpis(list);
+    expect(k.m3Sug).toBeCloseTo(0.42 + 3, 10);
+    expect(k.sinCubicaje).toBe(0);
+    expect(k.need).toBe(2);
+    expect(k.totSug).toBe(1010);
+  });
 });
 
 describe('computeAlza', () => {

@@ -28,8 +28,8 @@ def main():
     issues = Issues()
     execute = _connect_once(1)
 
-    bodega_codes = load_bodega_map(issues)
-    print(f'bodega_map: {bodega_codes}')
+    bodega_codes, referencia_codes = load_bodega_map(issues)
+    print(f'bodega_map: {bodega_codes}; referencia: {referencia_codes}')
 
     # `product_map` tal como lo deja `sync_catalog`: {str(odoo_id): id_nuestro}.
     # Se arma leyendo `products` en vez de correr el sync, que escribe.

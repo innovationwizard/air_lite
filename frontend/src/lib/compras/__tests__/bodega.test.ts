@@ -1,4 +1,4 @@
-import { ordenarBodegas, ordenarAreas, BODEGA_LABEL, bodegaTienePatio, patioDeBodega } from '../bodega';
+import { ordenarBodegas, ordenarAreas, BODEGA_LABEL, bodegaTienePatio, patioDeBodega, bodegasReferencia, esBodegaSinPestana } from '../bodega';
 
 describe('ordenarBodegas', () => {
   it('reorders to the canonical General → San José → Zacapa → Petén sequence', () => {
@@ -78,5 +78,25 @@ describe('ordenarAreas', () => {
     const copy = [...input];
     ordenarAreas(input);
     expect(input).toEqual(copy);
+  });
+});
+
+describe('bodegas de referencia', () => {
+  it('shows Zacapa and then San José while working in Petén', () => {
+    expect(bodegasReferencia('Petén')).toEqual(['Zacapa', 'San Jose VN']);
+  });
+
+  it('shows San José and then Zona 11 while working in Zacapa', () => {
+    expect(bodegasReferencia('Zacapa')).toEqual(['San Jose VN', 'Zona 11']);
+  });
+
+  it('gives General and San José no extra warehouse columns', () => {
+    expect(bodegasReferencia('General')).toEqual([]);
+    expect(bodegasReferencia('San Jose VN')).toEqual([]);
+  });
+
+  it('keeps Zona 11 off the tab strip', () => {
+    expect(esBodegaSinPestana('Zona 11')).toBe(true);
+    expect(esBodegaSinPestana('Zacapa')).toBe(false);
   });
 });

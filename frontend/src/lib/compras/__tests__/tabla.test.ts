@@ -1,7 +1,7 @@
 import {
   compararPorDefecto, dirInicial, esTexto, filtrar, ordenar, siguienteOrden, vista,
   tablaATsv, grupoFiltroValor,
-  claveCanal, esClaveCanal, slugDeClaveCanal, valorNumerico,
+  claveCanal, esClaveCanal, slugDeClaveCanal, valorNumerico, claveRef,
   type FilaOrdenable,
 } from '../tabla';
 
@@ -211,6 +211,34 @@ describe('W18 — columnas de la bodega que abastece', () => {
   it('las claves nuevas son numéricas y arrancan descendentes', () => {
     expect(esTexto('origenExist')).toBe(false);
     expect(dirInicial('origenDoh')).toBe('desc');
+  });
+});
+
+describe('columnas de otra bodega', () => {
+  const filas = [
+    fila({
+      cod: 'A',
+      referencias: [{ bodega: 'Zona 11', dato: { exist: 10, doh: 4 } }],
+    }),
+    fila({
+      cod: 'B',
+      referencias: [{ bodega: 'Zona 11', dato: null }],
+    }),
+    fila({
+      cod: 'C',
+      referencias: [{ bodega: 'Zona 11', dato: { exist: 80, doh: null } }],
+    }),
+  ];
+
+  it('ordena por existencia de Zona 11 y manda al final la fila que no está allá', () => {
+    expect(ordenar(filas, { clave: claveRef('Zona 11', 'exist'), dir: 'desc' }).map((f) => f.cod))
+      .toEqual(['C', 'A', 'B']);
+  });
+
+  it('un DOH no calculable se ordena como sin dato, no como cero', () => {
+    expect(valorNumerico(filas[2], claveRef('Zona 11', 'doh'))).toBeNull();
+    expect(ordenar(filas, { clave: claveRef('Zona 11', 'doh'), dir: 'asc' }).map((f) => f.cod))
+      .toEqual(['A', 'B', 'C']);
   });
 });
 

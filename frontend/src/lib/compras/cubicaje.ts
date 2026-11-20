@@ -20,6 +20,16 @@
  * como completa. Siguen abiertas la verificación de unidad y la remedición de
  * las bolsas (O7); ambas se declaran donde se muestra la suma.
  */
+/**
+ * Cantidad que entra al cubicaje, a la copia y al m³.
+ *
+ * Casilla vacía (`null`) = el Sugerido calculado. Un número digitado es la
+ * cantidad de esa línea. No modifica el Sugerido.
+ */
+export function cantidadACubicar(sug: number, pedida: number | null | undefined): number {
+  return pedida == null ? sug : pedida;
+}
+
 export function m3Sugerido(sug: number, volM3: number | null): number | null {
   if (typeof volM3 !== 'number' || !Number.isFinite(volM3) || volM3 <= 0) return null;
   if (!Number.isFinite(sug)) return null;

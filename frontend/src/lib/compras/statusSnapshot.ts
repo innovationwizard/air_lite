@@ -13,7 +13,7 @@
  * se eliminó el 2026-09-07 junto con las rutas /export.)
  */
 import {
-  esClaseAbc,
+  esClaseAbc, esClaveRef,
   type ClaveOrden, type ClaveOrdenNumerica, type Filtros, type FiltroRango, type Orden, type OperadorRango,
 } from './tabla';
 
@@ -29,10 +29,10 @@ const MAX_TEXTO_LEN = 200;
 const MAX_PROVEEDOR_LEN = 200;
 
 function isClaveOrden(v: unknown): v is ClaveOrden {
-  return typeof v === 'string' && (CLAVES_ORDEN as readonly string[]).includes(v);
+  return typeof v === 'string' && ((CLAVES_ORDEN as readonly string[]).includes(v) || esClaveRef(v));
 }
 function isClaveNumerica(v: string): v is ClaveOrdenNumerica {
-  return (CLAVES_NUMERICAS as readonly string[]).includes(v);
+  return (CLAVES_NUMERICAS as readonly string[]).includes(v) || esClaveRef(v);
 }
 
 /** `null` is a legal value (D-4/D-5 in tabla.ts: null = the default order). */

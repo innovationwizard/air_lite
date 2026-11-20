@@ -44,11 +44,18 @@ export interface SnapshotFila {
   tendencia: { estado: string; alzaPct: number | null; motivo: string | null; meses: { month: string; qty: number }[] };
   alerta: { estado: string; motivo: string | null };
   doh: number; sug: number;
+  /** Cantidad digitada para cubicar. Ausente en snapshots anteriores. */
+  cantidadPedida?: number | null;
   /**
    * W18 (2026-09-11) — la bodega que abastece, en sus cifras. Los snapshots
    * congelados antes no lo traen; null = sin origen o sin fila allá.
    */
-  origen?: { exist: number; p3: number; doh: number; pending: number | null } | null;
+  origen?: { exist: number; p3: number; doh: number | null; pending: number | null } | null;
+  /** Inventario de otras bodegas en esta pestaña. Ausente en snapshots anteriores. */
+  referencias?: {
+    etiqueta: string;
+    dato: { exist: number; p3: number; doh: number | null } | null;
+  }[];
   flags: {
     pendingUnknown: boolean; seasonalLowConfidence: boolean; seasonalExcluded: boolean;
     tendenciaCreciente: boolean; revisar: boolean; sinReferenciaAnioAnterior: boolean;

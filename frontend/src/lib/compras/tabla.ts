@@ -36,7 +36,12 @@ export interface FilaOrdenable {
   mtd: number | null;
   sug: number;
   /** W18 — la bodega que abastece; null = sin origen o el producto no está allá. */
-  origen: { exist: number; doh: number } | null;
+  origen: { exist: number; doh: number | null } | null;
+  /**
+   * Inventario de otras bodegas en esta pestaña. `dato` null = el producto
+   * no está allá. `doh` null = no hay venta ordenada y los días no se calculan.
+   */
+  referencias?: { bodega: string; dato: { exist: number; doh: number | null } | null }[];
   /** ABC (Wilmer, 2026-09-03) — ordenable y filtrable desde 2026-09-11: «no puedo ordenar o filtrar ABC». */
   abc: ClaseAbc;
   /**
@@ -67,7 +72,9 @@ export type ClaveOrden =
   // traslado?»; sin dato (sin origen) va al final, como todo null.
   | 'origenExist' | 'origenDoh'
   // Un canal comercial: `canal:<slug>` — ver `claveCanal`.
-  | ClaveCanal;
+  | ClaveCanal
+  // Inventario de otra bodega en esta pestaña: `ref:<bodega>:exist|doh`.
+  | ClaveRef;
 
 /**
  * La columna de UN canal comercial (Wilmer, 2026-09-25: «que cada columna de
@@ -83,8 +90,23 @@ export type ClaveOrden =
  * El prefijo NO puede chocar con una clave fija: ninguna lleva dos puntos.
  */
 export type ClaveCanal = `canal:${string}`;
+export type ClaveRef = `ref:${string}`;
 
 export const claveCanal = (slug: string): ClaveCanal => `canal:${slug}`;
+
+export function claveRef(bodega: string, campo: 'exist' | 'doh'): ClaveRef {
+  return `ref:${bodega}:${campo}`;
+}
+
+export function parseClaveRef(clave: string): { bodega: string; campo: 'exist' | 'doh' } | null {
+  const m = /^ref:([^:]+):(exist|doh)$/.exec(clave);
+  if (!m) return null;
+  return { bodega: m[1], campo: m[2] as 'exist' | 'doh' };
+}
+
+export function esClaveRef(clave: string): clave is ClaveRef {
+  return parseClaveRef(clave) !== null;
+}
 
 export function esClaveCanal(clave: ClaveOrden): clave is ClaveCanal {
   return clave.startsWith('canal:');
@@ -157,6 +179,12 @@ export function valorNumerico(f: FilaOrdenable, clave: ClaveOrden): number | nul
     case 'origenExist': return f.origen?.exist ?? null;
     case 'origenDoh': return f.origen?.doh ?? null;
     default: {
+      const ref = parseClaveRef(clave);
+      if (ref) {
+        const hit = f.referencias?.find((r) => r.bodega === ref.bodega);
+        if (!hit?.dato) return null;
+        return ref.campo === 'exist' ? hit.dato.exist : hit.dato.doh;
+      }
       // Un canal: lo que ENTRA al pedido (`directo`), que es lo que muestra la
       // celda en grande y lo que suma `adic`. Lo que va «a revisión» se ve
       // debajo en gris y NO se ordena: no entra al pedido, y ordenar por él

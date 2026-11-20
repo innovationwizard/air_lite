@@ -49,7 +49,7 @@
  * — la mitad de D2 era eso.
  */
 import { type SheetSpec } from '@/lib/xlsx/writer';
-import { m3Sugerido, sinCubicaje } from '@/lib/compras/cubicaje';
+import { cantidadACubicar, m3Sugerido, sinCubicaje } from '@/lib/compras/cubicaje';
 import { type Alerta, type Tendencia } from '@/lib/compras/tendencia';
 import { type ClaveOrden, type Filtros, type Orden } from '@/lib/compras/tabla';
 
@@ -82,6 +82,11 @@ export interface FilaExport {
   sugBodega: number | null;
   sug: number;
   /**
+   * Cantidad digitada para cubicar. null o ausente = la casilla está vacía
+   * y el m³ usa el Sugerido.
+   */
+  cantidadPedida?: number | null;
+  /**
    * m³ por unidad (`products.volume_m3`, sincronizado de `product.volume` de
    * Odoo). null = sin medir — ver el bloque m³ abajo.
    */
@@ -89,9 +94,17 @@ export interface FilaExport {
   /**
    * W18 — la bodega que abastece a ésta (Zacapa ← San José, Petén ← Zacapa),
    * en sus propias cifras. undefined/null = sin origen o sin fila allá; las
-   * columnas sólo se emiten cuando `ContextoExport.bodegaOrigenLabel` existe.
+   * columnas sólo se emiten cuando hay etiqueta de origen.
    */
-  origen?: { exist: number; p3: number; doh: number } | null;
+  origen?: { exist: number; p3: number; doh: number | null } | null;
+  /**
+   * Inventario de otras bodegas, en el mismo orden que las etiquetas.
+   * `dato` null = el producto no está en esa bodega.
+   */
+  referencias?: {
+    etiqueta: string;
+    dato: { exist: number; p3: number; doh: number | null } | null;
+  }[];
 }
 
 export interface ContextoExport {
@@ -103,6 +116,11 @@ export interface ContextoExport {
   bodegaDetalle?: string;
   /** W18 — cómo se llama la bodega que abastece a ésta, p. ej. 'San José'; ausente si no hay. */
   bodegaOrigenLabel?: string | null;
+  /**
+   * Etiquetas de las bodegas cuyas columnas van en el archivo, en orden.
+   * Ausente = usar `bodegaOrigenLabel` si existe.
+   */
+  etiquetasReferencia?: readonly string[] | null;
   /** La etiqueta del filtro de proveedor, ya resuelta (grupo → su nombre). */
   proveedorLabel: string;
   filtros: Filtros;
@@ -264,11 +282,16 @@ export const COLUMNAS_SUGERIDO: readonly {
   { header: 'Tendencia', width: 12, type: 'text', valor: (f) => etiquetaTendencia(f.tendencia, f.alerta) },
   { header: 'Pide bodega', width: 12, type: 'number', valor: (f) => f.sugBodega },
   { header: 'Sugerido', width: 12, type: 'number', valor: (f) => f.sug },
-  // El m³ por unidad va al lado del total a propósito: en cuanto él cambie el
-  // Sugerido para partir la orden, el m³ de la fila queda viejo. Con el
-  // unitario al lado lo recalcula; sin él, el número que quedó miente.
+  // Vacío = no digitó: el cubicaje y la copia usan el Sugerido. Un número
+  // es la cantidad de esa línea y no cambia la columna Sugerido.
+  { header: 'A pedir', width: 12, type: 'number', valor: (f) => f.cantidadPedida ?? null },
+  // El m³ por unidad va al lado del total a propósito: en cuanto él cambie
+  // la cantidad para partir la orden, puede recubicar con el unitario.
   { header: 'm³ x unidad', width: 12, type: 'decimal4', valor: (f) => f.volM3 },
-  { header: 'm³ sugerido', width: 12, type: 'decimal4', valor: (f) => m3Sugerido(f.sug, f.volM3) },
+  {
+    header: 'm³ sugerido', width: 12, type: 'decimal4',
+    valor: (f) => m3Sugerido(cantidadACubicar(f.sug, f.cantidadPedida), f.volM3),
+  },
 ];
 
 /**
@@ -296,9 +319,9 @@ export const COLUMNAS_SUGERIDO: readonly {
  */
 export function columnasSugerido(
   areas: readonly { slug: string; nombre: string }[] = [],
-  bodegaOrigenLabel: string | null = null,
+  bodegaOrigenLabel: string | readonly string[] | null = null,
 ): typeof COLUMNAS_SUGERIDO {
-  const base = columnasConOrigen(bodegaOrigenLabel);
+  const base = columnasConReferencias(etiquetasDe(bodegaOrigenLabel));
   if (areas.length === 0) return base;
   const i = base.findIndex((c) => c.header === 'Adicionales');
   const porCanal = areas.flatMap((a) => [
@@ -314,27 +337,48 @@ export function columnasSugerido(
   return [...base.slice(0, i), ...porCanal, ...base.slice(i)];
 }
 
+function etiquetasDe(etiquetas: string | readonly string[] | null | undefined): string[] {
+  if (etiquetas == null) return [];
+  return typeof etiquetas === 'string' ? [etiquetas] : [...etiquetas];
+}
+
+function datoReferencia(f: FilaExport, etiqueta: string, etiquetas: readonly string[]) {
+  const hit = f.referencias?.find((r) => r.etiqueta === etiqueta);
+  if (hit) return hit.dato;
+  if (etiquetas.length === 1) return f.origen ?? null;
+  return null;
+}
+
 /**
- * W18 — las columnas de la bodega que ABASTECE, justo después del DOH propio
- * y sólo cuando la bodega tiene origen (Zacapa ← San José, Petén ← Zacapa).
- * Mismo lugar que en pantalla. VACÍO = el producto no existe en esa bodega,
- * nunca 0: «no está en San José» y «San José tiene 0» son decisiones distintas.
+ * Columnas de las bodegas que se ven al lado, justo después del DOH propio.
+ * Una etiqueta (el abastecedor) lee `origen` cuando la fila no trae la lista.
+ * Varias etiquetas leen `referencias`, en el mismo orden.
+ * VACÍO = el producto no está en esa bodega, nunca 0.
  */
-function columnasConOrigen(label: string | null): typeof COLUMNAS_SUGERIDO {
-  if (!label) return COLUMNAS_SUGERIDO;
+function columnasConReferencias(labels: readonly string[]): typeof COLUMNAS_SUGERIDO {
+  if (labels.length === 0) return COLUMNAS_SUGERIDO;
   const i = COLUMNAS_SUGERIDO.findIndex((c) => c.header === 'DOH');
-  const origen = [
-    { header: `Exist. ${label}`, width: 13, type: 'number' as const, valor: (f: FilaExport) => f.origen?.exist ?? null },
-    { header: `Ord. 3m ${label}`, width: 13, type: 'number' as const, valor: (f: FilaExport) => f.origen?.p3 ?? null },
-    { header: `DOH ${label}`, width: 11, type: 'decimal1' as const, valor: (f: FilaExport) => f.origen?.doh ?? null },
-  ];
-  return [...COLUMNAS_SUGERIDO.slice(0, i + 1), ...origen, ...COLUMNAS_SUGERIDO.slice(i + 1)];
+  const extras = labels.flatMap((label) => [
+    {
+      header: `Exist. ${label}`, width: 13, type: 'number' as const,
+      valor: (f: FilaExport) => datoReferencia(f, label, labels)?.exist ?? null,
+    },
+    {
+      header: `Ord. 3m ${label}`, width: 13, type: 'number' as const,
+      valor: (f: FilaExport) => datoReferencia(f, label, labels)?.p3 ?? null,
+    },
+    {
+      header: `DOH ${label}`, width: 11, type: 'decimal1' as const,
+      valor: (f: FilaExport) => datoReferencia(f, label, labels)?.doh ?? null,
+    },
+  ]);
+  return [...COLUMNAS_SUGERIDO.slice(0, i + 1), ...extras, ...COLUMNAS_SUGERIDO.slice(i + 1)];
 }
 
 export function construirHojaSugerido(
   filas: readonly FilaExport[],
   areas: readonly { slug: string; nombre: string }[] = [],
-  bodegaOrigenLabel: string | null = null,
+  bodegaOrigenLabel: string | readonly string[] | null = null,
 ): SheetSpec {
   const columnas = columnasSugerido(areas, bodegaOrigenLabel);
   return {
@@ -387,6 +431,11 @@ export function construirHojaOrigen(
       + 'Es el MISMO número que estaba en la columna Sugerido de la pantalla: '
       + 'este archivo no recalcula nada ni propone cantidades propias.',
     ],
+    [
+      'A pedir',
+      'La cantidad digitada para cubicar esa línea. Vacío = no digitó, y el m³ '
+      + 'de la fila usa el Sugerido. Un número no cambia el Sugerido.',
+    ],
     ['Sugerido cubre', `${ctx.coberturaDias} días de demanda en ${ctx.bodegaLabel}`],
   );
   if (ctx.bodegaOrigenLabel) {
@@ -396,6 +445,15 @@ export function construirHojaOrigen(
       + 'tal como se ven en su propia pestaña (exist. neta = existencias − reservado − pendiente '
       + 'en vivo; DOH con el mismo motor). Para decidir comprar o trasladar. '
       + 'VACÍO = el producto no existe en esa bodega, no es cero.',
+    ]);
+  }
+  const extras = (ctx.etiquetasReferencia ?? []).filter((e) => e !== ctx.bodegaOrigenLabel);
+  if (extras.length) {
+    rows.push([
+      `Exist. / Ord. 3m / DOH ${extras.join(' / ')}`,
+      `Inventario y días de inventario de ${extras.join(' y ')} mientras se trabaja ${ctx.bodegaLabel}, `
+      + 'para ver si hay existencia que trasladar antes de comprar. '
+      + 'VACÍO = el producto no está en esa bodega. DOH vacío = no hay venta ordenada y los días no se calculan.',
     ]);
   }
   rows.push(
@@ -478,7 +536,11 @@ export function construirLibroSugerido(
   areas: readonly { slug: string; nombre: string }[] = [],
 ): SheetSpec[] {
   return [
-    construirHojaSugerido(filas, areas, ctx.bodegaOrigenLabel ?? null),
+    construirHojaSugerido(
+      filas,
+      areas,
+      ctx.etiquetasReferencia ?? ctx.bodegaOrigenLabel ?? null,
+    ),
     construirHojaOrigen(filas, ctx),
   ];
 }

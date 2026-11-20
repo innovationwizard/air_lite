@@ -15,6 +15,10 @@ Design decisions (docs/compras/REABASTECIMIENTO_LIVE_PROGRESS.md B2):
     the 07-28 "también patio, todo" answer (Jorge 2026-08-11: latest
     transcript wins — I6). The page tooltips state this composition so any
     disagreement surfaces as a bug report, not a silent mismatch.
+  - CD Zona 11 (2Z11, bodega 'Zona 11', in_scope false) is a REFERENCE: stock
+    and ordered sales are synced so the Zacapa tab can show them. It is not a
+    purchasing tab. Transit for PO-PZ11- stays unmapped. Tienda Zona 11 stays
+    on San José.
   - Patio = 1CET/Entrada only, and only on San José and General. Zacapa and
     Petén store 0 (Wilmer 2026-09-29: the Central yard was still showing on
     those tabs). Other */Entrada locations are receiving steps, not the yard.
@@ -138,11 +142,11 @@ CD_JOURNAL_TO_WH = {
 # as they do not have warehouse space». No llevan existencias propias, así que su
 # OC es demanda de San José y no una bodega nueva.
 #
-# `PO-PZ11-` (Centro de Distribución Zona 11) NO está acá A PROPÓSITO: es un CD,
-# no una tienda, así que el razonamiento de las tiendas no le aplica y Jorge no
-# lo ha decidido. Sin fila acá cae en la cubeta reportada — que es exactamente
-# donde ya estaba (su almacén 2Z11 tampoco está en bodega_map), así que dejarlo
-# abierto no mueve ningún número. Medido 2026-09-08: 2,947 unidades pendientes.
+# `PO-PZ11-` (Centro de Distribución Zona 11) NO entra al tránsito A
+# PROPÓSITO. El CD sí se sincroniza como bodega de REFERENCIA (`bodega` =
+# 'Zona 11', `in_scope` false): existencias y venta ordenada, para las
+# columnas de la pestaña Zacapa (Wilmer 2026-11-19). No es pestaña, no suma
+# al pendiente de General, y Tienda Zona 11 sigue en San José (`PO-PT11-`).
 SUCURSAL_PREFIX_TO_WH = {
     'PO-P-': '1CET',        # Centro de Distribución Central (San José VN)
     'PO-PE-': '3PET',       # Centro de Distribución Peten
@@ -330,17 +334,43 @@ class Issues:
 
 # ─── Sync steps ───────────────────────────────────────────────────────────────
 
-def load_bodega_map(issues):
-    """bodega name -> list of Odoo warehouse codes (in_scope only)."""
-    rows = sb_get_all('bodega_map?select=odoo_warehouse_code,bodega,in_scope')
-    by_bodega = {}
+# Bodegas whose stock and ordered sales are synced for columns on another
+# tab. They are not purchasing bodegas: transit and invoiced stay on the
+# purchasing map, and General's pending does not include them.
+REFERENCIA_BODEGAS = frozenset({'Zona 11'})
+
+
+def split_bodega_map(rows):
+    """Split bodega_map rows into purchasing bodegas and reference bodegas.
+
+    A reference name (CD Zona 11) is taken out even if `in_scope` is true, so
+    it cannot become a purchasing tab by a flag flip. Rows that are neither
+    in scope nor a reference are dropped.
+    """
+    purchasing = {}
+    referencia = {}
     for r in rows:
-        if r['in_scope']:
-            by_bodega.setdefault(r['bodega'], []).append(r['odoo_warehouse_code'])
-    if not by_bodega:
+        code = r.get('odoo_warehouse_code')
+        nombre = r.get('bodega')
+        if not code or not nombre:
+            continue
+        if nombre in REFERENCIA_BODEGAS:
+            referencia.setdefault(nombre, []).append(code)
+            continue
+        if r.get('in_scope'):
+            purchasing.setdefault(nombre, []).append(code)
+    return purchasing, referencia
+
+
+def load_bodega_map(issues):
+    """(purchasing, referencia). Purchasing is in_scope bodegas. Referencia
+    is stock and ordered sales for columns on another tab."""
+    rows = sb_get_all('bodega_map?select=odoo_warehouse_code,bodega,in_scope')
+    purchasing, referencia = split_bodega_map(rows)
+    if not purchasing:
         issues.add('error', 'bodega_map', 'bodega_map is empty — cannot sync')
-    logger.info('bodega_map: %s', by_bodega)
-    return by_bodega
+    logger.info('bodega_map: %s; referencia: %s', purchasing, referencia)
+    return purchasing, referencia
 
 
 def resolve_locations(execute, issues):
@@ -967,6 +997,12 @@ def sync_velocity(execute, bodega_codes, wh_ids_by_code, issues, uom_ctx):
         base = [['state', 'in', ORDERED_STATES]]
         if codes is not None:
             wh_ids = [wh_ids_by_code[c] for c in codes if c in wh_ids_by_code]
+            if not wh_ids:
+                issues.add('warning', 'sales',
+                           f'{bodega}: ningún código de almacén resolvió a un id — '
+                           f'venta ordenada vacía ({codes})')
+                result[bodega] = {}
+                continue
             base.append(['warehouse_id', 'in', wh_ids])
         q6 = grouped(base + [['order_id.date_order', '>=', str(start6)],
                              ['order_id.date_order', '<', str(end)]])
@@ -1903,7 +1939,7 @@ def main():
         logger.info('sync_run %s started', sync_id)
 
     try:
-        bodega_codes = load_bodega_map(issues)
+        bodega_codes, referencia_codes = load_bodega_map(issues)
         by_name = resolve_locations(execute, issues)
         whs = execute('stock.warehouse', 'search_read', [], fields=['id', 'code'])
         wh_ids_by_code = {w['code']: w['id'] for w in whs}
@@ -1911,8 +1947,13 @@ def main():
         product_map, sku_to_opid, n_odoo_products, n_inserted, sin_codigo = sync_catalog(
             execute, issues, dry_run)
         uom_ctx = load_uom_context(execute)
-        stock = sync_stock(execute, by_name, bodega_codes, issues)
-        velocity = sync_velocity(execute, bodega_codes, wh_ids_by_code, issues, uom_ctx)
+        # Referencia (Zona 11) entra a existencias y a venta ordenada. Tránsito
+        # y facturado se quedan en las bodegas de compra.
+        stock_codes = dict(bodega_codes)
+        for nombre, codes in referencia_codes.items():
+            stock_codes.setdefault(nombre, []).extend(codes)
+        stock = sync_stock(execute, by_name, stock_codes, issues)
+        velocity = sync_velocity(execute, stock_codes, wh_ids_by_code, issues, uom_ctx)
         seasonal = sync_seasonal(execute, sku_to_opid, issues)
         transit, transito_detalle = sync_transit(execute, issues, bodega_codes)
         invoiced, tiendas = sync_invoiced(execute, bodega_codes, issues, uom_ctx)

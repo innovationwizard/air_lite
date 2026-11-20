@@ -6,15 +6,23 @@
  * synced inputs.
  */
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { esBodegaSinPestana } from '@/lib/compras/bodega';
 import { fetchAll } from '@/lib/supabase/paginado';
 
 export const GENERAL_BODEGA = 'General';
 
-/** Known bodega names = bodega_map values + the General display aggregate. */
+/**
+ * Pestañas de compra = bodega_map + General.
+ * Zona 11 está en el mapa como referencia y no es una pestaña.
+ */
 export async function knownBodegas(service: SupabaseClient): Promise<string[]> {
   const { data, error } = await service.from('bodega_map').select('bodega');
   if (error) throw new Error(error.message);
-  const set = new Set<string>((data ?? []).map((r: { bodega: string }) => r.bodega));
+  const set = new Set<string>(
+    (data ?? [])
+      .map((r: { bodega: string }) => r.bodega)
+      .filter((b: string) => !esBodegaSinPestana(b)),
+  );
   set.add(GENERAL_BODEGA);
   return [...set];
 }

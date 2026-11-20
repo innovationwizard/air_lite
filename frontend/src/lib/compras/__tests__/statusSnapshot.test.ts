@@ -72,6 +72,13 @@ describe('readSnapshotOrden', () => {
       .toEqual({ rangos: { origenExist: { operador: 'gte', valor: 100 } } });
   });
 
+  it('accepts a reference-warehouse column, so sorting by Zona 11 round-trips', () => {
+    expect(readSnapshotOrden({ clave: 'ref:Zona 11:doh', dir: 'desc' }))
+      .toEqual({ clave: 'ref:Zona 11:doh', dir: 'desc' });
+    expect(readSnapshotFiltros({ rangos: { 'ref:San Jose VN:exist': { operador: 'gte', valor: 10 } } }))
+      .toEqual({ rangos: { 'ref:San Jose VN:exist': { operador: 'gte', valor: 10 } } });
+  });
+
   it('rejects a dir that is not asc/desc', () => {
     expect(readSnapshotOrden({ clave: 'doh', dir: 'up' })).toMatch(/dir/);
   });

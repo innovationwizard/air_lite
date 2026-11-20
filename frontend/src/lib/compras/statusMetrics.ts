@@ -11,7 +11,7 @@
  *
  * Pure, no DOM/React dependency — usable from a Next.js route handler.
  */
-import { m3Sugerido } from '@/lib/compras/cubicaje';
+import { cantidadACubicar, m3Sugerido } from '@/lib/compras/cubicaje';
 import { DOH_BANDS, type DohBands } from '@/lib/compras/reabastecimientoEngine';
 
 /** The minimal shape either the client's `ApiRow` or the server's `LiveRow` satisfies. */
@@ -19,6 +19,11 @@ export interface FilaMetrica {
   prov: string;
   doh: number;
   sug: number;
+  /**
+   * Cantidad digitada para cubicar. null o ausente = esa línea sigue siendo
+   * el Sugerido. El total de m³ usa esta cantidad.
+   */
+  cantidadPedida?: number | null;
   /** m³ por unidad. null = sin medir — nunca 0 (ver lib/compras/cubicaje.ts). */
   volM3: number | null;
   flags: { tendenciaCreciente: boolean };
@@ -31,13 +36,11 @@ export interface Kpis {
   totSug: number;
   crit: number;
   /**
-   * W21 (Wilmer, 2026-08-26) — m³ of the Sugerido, summed over the rows that
-   * need buying. Products WITHOUT a measured volume contribute nothing and are
-   * counted in `sinCubicaje` instead, so the total can never be read as
-   * complete when it is not: he books furgones against this number.
+   * m³ de la carga que está cubicando: A pedir cuando la digitó, si no el
+   * Sugerido. Sin volumen medido no suma y cuenta en `sinCubicaje`.
    */
   m3Sug: number;
-  /** Rows with sug > 0 and no measured m³ — the holes in `m3Sug`. */
+  /** Filas con cantidad a cubicar > 0 y sin m³ medido. */
   sinCubicaje: number;
 }
 
@@ -46,8 +49,10 @@ export function computeKpis(list: readonly FilaMetrica[], bands: DohBands = DOH_
   const need = list.filter((r) => r.sug > 0);
   let m3Sug = 0;
   let sinCubicaje = 0;
-  for (const r of need) {
-    const m3 = m3Sugerido(r.sug, r.volM3);
+  for (const r of list) {
+    const qty = cantidadACubicar(r.sug, r.cantidadPedida);
+    if (qty <= 0) continue;
+    const m3 = m3Sugerido(qty, r.volM3);
     if (m3 === null) sinCubicaje += 1; else m3Sug += m3;
   }
   return {
