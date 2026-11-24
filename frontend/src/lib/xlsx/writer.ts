@@ -18,7 +18,11 @@
  *
  * ZIP uses STORE (no compression). It is a valid ZIP that Excel, LibreOffice
  * and openpyxl all open; DEFLATE would only shrink a file that is already a
- * few KB, at the cost of shipping an compressor.
+ * few KB, at the cost of shipping an compressor. The bytes are copied with
+ * `Uint8Array.set`. Spreading a part into `push(...)` is one argument per
+ * byte, and that call throws `Maximum call stack size exceeded` once the
+ * sheet is about 120 KB — around 100 rows of the Sugerido (Wilmer, 2026-11-24,
+ * exporting Zacapa).
  *
  * VERIFIED, not assumed: on 2026-08-21 the output was generated and read back
  * with openpyxl (a real OOXML reader, not this code's own idea of the format) —
@@ -223,7 +227,7 @@ function utf8(s: string): Uint8Array {
   return new TextEncoder().encode(s);
 }
 
-interface ZipEntry { name: string; data: Uint8Array; crc: number }
+interface ZipEntry { nameBytes: Uint8Array; data: Uint8Array; crc: number }
 
 /**
  * Fixed DOS timestamp (1980-01-01) so the same input always produces byte-identical
@@ -232,52 +236,105 @@ interface ZipEntry { name: string; data: Uint8Array; crc: number }
 const DOS_TIME = 0;
 const DOS_DATE = 33; // (1980-1980)<<9 | 1<<5 | 1
 
-function u16(v: number): number[] { return [v & 0xff, (v >>> 8) & 0xff]; }
-function u32(v: number): number[] {
-  return [v & 0xff, (v >>> 8) & 0xff, (v >>> 16) & 0xff, (v >>> 24) & 0xff];
+/** Local file header, central-directory header, end-of-central-directory. No extra, no comment. */
+const LOCAL_HEADER = 30;
+const CENTRAL_HEADER = 46;
+const END_RECORD = 22;
+
+function putU16(out: Uint8Array, offset: number, v: number): number {
+  out[offset] = v & 0xff;
+  out[offset + 1] = (v >>> 8) & 0xff;
+  return offset + 2;
 }
 
+function putU32(out: Uint8Array, offset: number, v: number): number {
+  out[offset] = v & 0xff;
+  out[offset + 1] = (v >>> 8) & 0xff;
+  out[offset + 2] = (v >>> 16) & 0xff;
+  out[offset + 3] = (v >>> 24) & 0xff;
+  return offset + 4;
+}
+
+/**
+ * STORE zip of the given parts, in order.
+ *
+ * Each part is copied with `set` into one buffer sized up front. A spread
+ * (`push(...bytes)`, `new Uint8Array([...bytes])`) turns every byte into a
+ * function argument. That is what threw on the Zacapa export: the worksheet
+ * XML crossed the engine's argument limit and the click handler surfaced
+ * `Maximum call stack size exceeded`. Header fields are unchanged, so a small
+ * workbook stays byte-identical to the writer this replaced.
+ */
 export function zip(files: { name: string; content: string }[]): Uint8Array {
   const entries: ZipEntry[] = files.map((f) => {
     const data = utf8(f.content);
-    return { name: f.name, data, crc: crc32(data) };
+    return { nameBytes: utf8(f.name), data, crc: crc32(data) };
   });
 
-  const local: number[] = [];
-  const central: number[] = [];
-  const offsets: number[] = [];
-
+  let localSize = 0;
+  let centralSize = 0;
   for (const e of entries) {
-    offsets.push(local.length);
-    const name = utf8(e.name);
-    local.push(
-      ...u32(0x04034b50), ...u16(20), ...u16(0x0800), ...u16(0),
-      ...u16(DOS_TIME), ...u16(DOS_DATE),
-      ...u32(e.crc), ...u32(e.data.length), ...u32(e.data.length),
-      ...u16(name.length), ...u16(0),
-      ...name, ...e.data,
-    );
+    localSize += LOCAL_HEADER + e.nameBytes.length + e.data.length;
+    centralSize += CENTRAL_HEADER + e.nameBytes.length;
   }
 
+  const out = new Uint8Array(localSize + centralSize + END_RECORD);
+  const offsets: number[] = [];
+  let o = 0;
+
+  for (const e of entries) {
+    offsets.push(o);
+    o = putU32(out, o, 0x04034b50);
+    o = putU16(out, o, 20);
+    o = putU16(out, o, 0x0800);
+    o = putU16(out, o, 0);
+    o = putU16(out, o, DOS_TIME);
+    o = putU16(out, o, DOS_DATE);
+    o = putU32(out, o, e.crc);
+    o = putU32(out, o, e.data.length);
+    o = putU32(out, o, e.data.length);
+    o = putU16(out, o, e.nameBytes.length);
+    o = putU16(out, o, 0);
+    out.set(e.nameBytes, o);
+    o += e.nameBytes.length;
+    out.set(e.data, o);
+    o += e.data.length;
+  }
+
+  const centralStart = o;
   entries.forEach((e, i) => {
-    const name = utf8(e.name);
-    central.push(
-      ...u32(0x02014b50), ...u16(20), ...u16(20), ...u16(0x0800), ...u16(0),
-      ...u16(DOS_TIME), ...u16(DOS_DATE),
-      ...u32(e.crc), ...u32(e.data.length), ...u32(e.data.length),
-      ...u16(name.length), ...u16(0), ...u16(0), ...u16(0), ...u16(0),
-      ...u32(0), ...u32(offsets[i]),
-      ...name,
-    );
+    o = putU32(out, o, 0x02014b50);
+    o = putU16(out, o, 20);
+    o = putU16(out, o, 20);
+    o = putU16(out, o, 0x0800);
+    o = putU16(out, o, 0);
+    o = putU16(out, o, DOS_TIME);
+    o = putU16(out, o, DOS_DATE);
+    o = putU32(out, o, e.crc);
+    o = putU32(out, o, e.data.length);
+    o = putU32(out, o, e.data.length);
+    o = putU16(out, o, e.nameBytes.length);
+    o = putU16(out, o, 0);
+    o = putU16(out, o, 0);
+    o = putU16(out, o, 0);
+    o = putU16(out, o, 0);
+    o = putU32(out, o, 0);
+    o = putU32(out, o, offsets[i]);
+    out.set(e.nameBytes, o);
+    o += e.nameBytes.length;
   });
 
-  const end = [
-    ...u32(0x06054b50), ...u16(0), ...u16(0),
-    ...u16(entries.length), ...u16(entries.length),
-    ...u32(central.length), ...u32(local.length), ...u16(0),
-  ];
+  o = putU32(out, o, 0x06054b50);
+  o = putU16(out, o, 0);
+  o = putU16(out, o, 0);
+  o = putU16(out, o, entries.length);
+  o = putU16(out, o, entries.length);
+  o = putU32(out, o, centralSize);
+  o = putU32(out, o, centralStart);
+  o = putU16(out, o, 0);
+  if (o !== out.length) throw new Error(`zip: tamaño ${o} distinto de ${out.length}`);
 
-  return new Uint8Array([...local, ...central, ...end]);
+  return out;
 }
 
 // ── Public entry point ───────────────────────────────────────────────────────

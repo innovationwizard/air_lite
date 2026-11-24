@@ -103,6 +103,44 @@ describe('zip', () => {
   it('is deterministic — same input, byte-identical output', () => {
     expect(Array.from(zip([{ name: 'a.txt', content: 'hello' }]))).toEqual(Array.from(bytes));
   });
+
+  it('packs a sheet past the argument limit that used to throw on export', () => {
+    // Zacapa in Suma is 28 columns. The old `push(...sheetBytes)` died at
+    // about 120 KB of worksheet XML (~100 of those rows) with
+    // "Maximum call stack size exceeded". 400 rows is the screen cap and
+    // well past that limit; the whole filtered bodega is larger still.
+    const columns: SheetColumn[] = Array.from({ length: 28 }, (_, i) => ({
+      header: `Col ${i}`,
+      width: 12,
+      type: i % 5 === 0 ? 'text' : 'number',
+    }));
+    const rows = Array.from({ length: 400 }, (_, r) => columns.map((c, i) => (
+      c.type === 'text' ? `SKU-${r}-${i}-BOLSA` : r * 10 + i
+    )));
+    const spec: SheetSpec = { name: 'Sugerido', columns, rows };
+    const xml = sheetXml(spec);
+    expect(xml.length).toBeGreaterThan(200_000);
+
+    const file = buildWorkbook([
+      spec,
+      {
+        name: 'Origen',
+        autoFilter: false,
+        columns: [
+          { header: 'Campo', width: 20, type: 'text' },
+          { header: 'Valor', width: 40, type: 'text' },
+        ],
+        rows: [['Filas', String(rows.length)]],
+      },
+    ]);
+
+    expect(file).toBeInstanceOf(Uint8Array);
+    expect(Array.from(file.slice(0, 4))).toEqual([0x50, 0x4b, 0x03, 0x04]);
+    expect(Array.from(file.slice(file.length - 22, file.length - 18))).toEqual([0x50, 0x4b, 0x05, 0x06]);
+    // STORE, so the last row is literally in the container. A truncated
+    // write would still look like a zip and miss this cell.
+    expect(new TextDecoder().decode(file)).toContain('SKU-399-0-BOLSA');
+  });
 });
 
 describe('buildXlsx', () => {
