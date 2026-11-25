@@ -2,7 +2,7 @@
  * Bin-packing rules (L3): capacity, dedicated full-furgón code, splitting,
  * day assignment with shared-capacity awareness. Pure module, no IO.
  */
-import { generarPlan, mrpRegional, DIAS_DEFAULT, type PlanOpts } from '../planificacion';
+import { generarPlan, mrpRegional, packLines, DIAS_DEFAULT, type PlanOpts } from '../planificacion';
 import type { MrpDerived } from '../../reyma/engine';
 import type { VivoRow } from '../types';
 
@@ -120,6 +120,71 @@ describe('generarPlan — bin-packing del despacho semanal', () => {
     expect(r.rows[0].cod).toBe('A'); // menor nivel primero
     expect(r.totalCajas).toBe(150);
     expect(r.furgonesEstimados).toBe(1); // 15 m³ → 1 furgón
+    const sinCap = mrpRegional(rows, 'ZAC', 3, null);
+    expect(sinCap.totalCajas).toBe(150);
+    expect(sinCap.furgonesEstimados).toBeNull();
+  });
+
+  it('packLines devuelve el payload de reyma_plan_despacho y generarPlan lo proyecta igual', () => {
+    const rows = [
+      row({ cod: 'A', w: 500, m: 0.15, l: 2.0 }),
+      row({ cod: 'B', w: 400, m: 0.10, l: 0.5 }),
+      row({ cod: '77201046', w: 1258, m: 0.15898, l: 0.4 }),
+    ];
+    const plan = generarPlan(rows, OPTS);
+    const packed = packLines(
+      rows.map((r) => ({
+        codigo: r.cod,
+        cajas: r.w as number,
+        m3_por_caja: r.m,
+        semanas_cobertura: r.l,
+      })),
+      OPTS.capacidadM3,
+      {
+        dias: OPTS.dias,
+        max_por_dia: OPTS.maxPorDia,
+        cod_furgon_completo: OPTS.codFurgonCompleto,
+      },
+    );
+    expect(Object.keys(packed).sort()).toEqual(['dias', 'sinDia']);
+    const flat = [
+      ...packed.dias.flatMap((d) => d.furgones.map((f) => ({ ...f, dia: d.dia }))),
+      ...packed.sinDia.map((f) => ({ ...f, dia: null as string | null })),
+    ];
+    expect(flat.map((f) => ({ no: f.no, dia: f.dia, lineas: f.lineas }))).toEqual(
+      plan.furgones.map((f) => ({
+        no: f.no,
+        dia: f.dia,
+        lineas: f.lineas.map((l) => ({ codigo: l.cod, cajas: l.cajas })),
+      })),
+    );
+    // Días declarados, aunque ese día no haya recibido furgón.
+    expect(packed.dias.map((d) => d.dia)).toEqual(DIAS_DEFAULT);
+  });
+
+  it('packLines no inventa calendario cuando no le pasan días ni máximo', () => {
+    const packed = packLines(
+      [{ codigo: 'A', cajas: 10, m3_por_caja: 1, semanas_cobertura: 1 }],
+      100,
+    );
+    expect(packed.dias).toEqual([]);
+    expect(packed.sinDia).toEqual([{ no: 1, lineas: [{ codigo: 'A', cajas: 10 }] }]);
+  });
+
+  it('packLines rechaza una capacidad que no es un m³ usable', () => {
+    const line = [{ codigo: 'A', cajas: 1, m3_por_caja: 1, semanas_cobertura: 1 }];
+    expect(() => packLines(line, 0)).toThrow(/capacidad_m3/);
+    expect(() => packLines(line, Number.NaN)).toThrow(/capacidad_m3/);
+  });
+
+  it('avisa el resto que no completa un furgón dedicado', () => {
+    const rows = [row({ cod: '77201046', w: 630, m: 0.15898, l: 0.4 })];
+    const { furgones, avisos } = generarPlan(rows, OPTS);
+    expect(furgones.filter((f) => f.dedicado)).toHaveLength(1);
+    expect(furgones[0].lineas[0].cajas).toBe(629);
+    expect(avisos[0]).toBe(
+      '77201046: 1 cajas fuera de múltiplo de furgón completo — verificar W del motor',
+    );
   });
 
   it('excludes rows without pedido (w=0) and is deterministic', () => {

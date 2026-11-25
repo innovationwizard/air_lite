@@ -4,8 +4,8 @@
  * Reglas (docs/inventarios/RESPUESTAS_ALEXIS_2026-08-04.md + skill de Alexis):
  *  - Orden de prioridad: MENOR nivel de inventario primero (skill: "se ordena
  *    cuál es el que está con menos inventario").
- *  - Furgón = capacidad m³ fija (100); al llenarse se abre el siguiente
- *    (skill: "llenar furgones de 100 m3 secuencialmente").
+ *  - Furgón = la capacidad m³ que recibe (Reyma: 100). Al llenarse se abre el
+ *    siguiente (skill: "llenar furgones de 100 m3 secuencialmente").
  *  - Un producto que no cabe completo se PARTE entre furgones consecutivos.
  *  - El código furgón-completo (VT10) despacha en furgones dedicados de
  *    múltiplos exactos (regla medida del libro, FLOOR sobre cap/cubicaje).
@@ -16,7 +16,11 @@
  * Módulo puro (sin IO) — testeado en __tests__/planificacion.test.ts.
  */
 import { xround, WORKBOOK_CONSTANTS, type MrpDerived } from '../reyma/engine';
+import { packLines, type PackLine } from './packLines';
 import type { VivoRow } from './types';
+
+export { packLines } from './packLines';
+export type { PackLine, PackSettings, PlanDespachoPayload } from './packLines';
 
 export interface PlanLinea {
   cod: string;
@@ -82,7 +86,8 @@ export interface MrpRegionalResult {
   rows: MrpRegionalRow[];
   totalCajas: number;
   totalM3: number;
-  furgonesEstimados: number;
+  /** null cuando el modelo no tiene capacidad de furgón: no se estima con 100 m³. */
+  furgonesEstimados: number | null;
 }
 
 const INV_POR_BODEGA: Record<string, (r: VivoRow) => number> = {
@@ -96,7 +101,7 @@ export function mrpRegional(
   rows: VivoRow[],
   bodega: 'ZAC' | 'PET' | 'Z11',
   objetivoSemanas: number,
-  capacidadM3: number,
+  capacidadM3: number | null,
 ): MrpRegionalResult {
   const { weeksPerMonth, coverageSentinel } = WORKBOOK_CONSTANTS;
   const getInv = INV_POR_BODEGA[bodega];
@@ -124,89 +129,100 @@ export function mrpRegional(
   out.sort((a, b) => a.nivel - b.nivel);
   const totalCajas = out.reduce((a, x) => a + x.pedido, 0);
   const totalM3 = out.reduce((a, x) => a + x.m3, 0);
-  return { rows: out, totalCajas, totalM3, furgonesEstimados: Math.ceil(totalM3 / capacidadM3) };
+  const furgonesEstimados = capacidadM3 != null && Number.isFinite(capacidadM3) && capacidadM3 > 0
+    ? Math.ceil(totalM3 / capacidadM3)
+    : null;
+  return { rows: out, totalCajas, totalM3, furgonesEstimados };
 }
 
-interface Candidato {
-  cod: string;
-  clave: string;
-  desc: string;
-  cajas: number;
-  cubicaje: number;
-}
-
+/**
+ * Plan semanal de Reyma/Carvajal. El armado vive en `packLines`; acá se
+ * traducen las filas del MRP y se vuelven a armar las tarjetas que pinta
+ * la pantalla (clave, descripción, dedicado, avisos). Con la misma capacidad,
+ * los mismos días y el mismo máximo por día, el resultado es el de antes.
+ */
 export function generarPlan(mrpRows: MrpDerived[], opts: PlanOpts): PlanResult {
-  const avisos: string[] = [];
-  const cap = opts.capacidadM3;
-  // prioridad: nivel ascendente; solo filas con pedido semanal despachable
-  const candidatos: Candidato[] = [...mrpRows]
-    .filter((r) => (r.w ?? 0) > 0 && r.m > 0)
-    .sort((a, b) => a.l - b.l)
-    .map((r) => ({ cod: r.cod, clave: r.clave, desc: r.descProv, cajas: r.w as number, cubicaje: r.m }));
-
-  const furgones: PlanFurgon[] = [];
-  let actual: PlanFurgon | null = null;
-
-  const abrir = (dedicado = false): PlanFurgon => {
-    const f: PlanFurgon = {
-      no: furgones.length + 1,
-      dia: null,
-      dedicado,
-      lineas: [],
-      totalCajas: 0,
-      totalM3: 0,
-      pct: 0,
-    };
-    furgones.push(f);
-    return f;
-  };
-  const agregar = (f: PlanFurgon, c: Candidato, cajas: number) => {
-    const m3 = cajas * c.cubicaje;
-    f.lineas.push({ cod: c.cod, clave: c.clave, desc: c.desc, cajas, cubicaje: c.cubicaje, m3 });
-    f.totalCajas += cajas;
-    f.totalM3 += m3;
-    f.pct = f.totalM3 / cap;
-  };
-
-  for (const c of candidatos) {
-    if (c.cod === opts.codFurgonCompleto) {
-      // furgones dedicados de múltiplos exactos (el W ya viene FLOOR-eado por el motor)
-      const porFurgon = Math.floor(cap / c.cubicaje);
-      let resto = c.cajas;
-      while (resto >= porFurgon && porFurgon > 0) {
-        const f = abrir(true);
-        agregar(f, c, porFurgon);
-        resto -= porFurgon;
-      }
-      if (resto > 0) {
-        avisos.push(
-          `${c.cod}: ${resto} cajas fuera de múltiplo de furgón completo — verificar W del motor`,
-        );
-      }
-      actual = null; // lo que siga abre furgón nuevo (no se mezcla con dedicados)
-      continue;
+  const meta = new Map<string, { clave: string; desc: string; cubicaje: number }>();
+  const lines: PackLine[] = [];
+  for (const r of mrpRows) {
+    if (!meta.has(r.cod)) {
+      meta.set(r.cod, { clave: r.clave, desc: r.descProv, cubicaje: r.m });
     }
-    let resto = c.cajas;
-    while (resto > 0) {
-      if (!actual || actual.dedicado) actual = abrir();
-      const espacio = cap - actual.totalM3;
-      const caben = Math.floor(espacio / c.cubicaje);
-      if (caben < 1) {
-        actual = abrir();
-        continue;
-      }
-      const poner = Math.min(resto, caben);
-      agregar(actual, c, poner);
-      resto -= poner;
-      if (resto > 0) actual = abrir(); // se partió: el resto va al siguiente
-    }
+    lines.push({
+      codigo: r.cod,
+      cajas: r.w ?? 0,
+      m3_por_caja: r.m,
+      semanas_cobertura: r.l,
+    });
   }
 
-  // asignación de días: secuencial, máx N por día
-  const cupo = opts.dias.length * opts.maxPorDia;
-  furgones.forEach((f, i) => {
-    f.dia = i < cupo ? opts.dias[Math.floor(i / opts.maxPorDia)] : null;
+  const cap = opts.capacidadM3;
+  const packed = packLines(lines, cap, {
+    dias: opts.dias,
+    max_por_dia: opts.maxPorDia,
+    cod_furgon_completo: opts.codFurgonCompleto,
   });
+
+  const armar = (
+    f: { no: number; lineas: Array<{ codigo: string; cajas: number }> },
+    dia: string | null,
+  ): PlanFurgon => {
+    const lineas: PlanLinea[] = f.lineas.map((l) => {
+      const src = meta.get(l.codigo);
+      const cubicaje = src?.cubicaje ?? 0;
+      return {
+        cod: l.codigo,
+        clave: src?.clave ?? '',
+        desc: src?.desc ?? '',
+        cajas: l.cajas,
+        cubicaje,
+        m3: l.cajas * cubicaje,
+      };
+    });
+    const totalCajas = lineas.reduce((a, l) => a + l.cajas, 0);
+    const totalM3 = lineas.reduce((a, l) => a + l.m3, 0);
+    const cubDedicado = opts.codFurgonCompleto
+      ? (meta.get(opts.codFurgonCompleto)?.cubicaje ?? 0)
+      : 0;
+    const porFurgon = cubDedicado > 0 ? Math.floor(cap / cubDedicado) : 0;
+    const dedicado = lineas.length === 1
+      && lineas[0].cod === opts.codFurgonCompleto
+      && porFurgon > 0
+      && lineas[0].cajas === porFurgon;
+    return {
+      no: f.no,
+      dia,
+      dedicado,
+      lineas,
+      totalCajas,
+      totalM3,
+      pct: totalM3 / cap,
+    };
+  };
+
+  const furgones: PlanFurgon[] = [
+    ...packed.dias.flatMap((d) => d.furgones.map((f) => armar(f, d.dia))),
+    ...packed.sinDia.map((f) => armar(f, null)),
+  ];
+
+  const avisos: string[] = [];
+  if (opts.codFurgonCompleto) {
+    const fuentes = mrpRows
+      .filter((r) => r.cod === opts.codFurgonCompleto && (r.w ?? 0) > 0 && r.m > 0)
+      .sort((a, b) => a.l - b.l);
+    for (const r of fuentes) {
+      const porFurgon = Math.floor(cap / r.m);
+      const cajas = r.w as number;
+      const resto = porFurgon > 0
+        ? cajas - Math.floor(cajas / porFurgon) * porFurgon
+        : cajas;
+      if (resto > 0) {
+        avisos.push(
+          `${r.cod}: ${resto} cajas fuera de múltiplo de furgón completo — verificar W del motor`,
+        );
+      }
+    }
+  }
   const sinDia = furgones.filter((f) => f.dia === null).length;
   if (sinDia > 0) {
     avisos.push(

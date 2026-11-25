@@ -174,7 +174,11 @@ export interface ReymaVivoPayload {
   };
   /** Config the engine needs (measured workbook constants, server-owned). */
   config: {
-    capacidadM3: number;
+    /**
+     * m³ del furgón, leídos de `modelo_proveedor.capacidad_m3`.
+     * null = nadie lo declaró. No se rellena con 100.
+     */
+    capacidadM3: number | null;
     codFurgonCompleto: string;
     /** Meses de promedio móvil para la proyección por defecto (RESPUESTAS regla 1). */
     mesesPromedioMovil: number;

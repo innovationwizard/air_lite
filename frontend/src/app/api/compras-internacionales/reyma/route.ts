@@ -48,8 +48,20 @@ export const dynamic = 'force-dynamic';
 
 const MESES_PROMEDIO_MOVIL = 2;
 const MAX_EDAD_PENDIENTES_DIAS = 8;
-const CAPACIDAD_M3 = 100;
 const COD_FURGON_COMPLETO = '77201046';
+
+/** NUMERIC de Postgres a veces viaja como string. null se queda null. */
+function numeroONull(v: unknown): number | null {
+  if (v === null || v === undefined || v === '') return null;
+  const n = typeof v === 'number' ? v : typeof v === 'string' ? Number(v) : Number.NaN;
+  return Number.isFinite(n) ? n : null;
+}
+
+function diasONull(v: unknown): string[] | null {
+  if (!Array.isArray(v)) return null;
+  const dias = v.filter((d): d is string => typeof d === 'string' && d.trim() !== '');
+  return dias.length > 0 ? dias : null;
+}
 // NC Duroport: lista medida (hoja NC del libro, 8 claves VT; Alexis 2026-08-04).
 // La categoría ya no sirve de filtro: desde 2026-08-05 es x_studio_material.
 const NC_CODIGOS = [
@@ -149,8 +161,8 @@ export async function GET(request: Request) {
     }
     const run = runs[0];
 
-    // Parámetros del modelo. Ausente = se cae a las constantes de Reyma, que es
-    // lo que regía antes de que esta tabla existiera.
+    // Parámetros del modelo. Capacidad, días y máximo diario se leen de la fila
+    // y un NULL se queda en NULL: no se rellena con el furgón de 100 m³ de Reyma.
     const { data: modeloCfgRaw } = await service
       .from('modelo_proveedor')
       .select('slug, nombre, provisional, capacidad_m3, max_furgones_dia, furgones_semana, '
@@ -542,19 +554,17 @@ export async function GET(request: Request) {
       },
       // A4.26 — los parámetros del modelo que se está mirando.
       //
-      // Las constantes de abajo son las de Reyma y siguen siendo el piso: el
-      // motor tiene que seguir dando los MISMOS números con los que se midió la
-      // paridad de 2,752 celdas. Lo que llega de `modelo_proveedor` las
-      // sobreescribe SÓLO cuando tiene valor; un parámetro en NULL viaja como
-      // null y la pantalla lo muestra como «sin definir», que es la verdad —
-      // nadie lo ha declarado todavía para ese proveedor.
+      // Capacidad, días de despacho y máximo por día salen de `modelo_proveedor`.
+      // NULL viaja como null: la pantalla lo muestra y no arma furgones con el
+      // 100 m³ de Reyma. El código de furgón completo sí conserva el piso de
+      // Reyma (VT10) porque es la regla medida del libro, no un volumen.
       modelo: {
         slug: modeloCfg?.slug ?? 'reyma',
         nombre: modeloCfg?.nombre ?? 'Reyma',
         provisional: modeloCfg?.provisional ?? false,
-        furgonesSemana: modeloCfg?.furgones_semana ?? null,
-        maxFurgonesDia: modeloCfg?.max_furgones_dia ?? null,
-        diasDespacho: modeloCfg?.dias_despacho ?? null,
+        furgonesSemana: numeroONull(modeloCfg?.furgones_semana),
+        maxFurgonesDia: numeroONull(modeloCfg?.max_furgones_dia),
+        diasDespacho: diasONull(modeloCfg?.dias_despacho),
         semanasSeguridad: modeloCfg?.semanas_seguridad ?? null,
         leadTimeDias: modeloCfg?.lead_time_dias ?? null,
         objetivoSemanas: modeloCfg?.objetivo_semanas ?? null,
@@ -563,7 +573,7 @@ export async function GET(request: Request) {
         notas: modeloCfg?.notas ?? null,
       },
       config: {
-        capacidadM3: modeloCfg?.capacidad_m3 ?? CAPACIDAD_M3,
+        capacidadM3: numeroONull(modeloCfg?.capacidad_m3),
         codFurgonCompleto: modeloCfg?.cod_comodin ?? COD_FURGON_COMPLETO,
         mesesPromedioMovil: MESES_PROMEDIO_MOVIL,
         maxEdadPendientesDias: MAX_EDAD_PENDIENTES_DIAS,

@@ -16,7 +16,6 @@ import {
 import {
   generarPlan,
   mrpRegional,
-  DIAS_DEFAULT,
   OBJETIVO_SEMANAS_REGIONAL_DEFAULT,
   type PlanFurgon,
 } from './planificacion';
@@ -74,6 +73,11 @@ const TDR = 'px-2 py-1 text-right whitespace-nowrap tabular-nums';
 
 function qty(n: number): string {
   return Number.isInteger(n) ? fmt(n) : fmt(n, 2);
+}
+
+/** Capacidad usable de furgón. null, 0 o NaN no se sustituyen por 100 m³. */
+function capacidadUsable(n: number | null | undefined): n is number {
+  return typeof n === 'number' && Number.isFinite(n) && n > 0;
 }
 function m3(n: number): string {
   return fmt(n, 2);
@@ -160,12 +164,18 @@ export function VivoClient({ modelo = 'reyma', soloLectura = false }: { modelo?:
     // MRP through the SAME engine: no furgón assignments yet (bin-packing = L3),
     // so W/X compute and furgón/día stay null. Type assertion documented: computeMrp
     // only touches data.mrp.* of ReymaData.
+    // Sin capacidad no se redondea el código de furgón completo contra 100 m³.
+    // El motor exige un número; con el código dedicado en blanco ese número no
+    // entra en ninguna fila. Reyma trae 100 y su código, y el cálculo no se mueve.
+    const capMotor = capacidadUsable(payload.config.capacidadM3)
+      ? payload.config.capacidadM3
+      : null;
     const mrpData = {
       mrp: {
         titulo: '',
         leyenda: '',
-        capacidadM3: payload.config.capacidadM3,
-        codFurgonCompleto: payload.config.codFurgonCompleto,
+        capacidadM3: capMotor ?? 1,
+        codFurgonCompleto: capMotor ? payload.config.codFurgonCompleto : '\u0000',
         rows: payload.rows.map((r) => ({
           cod: r.cod,
           furgon: null,
@@ -261,6 +271,14 @@ export function VivoClient({ modelo = 'reyma', soloLectura = false }: { modelo?:
           {payload.config.maxEdadPendientesDias} días; tránsito = facturado no recibido (entregas directas aparte).
           Las ediciones se guardan con autor e historial (proyección, precios, NC, ETA, plan).
         </div>
+        {!capacidadUsable(payload.config.capacidadM3) && (
+          <div className="mt-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-950">
+            <AlertTriangle className="mr-1 inline h-3.5 w-3.5" />
+            <strong>{payload.modelo?.nombre ?? 'Este modelo'}</strong> no tiene capacidad de furgón
+            (<span className="font-mono">modelo_proveedor.capacidad_m3</span> está vacía). El plan de
+            despacho no se arma hasta que se cargue la capacidad de este modelo.
+          </div>
+        )}
       </div>
 
       {/* KPIs */}
@@ -270,7 +288,9 @@ export function VivoClient({ modelo = 'reyma', soloLectura = false }: { modelo?:
           { label: 'Pedido óptimo total (cajas)', value: fmt(computed.totCajas) },
           {
             label: 'Volumen pedido (m³ / furgones)',
-            value: `${m3(computed.totM3)} / ${fmt(Math.ceil(computed.totM3 / payload.config.capacidadM3))}`,
+            value: capacidadUsable(payload.config.capacidadM3)
+              ? `${m3(computed.totM3)} / ${fmt(Math.ceil(computed.totM3 / payload.config.capacidadM3))}`
+              : `${m3(computed.totM3)} m³ · capacidad sin definir`,
           },
           { label: 'Críticos (< 2 semanas)', value: fmt(computed.criticos) },
         ].map((k) => (
@@ -632,7 +652,9 @@ function TabMrp({
           <div className="mb-2 flex flex-wrap gap-2 text-[11px]">
             <span className="rounded bg-slate-100 px-2 py-1">{fmt(regional.totalCajas)} cajas a pedir</span>
             <span className="rounded bg-slate-100 px-2 py-1">
-              {m3(regional.totalM3)} m³ ≈ {fmt(regional.furgonesEstimados)} furgones
+              {regional.furgonesEstimados == null
+                ? `${m3(regional.totalM3)} m³ · capacidad de furgón sin definir`
+                : `${m3(regional.totalM3)} m³ ≈ ${fmt(regional.furgonesEstimados)} furgones`}
             </span>
             <span className="rounded bg-amber-50 px-2 py-1 text-amber-800">
               Demanda = ventas de {{ SJ: 'San José', ZAC: 'Zacapa', PET: 'Petén', Z11: 'Zona 11' }[bodega]} (promedio móvil por
@@ -1282,6 +1304,17 @@ function FacturasEta({ payload }: { payload: ReymaVivoPayload }) {
 
 const DIAS_TODOS = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes'];
 
+/** Días del modelo, en orden de semana. Vacío si el modelo no los declaró. */
+function diasMarcados(dias: string[] | null | undefined): string[] {
+  if (!dias?.length) return [];
+  const presentes = new Set(dias);
+  return DIAS_TODOS.filter((d) => presentes.has(d));
+}
+
+function maxDeclarado(n: number | null | undefined): number | null {
+  return typeof n === 'number' && Number.isFinite(n) && n > 0 ? Math.floor(n) : null;
+}
+
 function proximoLunes(): string {
   const d = new Date();
   const add = ((8 - d.getDay()) % 7) || 7;
@@ -1302,15 +1335,24 @@ function PlanPanel({
   onSaved: () => void;
   soloLectura: boolean;
 }) {
-  const [dias, setDias] = useState<string[]>(DIAS_DEFAULT);
-  const [maxPorDia, setMaxPorDia] = useState(3);
+  const [dias, setDias] = useState<string[]>(() => diasMarcados(payload.modelo?.diasDespacho));
+  const [maxPorDia, setMaxPorDia] = useState<number | null>(() => maxDeclarado(payload.modelo?.maxFurgonesDia));
   const [plan, setPlan] = useState<PlanFurgon[] | null>(null);
   const [avisos, setAvisos] = useState<string[]>([]);
   const [cajasEdits, setCajasEdits] = useState<Record<string, number>>({});
 
+  const cap = payload.config.capacidadM3;
+  const topeDiario = Math.max(6, maxDeclarado(payload.modelo?.maxFurgonesDia) ?? 0);
+  const puedeGenerar = capacidadUsable(cap) && dias.length > 0 && maxPorDia != null && maxPorDia >= 1;
+
   const generar = () => {
+    if (!capacidadUsable(cap) || maxPorDia == null || maxPorDia < 1 || dias.length === 0) {
+      setPlan(null);
+      setAvisos([]);
+      return;
+    }
     const r = generarPlan(mrpSorted, {
-      capacidadM3: payload.config.capacidadM3,
+      capacidadM3: cap,
       codFurgonCompleto: payload.config.codFurgonCompleto,
       dias,
       maxPorDia,
@@ -1319,8 +1361,6 @@ function PlanPanel({
     setAvisos(r.avisos);
     setCajasEdits({});
   };
-
-  const cap = payload.config.capacidadM3;
   const efectivo = (f: PlanFurgon, li: number) =>
     cajasEdits[`${f.no}|${li}`] ?? f.lineas[li].cajas;
   const totalM3 = (f: PlanFurgon) =>
@@ -1329,7 +1369,7 @@ function PlanPanel({
   return (
     <div className="bg-white rounded-lg border border-slate-200 p-4 mb-4">
       <h3 className="text-sm font-semibold text-slate-700 mb-2 flex items-center gap-2">
-        <Truck className="h-4 w-4" /> Plan semanal de despacho (bin-packing 100 m³ — reglas del libro)
+        <Truck className="h-4 w-4" /> Plan semanal de despacho ({capacidadUsable(cap) ? `furgón de ${cap} m³` : 'capacidad de furgón sin definir'} — reglas del libro)
       </h3>
       <div className="flex flex-wrap items-center gap-3 text-xs mb-3">
         <span className="text-slate-600">Días:</span>
@@ -1354,15 +1394,32 @@ function PlanPanel({
         <input
           type="number"
           min={1}
-          max={6}
-          value={maxPorDia}
-          onChange={(e) => setMaxPorDia(Math.max(1, Math.min(6, Number(e.target.value) || 3)))}
+          max={topeDiario}
+          value={maxPorDia ?? ''}
+          placeholder="—"
+          onChange={(e) => {
+            const raw = e.target.value;
+            if (raw.trim() === '') {
+              setMaxPorDia(null);
+              return;
+            }
+            const n = Math.floor(Number(raw));
+            if (!Number.isFinite(n)) return;
+            setMaxPorDia(Math.max(1, Math.min(topeDiario, n)));
+          }}
           className="w-14 rounded border border-slate-300 px-1 py-0.5 text-right"
-          title="La recepción total es de 6 furgones/día COMPARTIDA con Wilmer (regla 5)"
+          title={payload.modelo?.slug === 'reyma'
+            ? 'Sale de modelo_proveedor.max_furgones_dia. La recepción de 6 furgones/día es compartida con Wilmer (regla 5).'
+            : 'Máximo de furgones por día de este modelo (modelo_proveedor.max_furgones_dia).'}
         />
         <button
+          type="button"
           onClick={generar}
-          className="rounded bg-emerald-600 px-3 py-1 font-medium text-white hover:bg-emerald-700"
+          disabled={!puedeGenerar}
+          title={puedeGenerar ? undefined : 'Faltan capacidad, días de despacho o el máximo por día'}
+          className={`rounded px-3 py-1 font-medium text-white ${
+            puedeGenerar ? 'bg-emerald-600 hover:bg-emerald-700' : 'cursor-not-allowed bg-slate-300'
+          }`}
         >
           Generar plan
         </button>
@@ -1407,7 +1464,7 @@ function PlanPanel({
               let cuerpo =
                 `<h1>PEDIDO SEMANAL DE DESPACHO — LÍNEA REYMA</h1>` +
                 `<div class="meta">PLASTICENTRO S.A. · Atención: Iván / Viridiana · ` +
-                `Semana del ${esc(proximoLunes())} · Capacidad por furgón: ${payload.config.capacidadM3} m³ · ` +
+                `Semana del ${esc(proximoLunes())} · Capacidad por furgón: ${capacidadUsable(cap) ? `${cap} m³` : 'sin definir'} · ` +
                 `Asociado al pedido mensual vigente${payload.ultimoPedido ? ` (${esc(payload.ultimoPedido.mes.slice(0, 7))})` : ''}</div>`;
               const dias = [...new Set(plan.map((f) => f.dia ?? 'SIN DÍA'))];
               for (const dia of dias) {
@@ -1441,6 +1498,25 @@ function PlanPanel({
           </span>
         )}
       </div>
+      {!capacidadUsable(cap) && (
+        <div className="mb-2 flex items-start gap-1.5 rounded border border-amber-200 bg-amber-50 px-3 py-1.5 text-[11px] text-amber-800">
+          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          {payload.modelo?.nombre ?? 'Este modelo'} no tiene capacidad de furgón. El plan queda detenido hasta
+          cargarla en modelo_proveedor.
+        </div>
+      )}
+      {dias.length === 0 && (
+        <div className="mb-2 flex items-start gap-1.5 rounded border border-amber-200 bg-amber-50 px-3 py-1.5 text-[11px] text-amber-800">
+          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          Días de despacho sin definir. Marca al menos un día para poder armar el plan.
+        </div>
+      )}
+      {maxPorDia == null && (
+        <div className="mb-2 flex items-start gap-1.5 rounded border border-amber-200 bg-amber-50 px-3 py-1.5 text-[11px] text-amber-800">
+          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          Máximo de furgones por día sin definir.
+        </div>
+      )}
       {avisos.map((a) => (
         <div key={a} className="mb-2 flex items-start gap-1.5 rounded border border-amber-200 bg-amber-50 px-3 py-1.5 text-[11px] text-amber-800">
           <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" /> {a}
@@ -1480,8 +1556,8 @@ function PlanPanel({
                     <tr className="border-t border-slate-300 bg-slate-50 font-semibold">
                       <td className={TD} colSpan={2}>Total</td>
                       <td className={TDR}>{qty(f.lineas.reduce((a, _l, i) => a + efectivo(f, i), 0))}</td>
-                      <td className={`${TDR} ${tm3 > cap ? 'text-red-600' : ''}`}>
-                        {m3(tm3)} ({xround((tm3 / cap) * 100, 1)}%)
+                      <td className={`${TDR} ${capacidadUsable(cap) && tm3 > cap ? 'text-red-600' : ''}`}>
+                        {m3(tm3)}{capacidadUsable(cap) ? ` (${xround((tm3 / cap) * 100, 1)}%)` : ''}
                       </td>
                     </tr>
                   </tbody>
@@ -1493,8 +1569,9 @@ function PlanPanel({
       )}
       {!plan && (
         <div className="text-[11px] text-slate-500">
-          Genera el plan a partir del MRP (abajo): prioriza menor nivel, llena furgones de {cap} m³, VT10 va en
-          furgones dedicados, y asigna días respetando el máximo diario. Las cajas quedan editables antes de guardar.
+          {capacidadUsable(cap)
+            ? `Genera el plan a partir del MRP (abajo): prioriza menor nivel, llena furgones de ${cap} m³, VT10 va en furgones dedicados, y asigna días respetando el máximo diario. Las cajas quedan editables antes de guardar.`
+            : `El plan no se arma: ${payload.modelo?.nombre ?? 'este modelo'} no tiene capacidad de furgón cargada.`}
         </div>
       )}
     </div>
@@ -1559,7 +1636,13 @@ function TabPedido({
     const cajas = lineas.reduce((a, l) => a + l.cajas, 0);
     const usd = lineas.reduce((a, l) => a + l.cajas * l.precio, 0);
     const vol = lineas.reduce((a, l) => a + l.cajas * l.cub, 0);
-    return { cajas, usd, vol, furgones: Math.ceil(vol / payload.config.capacidadM3) };
+    const capPedido = payload.config.capacidadM3;
+    return {
+      cajas,
+      usd,
+      vol,
+      furgones: capacidadUsable(capPedido) ? Math.ceil(vol / capPedido) : null,
+    };
   }, [lineas, payload.config.capacidadM3]);
 
   const imprimir = () => {
@@ -1588,7 +1671,10 @@ function TabPedido({
         `<td class="n">${fmt(ls.reduce((a, l) => a + l.cajas, 0))}</td><td></td>` +
         `<td class="n">${fmt(ls.reduce((a, l) => a + l.cajas * l.precio, 0), 2)}</td></tr>`;
     }
-    cuerpo += `<tr class="sub"><td colspan="3">TOTAL GENERAL — ${fmt(totales.furgones)} furgones estimados (${m3(totales.vol)} m³)</td>` +
+    const furgonTxt = totales.furgones == null
+      ? `${m3(totales.vol)} m³, capacidad de furgón sin definir`
+      : `${fmt(totales.furgones)} furgones estimados (${m3(totales.vol)} m³)`;
+    cuerpo += `<tr class="sub"><td colspan="3">TOTAL GENERAL — ${furgonTxt}</td>` +
       `<td class="n">${fmt(totales.cajas)}</td><td></td><td class="n">${fmt(totales.usd, 2)}</td></tr>`;
     cuerpo += '</tbody></table>';
     const err = abrirImpresion(`Pedido Reyma ${nombreMes}`, cuerpo);
@@ -1650,7 +1736,11 @@ function TabPedido({
           <div className="mb-2 flex flex-wrap gap-2 text-[11px]">
             <span className="rounded bg-slate-100 px-2 py-1">{fmt(totales.cajas)} cajas</span>
             <span className="rounded bg-slate-100 px-2 py-1">USD {fmt(totales.usd, 2)}</span>
-            <span className="rounded bg-slate-100 px-2 py-1">{m3(totales.vol)} m³ ≈ {fmt(totales.furgones)} furgones</span>
+            <span className="rounded bg-slate-100 px-2 py-1">
+              {totales.furgones == null
+                ? `${m3(totales.vol)} m³ · capacidad de furgón sin definir`
+                : `${m3(totales.vol)} m³ ≈ ${fmt(totales.furgones)} furgones`}
+            </span>
           </div>
           <div className="overflow-x-auto">
             <table className="text-xs border-collapse min-w-full">
