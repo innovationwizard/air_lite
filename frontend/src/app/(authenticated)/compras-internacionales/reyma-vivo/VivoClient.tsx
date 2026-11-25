@@ -23,6 +23,8 @@ import type { EnlaceFactura, ReymaVivoPayload, VivoRow } from './types';
 import { computeSaldos } from './saldos';
 import { conciliar, type Enlace, type Excepcion } from './conciliacion';
 import { diasHabilesDe, resolverEta } from './eta';
+import { ColumnaProvider, ThCol } from './ColumnaModal';
+import type { ColumnaId } from './explicacionColumnas';
 
 function esc(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -66,8 +68,6 @@ async function postJson(path: string, body: unknown): Promise<string | null> {
 
 // ---------------------------------------------------------------- helpers
 
-const TH = 'px-2 py-1.5 text-left font-semibold text-slate-600 whitespace-nowrap';
-const THR = 'px-2 py-1.5 text-right font-semibold text-slate-600 whitespace-nowrap';
 const TD = 'px-2 py-1 whitespace-nowrap';
 const TDR = 'px-2 py-1 text-right whitespace-nowrap tabular-nums';
 
@@ -132,6 +132,8 @@ export function VivoClient({ modelo = 'reyma', soloLectura = false }: { modelo?:
   const [saveMsg, setSaveMsg] = useState<string | null>(null);
   const [tab, setTab] = useState<TabId>('modelo');
   const [proyEdits, setProyEdits] = useState<Record<string, number>>({});
+  const [columnaAbierta, setColumnaAbierta] = useState<ColumnaId | null>(null);
+  const cerrarColumna = useCallback(() => setColumnaAbierta(null), []);
 
   const load = useCallback(() => {
     fetch(`/api/compras-internacionales/reyma?modelo=${encodeURIComponent(modelo)}`)
@@ -224,6 +226,7 @@ export function VivoClient({ modelo = 'reyma', soloLectura = false }: { modelo?:
   const nombreModelo = `Modelo ${payload?.modelo?.nombre ?? modelo.charAt(0).toUpperCase() + modelo.slice(1)}`;
 
   return (
+    <ColumnaProvider abierta={columnaAbierta} onAbrir={setColumnaAbierta} onCerrar={cerrarColumna}>
     <div className="p-6 max-w-[1400px] mx-auto">
       <div className="mb-4">
         <div className="flex flex-wrap items-center gap-3">
@@ -342,6 +345,7 @@ export function VivoClient({ modelo = 'reyma', soloLectura = false }: { modelo?:
       {tab === 'ventas' && <TabVentas payload={payload} computed={computed} />}
       {tab === 'datos' && <TabDatos payload={payload} flash={flash} onSaved={load} soloLectura={soloLectura} />}
     </div>
+    </ColumnaProvider>
   );
 }
 
@@ -454,24 +458,24 @@ function TabModelo({
         <table className="text-xs border-collapse min-w-full">
           <thead className="bg-slate-50">
             <tr>
-              <th className={TH}>Código</th>
-              <th className={TH}>Clave</th>
-              <th className={TH}>Descripción</th>
-              <th className={TH}>Categoría</th>
-              <th className={THR}>Precio USD</th>
-              <th className={THR}>San José</th>
-              <th className={THR}>Zona 11</th>
-              <th className={THR}>Petén</th>
-              <th className={THR}>Zacapa</th>
-              <th className={THR}>Patios</th>
-              <th className={THR}>PxS (≤8d)</th>
-              <th className={THR}>Inv. Disp.</th>
-              <th className={THR}>Tránsito</th>
-              <th className={THR}>Ent. Directa</th>
-              <th className={THR}>Proyección</th>
-              <th className={THR}>Stock Seg.</th>
-              <th className={THR}>Pedido Óptimo</th>
-              <th className={THR}>Vol. m³</th>
+              <ThCol id="codigo">Código</ThCol>
+              <ThCol id="clave">Clave</ThCol>
+              <ThCol id="descripcion">Descripción</ThCol>
+              <ThCol id="categoria">Categoría</ThCol>
+              <ThCol id="precioUsd" align="right">Precio USD</ThCol>
+              <ThCol id="stock.sj" align="right">San José</ThCol>
+              <ThCol id="stock.z11" align="right">Zona 11</ThCol>
+              <ThCol id="stock.pet" align="right">Petén</ThCol>
+              <ThCol id="stock.zac" align="right">Zacapa</ThCol>
+              <ThCol id="stock.pat" align="right">Patios</ThCol>
+              <ThCol id="pxs" align="right">PxS (≤8d)</ThCol>
+              <ThCol id="modelo.invDisp" align="right">Inv. Disp.</ThCol>
+              <ThCol id="transito" align="right">Tránsito</ThCol>
+              <ThCol id="entregaDirecta" align="right">Ent. Directa</ThCol>
+              <ThCol id="proyeccion" align="right">Proyección</ThCol>
+              <ThCol id="modelo.stockSeg" align="right">Stock Seg.</ThCol>
+              <ThCol id="modelo.pedidoOptimo" align="right">Pedido Óptimo</ThCol>
+              <ThCol id="modelo.vol" align="right">Vol. m³</ThCol>
             </tr>
           </thead>
           <tbody>
@@ -666,18 +670,18 @@ function TabMrp({
             <table className="text-xs border-collapse min-w-full">
               <thead className="bg-slate-50">
                 <tr>
-                  <th className={TH}>Código</th>
-                  <th className={TH}>Clave</th>
-                  <th className={TH}>Descripción</th>
-                  <th className={THR}>Inv. bodega</th>
-                  <th className={THR}>PxS (≤8d)</th>
-                  <th className={THR}>Tránsito</th>
-                  <th className={THR}>Neto</th>
-                  <th className={THR}>Prom. mensual</th>
-                  <th className={THR}>Venta sem.</th>
-                  <th className={THR}>Pedido</th>
-                  <th className={THR}>Nivel (sem)</th>
-                  <th className={THR}>m³</th>
+                  <ThCol id="codigo">Código</ThCol>
+                  <ThCol id="clave">Clave</ThCol>
+                  <ThCol id="descripcion">Descripción</ThCol>
+                  <ThCol id="regional.inv" align="right">Inv. bodega</ThCol>
+                  <ThCol id="regional.pxs" align="right">PxS (≤8d)</ThCol>
+                  <ThCol id="regional.transito" align="right">Tránsito</ThCol>
+                  <ThCol id="regional.neto" align="right">Neto</ThCol>
+                  <ThCol id="regional.prom" align="right">Prom. mensual</ThCol>
+                  <ThCol id="regional.ventaSem" align="right">Venta sem.</ThCol>
+                  <ThCol id="regional.pedido" align="right">Pedido</ThCol>
+                  <ThCol id="regional.nivel" align="right">Nivel (sem)</ThCol>
+                  <ThCol id="regional.m3" align="right">m³</ThCol>
                 </tr>
               </thead>
               <tbody>
@@ -718,20 +722,20 @@ function TabMrp({
         <table className="text-xs border-collapse min-w-full">
           <thead className="bg-slate-50">
             <tr>
-              <th className={TH}>#</th>
-              <th className={TH}>Código</th>
-              <th className={TH}>Clave</th>
-              <th className={TH}>Descripción</th>
-              <th className={THR}>Inv Disp Bodega</th>
-              <th className={THR}>Tránsito</th>
-              <th className={THR}>Inv Neto</th>
-              <th className={THR}>Prom Mensual</th>
-              <th className={THR}>Venta Sem.</th>
-              <th className={THR}>Ped. Opt. Sem.</th>
-              <th className={THR}>Nivel (sem)</th>
-              <th className={TH}>Prioridad</th>
-              <th className={THR}>Cajas a Desp.</th>
-              <th className={THR}>Vol. m³</th>
+              <ThCol id="mrp.puesto">#</ThCol>
+              <ThCol id="codigo">Código</ThCol>
+              <ThCol id="clave">Clave</ThCol>
+              <ThCol id="descripcion">Descripción</ThCol>
+              <ThCol id="mrp.invDispBodega" align="right">Inv Disp Bodega</ThCol>
+              <ThCol id="transito" align="right">Tránsito</ThCol>
+              <ThCol id="mrp.invNeto" align="right">Inv Neto</ThCol>
+              <ThCol id="mrp.promMensual" align="right">Prom Mensual</ThCol>
+              <ThCol id="mrp.ventaSem" align="right">Venta Sem.</ThCol>
+              <ThCol id="mrp.pedido" align="right">Ped. Opt. Sem.</ThCol>
+              <ThCol id="mrp.nivel" align="right">Nivel (sem)</ThCol>
+              <ThCol id="mrp.prioridad">Prioridad</ThCol>
+              <ThCol id="mrp.cajas" align="right">Cajas a Desp.</ThCol>
+              <ThCol id="mrp.vol" align="right">Vol. m³</ThCol>
             </tr>
           </thead>
           <tbody>
@@ -871,9 +875,12 @@ function PanelConciliacion({
                 <table className="min-w-full text-[11px]">
                   <thead className="text-slate-500">
                     <tr>
-                      {['Factura PDF', 'Bill de Odoo', 'Tier', 'Regla', 'Estado', 'Quién / cuándo'].map((h) => (
-                        <th key={h} className="px-2 py-1 text-left font-medium">{h}</th>
-                      ))}
+                      <ThCol id="conc.facturaPdf" className="text-slate-500">Factura PDF</ThCol>
+                      <ThCol id="conc.bill" className="text-slate-500">Bill de Odoo</ThCol>
+                      <ThCol id="conc.tier" className="text-slate-500">Tier</ThCol>
+                      <ThCol id="conc.regla" className="text-slate-500">Regla</ThCol>
+                      <ThCol id="conc.estado" className="text-slate-500">Estado</ThCol>
+                      <ThCol id="conc.quien" className="text-slate-500">Quién / cuándo</ThCol>
                     </tr>
                   </thead>
                   <tbody>
@@ -927,9 +934,13 @@ function PanelConciliacion({
                     <table className="mt-1 min-w-full text-[11px]">
                       <thead className="text-slate-500">
                         <tr>
-                          {['Bill candidata', 'Por qué', 'Total PDF', 'Total Odoo', 'Fecha PDF', 'Fecha Odoo', ''].map((h) => (
-                            <th key={h} className="px-2 py-0.5 text-left font-medium">{h}</th>
-                          ))}
+                          <ThCol id="conc.candidata" className="text-slate-500">Bill candidata</ThCol>
+                          <ThCol id="conc.porque" className="text-slate-500">Por qué</ThCol>
+                          <ThCol id="conc.totalPdf" className="text-slate-500">Total PDF</ThCol>
+                          <ThCol id="conc.totalOdoo" className="text-slate-500">Total Odoo</ThCol>
+                          <ThCol id="conc.fechaPdf" className="text-slate-500">Fecha PDF</ThCol>
+                          <ThCol id="conc.fechaOdoo" className="text-slate-500">Fecha Odoo</ThCol>
+                          <th className="px-2 py-0.5" />
                         </tr>
                       </thead>
                       <tbody>
@@ -1125,10 +1136,10 @@ function TabCumplimiento({ payload, soloLectura }: { payload: ReymaVivoPayload; 
       <table className="text-xs border-collapse min-w-[480px] mb-4">
         <thead className="bg-slate-50">
           <tr>
-            <th className={TH}>Categoría</th>
-            <th className={THR}>Pedido</th>
-            <th className={THR}>Facturado</th>
-            <th className={TH}>Fill</th>
+            <ThCol id="categoria">Categoría</ThCol>
+            <ThCol id="cumpl.catPedido" align="right">Pedido</ThCol>
+            <ThCol id="cumpl.catFacturado" align="right">Facturado</ThCol>
+            <ThCol id="cumpl.fill">Fill</ThCol>
           </tr>
         </thead>
         <tbody>
@@ -1146,13 +1157,13 @@ function TabCumplimiento({ payload, soloLectura }: { payload: ReymaVivoPayload; 
         <table className="text-xs border-collapse min-w-full">
           <thead className="bg-slate-50">
             <tr>
-              <th className={TH}>Código</th>
-              <th className={TH}>Descripción</th>
-              <th className={THR}>Pedido</th>
-              <th className={THR}>Facturado</th>
-              <th className={THR}>Recibidas</th>
-              <th className={THR}>Saldo</th>
-              <th className={TH}>Fill</th>
+              <ThCol id="codigo">Código</ThCol>
+              <ThCol id="descripcion">Descripción</ThCol>
+              <ThCol id="cumpl.pedido" align="right">Pedido</ThCol>
+              <ThCol id="cumpl.facturado" align="right">Facturado</ThCol>
+              <ThCol id="cumpl.recibidas" align="right">Recibidas</ThCol>
+              <ThCol id="cumpl.saldo" align="right">Saldo</ThCol>
+              <ThCol id="cumpl.fill">Fill</ThCol>
             </tr>
           </thead>
           <tbody>
@@ -1243,12 +1254,12 @@ function FacturasEta({ payload }: { payload: ReymaVivoPayload }) {
         <table className="text-xs border-collapse min-w-full">
           <thead className="bg-slate-50">
             <tr>
-              <th className={TH}>Factura</th>
-              <th className={TH}>Guía</th>
-              <th className={TH}>Destino</th>
-              <th className={TH}>Fecha factura</th>
-              <th className={TH}>ETA</th>
-              <th className={THR}>Cajas</th>
+              <ThCol id="eta.factura">Factura</ThCol>
+              <ThCol id="eta.guia">Guía</ThCol>
+              <ThCol id="eta.destino">Destino</ThCol>
+              <ThCol id="eta.fecha">Fecha factura</ThCol>
+              <ThCol id="eta.eta">ETA</ThCol>
+              <ThCol id="eta.cajas" align="right">Cajas</ThCol>
             </tr>
           </thead>
           <tbody>
@@ -1746,14 +1757,14 @@ function TabPedido({
             <table className="text-xs border-collapse min-w-full">
               <thead className="bg-slate-50">
                 <tr>
-                  <th className={TH}>Código</th>
-                  <th className={TH}>Clave</th>
-                  <th className={TH}>Descripción</th>
-                  <th className={TH}>Categoría</th>
-                  <th className={THR}>Cajas</th>
-                  <th className={THR}>Precio USD</th>
-                  <th className={THR}>Total USD</th>
-                  <th className={THR}>m³</th>
+                  <ThCol id="codigo">Código</ThCol>
+                  <ThCol id="clave">Clave</ThCol>
+                  <ThCol id="descripcion">Descripción</ThCol>
+                  <ThCol id="categoria">Categoría</ThCol>
+                  <ThCol id="pedido.cajas" align="right">Cajas</ThCol>
+                  <ThCol id="pedido.precio" align="right">Precio USD</ThCol>
+                  <ThCol id="pedido.total" align="right">Total USD</ThCol>
+                  <ThCol id="pedido.m3" align="right">m³</ThCol>
                   <th />
                 </tr>
               </thead>
@@ -1898,11 +1909,11 @@ function TabNc({
         <table className="text-xs border-collapse min-w-[560px]">
           <thead className="bg-slate-50">
             <tr>
-              <th className={TH}>Código</th>
-              <th className={TH}>Descripción</th>
-              <th className={THR}>Cajas facturadas</th>
-              <th className={THR}>NC USD</th>
-              <th className={TH}>Facturas</th>
+              <ThCol id="codigo">Código</ThCol>
+              <ThCol id="descripcion">Descripción</ThCol>
+              <ThCol id="nc.cajas" align="right">Cajas facturadas</ThCol>
+              <ThCol id="nc.usd" align="right">NC USD</ThCol>
+              <ThCol id="nc.facturas">Facturas</ThCol>
             </tr>
           </thead>
           <tbody>
@@ -1941,12 +1952,12 @@ function TabNc({
           <table className="text-xs border-collapse min-w-[560px]">
             <thead className="bg-slate-50">
               <tr>
-                <th className={TH}>Factura</th>
-                <th className={TH}>Fecha</th>
-                <th className={TH}>Código</th>
-                <th className={THR}>Precio factura</th>
-                <th className={THR}>Precio vigente</th>
-                <th className={THR}>Δ</th>
+                <ThCol id="precio.factura">Factura</ThCol>
+                <ThCol id="precio.fecha">Fecha</ThCol>
+                <ThCol id="codigo">Código</ThCol>
+                <ThCol id="precio.unitario" align="right">Precio factura</ThCol>
+                <ThCol id="precio.vigente" align="right">Precio vigente</ThCol>
+                <ThCol id="precio.delta" align="right">Δ</ThCol>
               </tr>
             </thead>
             <tbody>
@@ -1983,27 +1994,33 @@ function TabVentas({ payload, computed }: { payload: ReymaVivoPayload; computed:
         <table className="text-xs border-collapse min-w-full">
           <thead className="bg-slate-50">
             <tr>
-              <th className={TH}>Código</th>
-              <th className={TH}>Clave</th>
+              <ThCol id="codigo">Código</ThCol>
+              <ThCol id="clave">Clave</ThCol>
               {[2024, 2025, 2026].map((y) => (
-                <th key={y} className="px-2 py-1 text-center font-semibold text-emerald-700 border-l border-slate-200" colSpan={y === 2026 ? (payload.ventas[0]?.v2026.length ?? 0) : 12}>
+                <ThCol
+                  key={y}
+                  id="ventas.anio"
+                  align="center"
+                  colSpan={y === 2026 ? (payload.ventas[0]?.v2026.length ?? 0) : 12}
+                  className="text-emerald-700 border-l border-slate-200"
+                >
                   {y}
-                </th>
+                </ThCol>
               ))}
-              <th className={`${THR} border-l border-slate-200`}>Factor</th>
-              <th className={THR}>Pron. mes act.</th>
-              <th className={THR}>Pron. mes sig.</th>
+              <ThCol id="ventas.factor" align="right" className="text-slate-600 border-l border-slate-200">Factor</ThCol>
+              <ThCol id="ventas.pronAct" align="right">Pron. mes act.</ThCol>
+              <ThCol id="ventas.pronSig" align="right">Pron. mes sig.</ThCol>
             </tr>
             <tr>
-              <th className={TH} colSpan={2} />
+              <th className="px-2 py-1.5" colSpan={2} />
               {MES_LABELS.map((m) => (
-                <th key={`a${m}`} className={THR}>{m}</th>
+                <ThCol key={`a${m}`} id="ventas.mes" align="right">{m}</ThCol>
               ))}
               {MES_LABELS.map((m) => (
-                <th key={`b${m}`} className={THR}>{m}</th>
+                <ThCol key={`b${m}`} id="ventas.mes" align="right">{m}</ThCol>
               ))}
               {MES_LABELS.slice(0, payload.ventas[0]?.v2026.length ?? 0).map((m) => (
-                <th key={`c${m}`} className={THR}>{m}</th>
+                <ThCol key={`c${m}`} id="ventas.mes" align="right">{m}</ThCol>
               ))}
               <th colSpan={3} />
             </tr>
@@ -2077,14 +2094,14 @@ function TabDatos({
           <table className="text-xs border-collapse min-w-full">
             <thead className="bg-slate-50">
               <tr>
-                <th className={TH}>PO</th>
-                <th className={TH}>Código</th>
-                <th className={THR}>Cajas</th>
-                <th className={TH}>Destino</th>
-                <th className={TH}>ETA Alexis</th>
-                <th className={TH}>ETA App</th>
-                <th className={TH}>Nota</th>
-                <th className={TH}>Tipo</th>
+                <ThCol id="datos.po">PO</ThCol>
+                <ThCol id="codigo">Código</ThCol>
+                <ThCol id="datos.cajas" align="right">Cajas</ThCol>
+                <ThCol id="datos.destino">Destino</ThCol>
+                <ThCol id="datos.etaAlexis">ETA Alexis</ThCol>
+                <ThCol id="datos.etaApp">ETA App</ThCol>
+                <ThCol id="datos.nota">Nota</ThCol>
+                <ThCol id="datos.tipo">Tipo</ThCol>
               </tr>
             </thead>
             <tbody>
