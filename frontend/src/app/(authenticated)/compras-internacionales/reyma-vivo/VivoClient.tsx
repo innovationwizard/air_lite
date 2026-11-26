@@ -1376,11 +1376,17 @@ function PlanPanel({
     cajasEdits[`${f.no}|${li}`] ?? f.lineas[li].cajas;
   const totalM3 = (f: PlanFurgon) =>
     f.lineas.reduce((a, l, i) => a + efectivo(f, i) * l.cubicaje, 0);
+  const vanM3 = mrpSorted.reduce(
+    (sum, d) => sum + (d.o.startsWith('CRITICO') && d.x != null && Number.isFinite(d.x) ? d.x : 0),
+    0,
+  );
 
   return (
     <div className="bg-white rounded-lg border border-slate-200 p-4 mb-4">
+      <div className="mb-3 flex items-start gap-4">
+        <div className="min-w-0 flex-1">
       <h3 className="text-sm font-semibold text-slate-700 mb-2 flex items-center gap-2">
-        <Truck className="h-4 w-4" /> Plan semanal de despacho ({capacidadUsable(cap) ? `furgón de ${cap} m³` : 'capacidad de furgón sin definir'} — reglas del libro)
+        <Truck className="h-4 w-4 shrink-0" /> Plan semanal de despacho ({capacidadUsable(cap) ? `furgón de ${cap} m³` : 'capacidad de furgón sin definir'})
       </h3>
       <div className="flex flex-wrap items-center gap-3 text-xs mb-3">
         <span className="text-slate-600">Días:</span>
@@ -1509,6 +1515,19 @@ function PlanPanel({
           </span>
         )}
       </div>
+      {!plan && (
+        <div className="text-[11px] text-slate-500">
+          {capacidadUsable(cap)
+            ? `Genera el plan a partir del MRP (abajo): prioriza menor nivel, llena furgones de ${cap} m³, VT10 va en furgones dedicados, y asigna días respetando el máximo diario. Las cajas quedan editables antes de guardar.`
+            : `El plan no se arma: ${payload.modelo?.nombre ?? 'este modelo'} no tiene capacidad de furgón cargada.`}
+        </div>
+      )}
+        </div>
+        <div className="shrink-0 rounded border border-slate-200 px-3 py-2 text-right">
+          <div className="text-[11px] font-medium text-slate-500">Van:</div>
+          <div className="text-base font-semibold tabular-nums text-slate-800">{m3(vanM3)} m³</div>
+        </div>
+      </div>
       {!capacidadUsable(cap) && (
         <div className="mb-2 flex items-start gap-1.5 rounded border border-amber-200 bg-amber-50 px-3 py-1.5 text-[11px] text-amber-800">
           <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
@@ -1576,13 +1595,6 @@ function PlanPanel({
               </div>
             );
           })}
-        </div>
-      )}
-      {!plan && (
-        <div className="text-[11px] text-slate-500">
-          {capacidadUsable(cap)
-            ? `Genera el plan a partir del MRP (abajo): prioriza menor nivel, llena furgones de ${cap} m³, VT10 va en furgones dedicados, y asigna días respetando el máximo diario. Las cajas quedan editables antes de guardar.`
-            : `El plan no se arma: ${payload.modelo?.nombre ?? 'este modelo'} no tiene capacidad de furgón cargada.`}
         </div>
       )}
     </div>
