@@ -221,8 +221,7 @@ export function VivoClient({ modelo = 'reyma', soloLectura = false }: { modelo?:
   const syncAge = syncAgeLabel(payload.sync.finishedAt);
   const nEdits = Object.keys(proyEdits).length;
   // El mismo cliente sirve a Reyma y Carvajal (A4.26): el título sale del
-  // modelo que devolvió el API, no de un literal. Sin «en vivo» — todo el
-  // silo lee Odoo; el sello «Odoo producción» de al lado ya lo dice.
+  // modelo que devolvió el API, no de un literal.
   const nombreModelo = `Modelo ${payload?.modelo?.nombre ?? modelo.charAt(0).toUpperCase() + modelo.slice(1)}`;
 
   return (
@@ -231,9 +230,6 @@ export function VivoClient({ modelo = 'reyma', soloLectura = false }: { modelo?:
       <div className="mb-4">
         <div className="flex flex-wrap items-center gap-3">
           <h1 className="text-xl font-bold text-slate-800">{nombreModelo}</h1>
-          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-700">
-            <Activity className="h-3 w-3" /> Odoo producción
-          </span>
           {nEdits > 0 && (
             <>
               <button
@@ -267,12 +263,7 @@ export function VivoClient({ modelo = 'reyma', soloLectura = false }: { modelo?:
             : 'border-emerald-200 bg-emerald-50 text-emerald-900'
         }`}>
           Última sincronización: <strong>{syncDate}</strong>
-          {syncAge ? <> · {syncAge}</> : null} (corrida{' '}
-          <span className="font-mono">{payload.sync.id.slice(0, 8)}</span>). Mismo motor de cálculo que la réplica
-          (paridad 2,752/2,752 con el libro de Alexis). Proyección por defecto = promedio móvil de{' '}
-          {payload.config.mesesPromedioMovil} meses completos, editable; pendientes por surtir cuentan solo con edad ≤{' '}
-          {payload.config.maxEdadPendientesDias} días; tránsito = facturado no recibido (entregas directas aparte).
-          Las ediciones se guardan con autor e historial (proyección, precios, NC, ETA, plan).
+          {syncAge ? <> · {syncAge}</> : null}
         </div>
         {!capacidadUsable(payload.config.capacidadM3) && (
           <div className="mt-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-950">
